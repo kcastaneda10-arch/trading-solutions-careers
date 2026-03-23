@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #EBEBEB; color: #000; }
+}
+
+@layer components {
+  .pill-btn {
+    @apply inline-flex items-center gap-2 px-7 py-3.5 rounded-full font-medium text-sm transition-all duration-300 cursor-pointer border-none;
+  }
+  .pill-btn-primary { @apply bg-black text-white hover:bg-neutral-800; }
+  .pill-btn-outline { @apply bg-white text-black border border-black hover:bg-black hover:text-white; }
+  .pill-btn-white { @apply bg-white text-black hover:bg-gray-100; }
+
+  .tag {
+    @apply inline-flex px-3.5 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3.5 bg-gray-100 border-2 border-transparent rounded-xl text-sm font-sans transition-all outline-none focus:border-black focus:bg-white;
+  }
+
+  .filter-chip {
+    @apply px-4 py-2 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-600 cursor-pointer transition-all hover:bg-black hover:text-white hover:border-black;
+  }
+  .filter-chip.active { @apply bg-black text-white border-black; }
+
+  .section-title {
+    font-size: clamp(1.8rem, 4vw, 3.2rem);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .hero-text {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .stat-number {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+}
