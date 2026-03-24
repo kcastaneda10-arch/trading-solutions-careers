@@ -15,9 +15,22 @@ export default function JobDetailPage() {
   const { t, locale } = useLanguage();
   const [showApply, setShowApply] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    linkedin: '',
+    why_ts: '',
+  });
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const modeName = (m: string) => (t.modeNames as Record<string, string>)[m] || m;
   const deptName = (d: string) => (t.deptNames as Record<string, string>)[d] || d;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
 
   if (!job) {
     return (
@@ -34,10 +47,42 @@ export default function JobDetailPage() {
     );
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShowApply(false);
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      let cv_filename = null;
+      let cv_data = null;
+      if (cvFile) {
+        cv_filename = cvFile.name;
+        cv_data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(cvFile);
+        });
+      }
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: job.id,
+          job_title: job.title[locale],
+          ...formData,
+          cv_filename,
+          cv_data,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to submit');
+      setShowApply(false);
+      setSubmitted(true);
+      setFormData({ full_name: '', email: '', phone: '', linkedin: '', why_ts: '' });
+      setCvFile(null);
+    } catch (err) {
+      console.error(err);
+      alert(locale === 'es' ? 'Error al enviar la aplicación. Intenta de nuevo.' : 'Error submitting application. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -61,9 +106,9 @@ export default function JobDetailPage() {
               <MapPin size={14} />
               {job.location}
             </span>
-            <span>Â·</span>
+            <span>·</span>
             <span>{modeName(job.mode)}</span>
-            <span>Â·</span>
+            <span>·</span>
             <span>{job.level}</span>
           </div>
         </div>
@@ -143,29 +188,44 @@ export default function JobDetailPage() {
                 <div className="space-y-5">
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.fullName}</label>
-                    <input type="text" required className="input-field" placeholder={t.jobs.fullNamePlaceholder} />
+                    <input type="text" required className="input-field" placeholder={t.jobs.fullNamePlaceholder} name="full_name" value={formData.full_name} onChange={handleChange} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.email}</label>
-                    <input type="email" required className="input-field" placeholder={t.jobs.emailPlaceholder} />
+                    <input type="email" required className="input-field" placeholder={t.jobs.emailPlaceholder} name="email" value={formData.email} onChange={handleChange} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.phone}</label>
-                    <input type="tel" className="input-field" placeholder={t.jobs.phonePlaceholder} />
+                    <input type="tel" className="input-field" placeholder={t.jobs.phonePlaceholder} name="phone" value={formData.phone} onChange={handleChange} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.linkedin}</label>
-                    <input type="url" className="input-field" placeholder={t.jobs.linkedinPlaceholder} />
+                    <input type="url" className="input-field" placeholder={t.jobs.linkedinPlaceholder} name="linkedin" value={formData.linkedin} onChange={handleChange} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.cvLabel}</label>
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-black transition-colors cursor-pointer">
-                      <Upload size={24} className="mx-auto mb-3 text-gray-400" />
-                      <p className="text-sm text-gray-500">
-                        {t.jobs.cvDrag} <span className="text-black font-medium">{t.jobs.cvSelect}</span>
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">{t.jobs.cvFormats}</p>
-                      <input type="file" accept=".pdf,.doc,.docx" className="hidden" />
+                    <div 
+                      className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-black transition-colors cursor-pointer"
+                      onClick={() => document.getElementById('cv-input')?.click()}
+                    >
+                      {cvFile ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Check size={18} className="text-green-600" />
+                          <span className="text-sm font-medium">{cvFile.name}</span>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setCvFile(null); }} className="ml-2 text-gray-400 hover:text-red-500">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload size={24} className="mx-auto mb-3 text-gray-400" />
+                          <p className="text-sm text-gray-500">
+                            {t.jobs.cvDrag} <span className="text-black font-medium">{t.jobs.cvSelect}</span>
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">{t.jobs.cvFormats}</p>
+                        </>
+                      )}
+                      <input id="cv-input" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setCvFile(e.target.files[0]); }} />
                     </div>
                   </div>
                   <div>
@@ -174,13 +234,16 @@ export default function JobDetailPage() {
                       className="input-field"
                       rows={4}
                       placeholder={t.jobs.whyTsPlaceholder}
+                      name="why_ts"
+                      value={formData.why_ts}
+                      onChange={handleChange}
                     />
                   </div>
                 </div>
                 <div className="mt-8 flex gap-3">
-                  <button type="submit" className="pill-btn pill-btn-primary flex-1 justify-center">
-                    {t.jobs.submit}
-                    <ArrowUpRight size={16} strokeWidth={2.5} />
+                  <button type="submit" disabled={submitting} className="pill-btn pill-btn-primary flex-1 justify-center disabled:opacity-50">
+                    {submitting ? (locale === 'es' ? 'Enviando...' : 'Submitting...') : t.jobs.submit}
+                    {!submitting && <ArrowUpRight size={16} strokeWidth={2.5} />}
                   </button>
                   <button type="button" onClick={() => setShowApply(false)} className="pill-btn pill-btn-outline">
                     {t.jobs.cancel}
