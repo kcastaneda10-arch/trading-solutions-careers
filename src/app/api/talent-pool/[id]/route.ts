@@ -103,7 +103,7 @@ export async function PATCH(
       values.push(phone);
     }
     if (current_role !== undefined) {
-      updates.push(`current_role = $${paramCount++}`);
+      updates.push(`"current_role" = $${paramCount++}`);
       values.push(current_role);
     }
     if (years_experience !== undefined) {
