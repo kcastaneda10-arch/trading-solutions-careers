@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         full_name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         phone VARCHAR(50),
-        current_role VARCHAR(255),
+        "current_role" VARCHAR(255),
         years_experience INTEGER,
         skills TEXT,
         education VARCHAR(500),
