@@ -2,41 +2,41 @@ export type Locale = "es" | "en";
 
 export const translations = {
   es: {
-    nav: { culture: "Cultura", areas: "Ãreas", experience: "Experiencia", viewJobs: "Ver vacantes" },
+    nav: { culture: "Cultura", areas: "Áreas", experience: "Experiencia", viewJobs: "Ver vacantes" },
     hero: {
       tag: "Trading Solutions Careers",
-      title: "Tu prÃ³ximo capÃ­tulo\nempieza aquÃ­.",
-      subtitle: "Somos un boutique freight forwarder con operaciÃ³n en mÃ¡s de 10 paÃ­ses. Buscamos personas curiosas, comprometidas y con ganas de crecer junto a nosotros.",
+      title: "Tu próximo capítulo\nempieza aquí.",
+      subtitle: "Somos un boutique freight forwarder con operación en más de 10 países. Buscamos personas curiosas, comprometidas y con ganas de crecer junto a nosotros.",
       cta: "Explorar oportunidades",
       ctaSecondary: "Conoce nuestra cultura"
     },
     stats: {
-      countries: { value: "+10", label: "PaÃ­ses en operaciÃ³n" },
+      countries: { value: "+10", label: "Países en operación" },
       clients: { value: "+300", label: "Clientes activos" },
-      teus: { value: "+52k", label: "TEUs marÃ­timos" },
+      teus: { value: "+52k", label: "TEUs marítimos" },
       tons: { value: "+500", label: "Tons Air & Land" }
     },
     culture: {
       tag: "Mentalidad de crecimiento",
-      title: "AquÃ­ no vienes a ocupar un puesto.\nVienes a construir tu futuro.",
+      title: "Aquí no vienes a ocupar un puesto.\nVienes a construir tu futuro.",
       subtitle: "En Trading Solutions creemos que el talento excepcional florece cuando se le da espacio para crecer, libertad para proponer y un entorno donde cada persona puede desafiar el status quo.",
       cards: [
-        { title: "Crecimiento acelerado", desc: "Tu carrera se acelera con exposiciÃ³n internacional, proyectos de alto impacto y lÃ­deres que invierten en tu desarrollo. AquÃ­ el techo lo pones tÃº." },
-        { title: "Alcance internacional", desc: "Operamos en mÃ¡s de 10 paÃ­ses con servicios marÃ­timos, terrestres, aÃ©reos y aduaneros. Cada dÃ­a es una oportunidad de resolver desafÃ­os logÃ­sticos reales." },
-        { title: "Cultura de expansiÃ³n", desc: "Cada idea tiene espacio. Cada voz importa. Construimos un entorno donde la curiosidad se premia, la innovaciÃ³n se celebra y los lÃ­mites se desafÃ­an." }
+        { title: "Crecimiento acelerado", desc: "Tu carrera se acelera con exposición internacional, proyectos de alto impacto y líderes que invierten en tu desarrollo. Aquí el techo lo pones tú." },
+        { title: "Alcance internacional", desc: "Operamos en más de 10 países con servicios marítimos, terrestres, aéreos y aduaneros. Cada día es una oportunidad de resolver desafíos logísticos reales." },
+        { title: "Cultura de expansión", desc: "Cada idea tiene espacio. Cada voz importa. Construimos un entorno donde la curiosidad se premia, la innovación se celebra y los límites se desafían." }
       ],
       blackBlock: {
-        title: "Creemos en las personas que quieren mÃ¡s.",
-        desc: "MÃ¡s impacto. MÃ¡s aprendizaje. MÃ¡s libertad. Si buscas un lugar donde tu energÃ­a se convierte en resultados reales y tu crecimiento profesional no tiene techo â este es tu lugar.",
+        title: "Creemos en las personas que quieren más.",
+        desc: "Más impacto. Más aprendizaje. Más libertad. Si buscas un lugar donde tu energía se convierte en resultados reales y tu crecimiento profesional no tiene techo — este es tu lugar.",
         maritime: "Maritime",
         maritimeSub: "Ground, Air & Customs",
-        countriesLabel: "PaÃ­ses en operaciÃ³n",
-        teusLabel: "TEUs marÃ­timos gestionados",
+        countriesLabel: "Países en operación",
+        teusLabel: "TEUs marítimos gestionados",
         tonsLabel: "Tons Air & Land"
       }
     },
     departments: {
-      tag: "Ãreas",
+      tag: "Áreas",
       title: "Encuentra tu espacio.",
       ops: { name: "Operaciones", count: "4 posiciones abiertas" },
       corporate: { name: "Corporate", count: "3 posiciones abiertas" },
@@ -44,80 +44,80 @@ export const translations = {
     },
     experience: {
       tag: "La experiencia",
-      title: "Contratamos talento excepcional. AsÃ­ se siente ser parte del proceso.",
+      title: "Contratamos talento excepcional. Así se siente ser parte del proceso.",
       steps: [
-        { num: "01", label: "Descubrimiento", title: "Nos encuentras. Te intrigamos.", desc: "Exploras nuestras oportunidades y algo conecta. No es solo un trabajo â es la posibilidad de hacer algo que importa en una escala internacional." },
-        { num: "02", label: "ConversaciÃ³n", title: "No es una entrevista. Es un diÃ¡logo.", desc: "Queremos conocer quiÃ©n eres de verdad â tu curiosidad, tus ideas, tu forma de pensar. TÃº tambiÃ©n nos conoces a nosotros. Es un match de dos vÃ­as." },
-        { num: "03", label: "InmersiÃ³n", title: "MuÃ©stranos cÃ³mo piensas.", desc: "Un reto real del negocio. Sin respuestas correctas. Queremos ver tu proceso, tu creatividad y cÃ³mo abordas lo desconocido." },
-        { num: "04", label: "Bienvenida", title: "Empieza algo extraordinario.", desc: "Desde el dÃ­a uno, tienes mentor, equipo y acceso a un programa de onboarding diseÃ±ado para que despegues rÃ¡pido y con confianza." }
+        { num: "01", label: "Descubrimiento", title: "Nos encuentras. Te intrigamos.", desc: "Exploras nuestras oportunidades y algo conecta. No es solo un trabajo — es la posibilidad de hacer algo que importa en una escala internacional." },
+        { num: "02", label: "Conversación", title: "No es una entrevista. Es un diálogo.", desc: "Queremos conocer quién eres de verdad — tu curiosidad, tus ideas, tu forma de pensar. Tú también nos conoces a nosotros. Es un match de dos vías." },
+        { num: "03", label: "Inmersión", title: "Muéstranos cómo piensas.", desc: "Un reto real del negocio. Sin respuestas correctas. Queremos ver tu proceso, tu creatividad y cómo abordas lo desconocido." },
+        { num: "04", label: "Bienvenida", title: "Empieza algo extraordinario.", desc: "Desde el día uno, tienes mentor, equipo y acceso a un programa de onboarding diseñado para que despegues rápido y con confianza." }
       ],
       cta: "Explorar vacantes abiertas"
     },
     benefits: {
       tag: "Lo que te espera",
-      title: "DiseÃ±ado para que crezcas.",
+      title: "Diseñado para que crezcas.",
       items: [
-        { title: "Aprendizaje continuo", desc: "Presupuesto anual para formaciÃ³n, certificaciones y conferencias" },
+        { title: "Aprendizaje continuo", desc: "Presupuesto anual para formación, certificaciones y conferencias" },
         { title: "Experiencia internacional", desc: "Proyectos cross-country y oportunidad de asignaciones internacionales" },
         { title: "Bienestar integral", desc: "Programas de wellness, salud mental, flexibilidad y balance real" },
-        { title: "Reconocimiento", desc: "Tu impacto se ve. CompensaciÃ³n competitiva y crecimiento acelerado" }
+        { title: "Reconocimiento", desc: "Tu impacto se ve. Compensación competitiva y crecimiento acelerado" }
       ]
     },
     cta: {
-      title: "Â¿Listo para lo que viene?",
-      subtitle: "Las mejores historias profesionales empiezan con una decisiÃ³n valiente. Esta podrÃ­a ser la tuya.",
+      title: "¿Listo para lo que viene?",
+      subtitle: "Las mejores historias profesionales empiezan con una decisión valiente. Esta podría ser la tuya.",
       button: "Ver todas las vacantes"
     },
     footer: {
-      tagline: "Boutique freight forwarder. Movemos lo que importa, con precisiÃ³n y propÃ³sito.",
+      tagline: "Boutique freight forwarder. Movemos lo que importa, con precisión y propósito.",
       services: "Servicios",
-      company: "CompaÃ±Ã­a",
+      company: "Compañía",
       companyAbout: "Nosotros",
       companyCareers: "Carreras",
       companyContact: "Contacto",
-      followUs: "SÃ­guenos",
+      followUs: "Síguenos",
       legal: "Legal",
       privacy: "Privacidad",
       rights: "Todos los derechos reservados."
     },
     jobs: {
       pageTitle: "Vacantes abiertas",
-      pageSubtitle: "Encuentra el rol que conecta con tu ambiciÃ³n.",
+      pageSubtitle: "Encuentra el rol que conecta con tu ambición.",
       backHome: "Volver al inicio",
-      searchPlaceholder: "Buscar por tÃ­tulo, Ã¡rea o habilidad...",
+      searchPlaceholder: "Buscar por título, área o habilidad...",
       deptLabel: "Departamento:",
       modeLabel: "Modalidad:",
       all: "Todos",
       allFem: "Todas",
-      resultsSingular: "posiciÃ³n encontrada",
+      resultsSingular: "posición encontrada",
       resultsPlural: "posiciones encontradas",
       clearFilters: "Limpiar filtros",
       noResults: "No encontramos vacantes con esos filtros.",
       backToJobs: "Todas las vacantes",
       notFound: "Vacante no encontrada",
       viewAll: "Ver todas las vacantes",
-      whatYouDo: "Lo que harÃ¡s",
+      whatYouDo: "Lo que harás",
       whatWeSeek: "Lo que buscamos",
-      applyBtn: "Aplicar a esta posiciÃ³n",
+      applyBtn: "Aplicar a esta posición",
       applyTo: "Aplicar a",
       fullName: "Nombre completo",
       fullNamePlaceholder: "Tu nombre",
       email: "Email",
       emailPlaceholder: "tu@email.com",
-      phone: "TelÃ©fono",
+      phone: "Teléfono",
       phonePlaceholder: "+1 (555) 000-0000",
       linkedin: "LinkedIn",
       linkedinPlaceholder: "https://linkedin.com/in/tu-perfil",
-      cvLabel: "CV / RÃ©sumÃ©",
+      cvLabel: "CV / Résumé",
       cvDrag: "Arrastra tu CV o",
       cvSelect: "selecciona un archivo",
-      cvFormats: "PDF, DOC o DOCX (mÃ¡x. 10 MB)",
-      whyTs: "Â¿Por quÃ© Trading Solutions?",
-      whyTsPlaceholder: "CuÃ©ntanos quÃ© te motiva y quÃ© te harÃ­a excepcional en este rol...",
-      submit: "Enviar aplicaciÃ³n",
+      cvFormats: "PDF, DOC o DOCX (máx. 10 MB)",
+      whyTs: "¿Por qué Trading Solutions?",
+      whyTsPlaceholder: "Cuéntanos qué te motiva y qué te haría excepcional en este rol...",
+      submit: "Enviar aplicación",
       cancel: "Cancelar",
-      successTitle: "AplicaciÃ³n enviada",
-      successMsg: "Gracias por tu interÃ©s en Trading Solutions. Nuestro equipo revisarÃ¡ tu perfil y te contactaremos pronto.",
+      successTitle: "Aplicación enviada",
+      successMsg: "Gracias por tu interés en Trading Solutions. Nuestro equipo revisará tu perfil y te contactaremos pronto.",
       backToJobsBtn: "Volver a vacantes"
     },
     deptNames: {
@@ -129,7 +129,7 @@ export const translations = {
     },
     modeNames: {
       Presencial: "Presencial",
-      "HÃ­brido": "HÃ­brido",
+      "Híbrido": "Híbrido",
       Remoto: "Remoto"
     }
   },
@@ -159,7 +159,7 @@ export const translations = {
       ],
       blackBlock: {
         title: "We believe in people who want more.",
-        desc: "More impact. More learning. More freedom. If you're looking for a place where your energy turns into real results and your professional growth knows no ceiling â this is your place.",
+        desc: "More impact. More learning. More freedom. If you're looking for a place where your energy turns into real results and your professional growth knows no ceiling — this is your place.",
         maritime: "Maritime",
         maritimeSub: "Ground, Air & Customs",
         countriesLabel: "Countries of operation",
@@ -178,8 +178,8 @@ export const translations = {
       tag: "The experience",
       title: "We hire exceptional talent. This is what being part of the process feels like.",
       steps: [
-        { num: "01", label: "Discovery", title: "You find us. We intrigue you.", desc: "You explore our opportunities and something clicks. It's not just a job â it's the chance to do something that matters on an international scale." },
-        { num: "02", label: "Conversation", title: "It's not an interview. It's a dialogue.", desc: "We want to meet the real you â your curiosity, your ideas, your way of thinking. You also get to know us. It's a two-way match." },
+        { num: "01", label: "Discovery", title: "You find us. We intrigue you.", desc: "You explore our opportunities and something clicks. It's not just a job — it's the chance to do something that matters on an international scale." },
+        { num: "02", label: "Conversation", title: "It's not an interview. It's a dialogue.", desc: "We want to meet the real you — your curiosity, your ideas, your way of thinking. You also get to know us. It's a two-way match." },
         { num: "03", label: "Immersion", title: "Show us how you think.", desc: "A real business challenge. No right answers. We want to see your process, your creativity, and how you approach the unknown." },
         { num: "04", label: "Welcome", title: "Start something extraordinary.", desc: "From day one, you have a mentor, a team, and access to an onboarding program designed to help you take off quickly and confidently." }
       ],
@@ -240,7 +240,7 @@ export const translations = {
       phonePlaceholder: "+1 (555) 000-0000",
       linkedin: "LinkedIn",
       linkedinPlaceholder: "https://linkedin.com/in/your-profile",
-      cvLabel: "CV / RÃ©sumÃ©",
+      cvLabel: "CV / Résumé",
       cvDrag: "Drag your CV or",
       cvSelect: "select a file",
       cvFormats: "PDF, DOC, or DOCX (max. 10 MB)",
@@ -261,7 +261,7 @@ export const translations = {
     },
     modeNames: {
       Presencial: "On-site",
-      "HÃ­brido": "Hybrid",
+      "Híbrido": "Hybrid",
       Remoto: "Remote"
     }
   }
