@@ -3,7 +3,7 @@ export interface Job {
   title: { es: string; en: string };
   dept: string;
   location: string;
-  mode: "Presencial" | "HÃ­brido" | "Remoto";
+  mode: "Presencial" | "Híbrido" | "Remoto";
   level: "Junior" | "Mid-Level" | "Senior";
   salary: string;
   tags: string[];
@@ -13,29 +13,29 @@ export interface Job {
 }
 
 export const departments = ["Operaciones", "Corporate", "Comercial", "People", "Finanzas"] as const;
-export const modes = ["Presencial", "HÃ­brido", "Remoto"] as const;
+export const modes = ["Presencial", "Híbrido", "Remoto"] as const;
 
 export const jobs: Job[] = [
   {
     id: 1,
-    title: { es: "Coordinador de Operaciones MarÃ­timas", en: "Maritime Operations Coordinator" },
+    title: { es: "Coordinador de Operaciones Marítimas", en: "Maritime Operations Coordinator" },
     dept: "Operaciones",
-    location: "Ciudad de PanamÃ¡, PanamÃ¡",
+    location: "Ciudad de Panamá, Panamá",
     mode: "Presencial",
     level: "Mid-Level",
-    salary: "$45,000 â $60,000 USD",
-    tags: ["LogÃ­stica", "Comercio exterior", "GestiÃ³n de embarques"],
+    salary: "$45,000 — $60,000 USD",
+    tags: ["Logística", "Comercio exterior", "Gestión de embarques"],
     description: {
-      es: "CoordinarÃ¡s operaciones marÃ­timas de importaciÃ³n y exportaciÃ³n para clientes estratÃ©gicos, asegurando tiempos de entrega y cumplimiento regulatorio en una de las rutas mÃ¡s dinÃ¡micas del mundo.",
+      es: "Coordinarás operaciones marítimas de importación y exportación para clientes estratégicos, asegurando tiempos de entrega y cumplimiento regulatorio en una de las rutas más dinámicas del mundo.",
       en: "You'll coordinate maritime import and export operations for strategic clients, ensuring delivery times and regulatory compliance on one of the world's most dynamic trade routes."
     },
     responsibilities: {
       es: [
-        "Gestionar embarques marÃ­timos de punto a punto con visibilidad en tiempo real",
+        "Gestionar embarques marítimos de punto a punto con visibilidad en tiempo real",
         "Coordinar con agentes internacionales, navieras y autoridades portuarias",
-        "Optimizar costos y tiempos de trÃ¡nsito a travÃ©s de negociaciÃ³n estratÃ©gica",
-        "Garantizar cumplimiento aduanero y documentaciÃ³n correcta",
-        "Proponer mejoras operativas usando datos y tecnologÃ­a"
+        "Optimizar costos y tiempos de tránsito a través de negociación estratégica",
+        "Garantizar cumplimiento aduanero y documentación correcta",
+        "Proponer mejoras operativas usando datos y tecnología"
       ],
       en: [
         "Manage maritime shipments point-to-point with real-time visibility",
@@ -47,11 +47,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "3+ aÃ±os de experiencia en freight forwarding o logÃ­stica internacional",
-        "Conocimiento de Incoterms, regulaciones aduaneras y documentaciÃ³n marÃ­tima",
-        "InglÃ©s avanzado (comunicaciÃ³n diaria con partners globales)",
-        "Perfil analÃ­tico con orientaciÃ³n a resultados",
-        "Capacidad para gestionar mÃºltiples operaciones simultÃ¡neamente"
+        "3+ años de experiencia en freight forwarding o logística internacional",
+        "Conocimiento de Incoterms, regulaciones aduaneras y documentación marítima",
+        "Inglés avanzado (comunicación diaria con partners globales)",
+        "Perfil analítico con orientación a resultados",
+        "Capacidad para gestionar múltiples operaciones simultáneamente"
       ],
       en: [
         "3+ years of experience in freight forwarding or international logistics",
@@ -67,21 +67,21 @@ export const jobs: Job[] = [
     title: { es: "Analista de Aduanas", en: "Customs Analyst" },
     dept: "Operaciones",
     location: "Miami, FL",
-    mode: "HÃ­brido",
+    mode: "Híbrido",
     level: "Junior",
-    salary: "$38,000 â $50,000 USD",
+    salary: "$38,000 — $50,000 USD",
     tags: ["Aduanas", "Compliance", "Regulaciones"],
     description: {
-      es: "SerÃ¡s parte del equipo que asegura que cada carga cruce fronteras de forma legal, eficiente y sin fricciones. Tu ojo para el detalle mantendrÃ¡ nuestras operaciones impecables.",
+      es: "Serás parte del equipo que asegura que cada carga cruce fronteras de forma legal, eficiente y sin fricciones. Tu ojo para el detalle mantendrá nuestras operaciones impecables.",
       en: "You'll be part of the team ensuring every shipment crosses borders legally, efficiently, and seamlessly. Your attention to detail will keep our operations impeccable."
     },
     responsibilities: {
       es: [
-        "Clasificar mercancÃ­as y determinar aranceles aplicables",
-        "Preparar y revisar documentaciÃ³n aduanera para importaciones y exportaciones",
+        "Clasificar mercancías y determinar aranceles aplicables",
+        "Preparar y revisar documentación aduanera para importaciones y exportaciones",
         "Coordinar con brokers y autoridades aduaneras",
         "Monitorear cambios regulatorios y actualizar procedimientos",
-        "Apoyar auditorÃ­as de compliance"
+        "Apoyar auditorías de compliance"
       ],
       en: [
         "Classify merchandise and determine applicable tariffs",
@@ -93,11 +93,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "1-2 aÃ±os de experiencia en comercio exterior o aduanas",
+        "1-2 años de experiencia en comercio exterior o aduanas",
         "Conocimiento de regulaciones US Customs & Border Protection",
-        "AtenciÃ³n excepcional al detalle",
-        "InglÃ©s y espaÃ±ol fluido",
-        "Licenciatura en Comercio Internacional, LogÃ­stica o afÃ­n"
+        "Atención excepcional al detalle",
+        "Inglés y español fluido",
+        "Licenciatura en Comercio Internacional, Logística o afín"
       ],
       en: [
         "1-2 years of experience in foreign trade or customs",
@@ -115,10 +115,10 @@ export const jobs: Job[] = [
     location: "Houston, TX",
     mode: "Presencial",
     level: "Mid-Level",
-    salary: "$50,000 â $65,000 USD",
-    tags: ["Transporte", "FTL/LTL", "NegociaciÃ³n"],
+    salary: "$50,000 — $65,000 USD",
+    tags: ["Transporte", "FTL/LTL", "Negociación"],
     description: {
-      es: "GestionarÃ¡s la red de transporte terrestre, optimizando rutas y relaciones con carriers para entregar confiabilidad y eficiencia a nuestros clientes.",
+      es: "Gestionarás la red de transporte terrestre, optimizando rutas y relaciones con carriers para entregar confiabilidad y eficiencia a nuestros clientes.",
       en: "You'll manage the ground transportation network, optimizing routes and carrier relationships to deliver reliability and efficiency to our customers."
     },
     responsibilities: {
@@ -126,7 +126,7 @@ export const jobs: Job[] = [
         "Gestionar operaciones de transporte FTL y LTL en EE.UU. y cross-border",
         "Negociar tarifas con carriers y optimizar costos de flete",
         "Monitorear entregas en tiempo real y resolver incidencias",
-        "Desarrollar relaciones estratÃ©gicas con transportistas",
+        "Desarrollar relaciones estratégicas con transportistas",
         "Generar reportes de KPIs operativos"
       ],
       en: [
@@ -139,11 +139,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "3+ aÃ±os en gestiÃ³n de transporte terrestre",
+        "3+ años en gestión de transporte terrestre",
         "Experiencia con TMS y herramientas de tracking",
-        "Habilidades de negociaciÃ³n comprobadas",
+        "Habilidades de negociación comprobadas",
         "Conocimiento del mercado de carriers en EE.UU.",
-        "InglÃ©s fluido"
+        "Inglés fluido"
       ],
       en: [
         "3+ years in ground transportation management",
@@ -156,24 +156,24 @@ export const jobs: Job[] = [
   },
   {
     id: 4,
-    title: { es: "Coordinador de Carga AÃ©rea", en: "Air Freight Coordinator" },
+    title: { es: "Coordinador de Carga Aérea", en: "Air Freight Coordinator" },
     dept: "Operaciones",
     location: "Miami, FL",
     mode: "Presencial",
     level: "Mid-Level",
-    salary: "$48,000 â $62,000 USD",
-    tags: ["Carga aÃ©rea", "IATA", "Urgentes"],
+    salary: "$48,000 — $62,000 USD",
+    tags: ["Carga aérea", "IATA", "Urgentes"],
     description: {
-      es: "GestionarÃ¡s embarques aÃ©reos para clientes que necesitan velocidad y precisiÃ³n. Desde perecederos hasta carga de alto valor, cada envÃ­o es una misiÃ³n crÃ­tica.",
+      es: "Gestionarás embarques aéreos para clientes que necesitan velocidad y precisión. Desde perecederos hasta carga de alto valor, cada envío es una misión crítica.",
       en: "You'll manage air shipments for clients who need speed and precision. From perishables to high-value cargo, every shipment is a critical mission."
     },
     responsibilities: {
       es: [
-        "Coordinar embarques aÃ©reos internacionales de exportaciÃ³n e importaciÃ³n",
-        "Negociar espacios y tarifas con aerolÃ­neas",
-        "Gestionar documentaciÃ³n HAWB/MAWB y cumplimiento IATA",
+        "Coordinar embarques aéreos internacionales de exportación e importación",
+        "Negociar espacios y tarifas con aerolíneas",
+        "Gestionar documentación HAWB/MAWB y cumplimiento IATA",
         "Resolver incidencias y garantizar entregas on-time",
-        "Optimizar consolidaciones y rutas aÃ©reas"
+        "Optimizar consolidaciones y rutas aéreas"
       ],
       en: [
         "Coordinate international air shipments for import and export",
@@ -185,11 +185,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "2+ aÃ±os de experiencia en carga aÃ©rea o freight forwarding",
-        "Conocimiento de regulaciones IATA y documentaciÃ³n aÃ©rea",
-        "Capacidad para trabajar bajo presiÃ³n con envÃ­os urgentes",
-        "InglÃ©s avanzado",
-        "OrientaciÃ³n al cliente y resoluciÃ³n de problemas"
+        "2+ años de experiencia en carga aérea o freight forwarding",
+        "Conocimiento de regulaciones IATA y documentación aérea",
+        "Capacidad para trabajar bajo presión con envíos urgentes",
+        "Inglés avanzado",
+        "Orientación al cliente y resolución de problemas"
       ],
       en: [
         "2+ years of experience in air cargo or freight forwarding",
@@ -207,19 +207,19 @@ export const jobs: Job[] = [
     location: "Remoto (LATAM)",
     mode: "Remoto",
     level: "Senior",
-    salary: "$70,000 â $95,000 USD",
+    salary: "$70,000 — $95,000 USD",
     tags: ["React", "Node.js", "TypeScript", "Cloud"],
     description: {
-      es: "ConstruirÃ¡s las plataformas tecnolÃ³gicas que estÃ¡n transformando cÃ³mo se mueve la carga globalmente. Stack moderno, equipo colaborativo, impacto directo en el negocio.",
+      es: "Construirás las plataformas tecnológicas que están transformando cómo se mueve la carga globalmente. Stack moderno, equipo colaborativo, impacto directo en el negocio.",
       en: "You'll build the technology platforms transforming how cargo moves globally. Modern stack, collaborative team, direct business impact."
     },
     responsibilities: {
       es: [
-        "DiseÃ±ar y desarrollar features end-to-end en nuestra plataforma de tracking",
+        "Diseñar y desarrollar features end-to-end en nuestra plataforma de tracking",
         "Colaborar con Product y UX para entregar experiencias excepcionales",
-        "Implementar APIs escalables e integraciones con partners logÃ­sticos",
+        "Implementar APIs escalables e integraciones con partners logísticos",
         "Liderar code reviews y mentorear desarrolladores junior",
-        "Contribuir a decisiones de arquitectura y stack tecnolÃ³gico"
+        "Contribuir a decisiones de arquitectura y stack tecnológico"
       ],
       en: [
         "Design and develop end-to-end features in our tracking platform",
@@ -231,11 +231,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "5+ aÃ±os de experiencia en desarrollo web full stack",
+        "5+ años de experiencia en desarrollo web full stack",
         "Dominio de React, Node.js, TypeScript",
         "Experiencia con servicios cloud (AWS o GCP)",
         "Familiaridad con CI/CD, testing automatizado y DevOps",
-        "Capacidad para trabajar de forma autÃ³noma en un equipo distribuido"
+        "Capacidad para trabajar de forma autónoma en un equipo distribuido"
       ],
       en: [
         "5+ years of experience in full stack web development",
@@ -250,21 +250,21 @@ export const jobs: Job[] = [
     id: 6,
     title: { es: "Data Analyst", en: "Data Analyst" },
     dept: "Corporate",
-    location: "Ciudad de PanamÃ¡, PanamÃ¡",
-    mode: "HÃ­brido",
+    location: "Ciudad de Panamá, Panamá",
+    mode: "Híbrido",
     level: "Mid-Level",
-    salary: "$45,000 â $60,000 USD",
+    salary: "$45,000 — $60,000 USD",
     tags: ["SQL", "Python", "BI", "Logistics Data"],
     description: {
-      es: "TransformarÃ¡s datos operativos en insights accionables que optimicen rutas, reduzcan costos y mejoren la toma de decisiones en toda la compaÃ±Ã­a.",
+      es: "Transformarás datos operativos en insights accionables que optimicen rutas, reduzcan costos y mejoren la toma de decisiones en toda la compañía.",
       en: "You'll transform operational data into actionable insights that optimize routes, reduce costs, and improve decision-making across the company."
     },
     responsibilities: {
       es: [
         "Construir dashboards y reportes para equipos de operaciones y liderazgo",
-        "Analizar tendencias de volumen, costos y tiempos de trÃ¡nsito",
+        "Analizar tendencias de volumen, costos y tiempos de tránsito",
         "Desarrollar modelos predictivos para demanda y pricing",
-        "Colaborar con equipos de negocio para definir mÃ©tricas clave",
+        "Colaborar con equipos de negocio para definir métricas clave",
         "Mantener y optimizar pipelines de datos"
       ],
       en: [
@@ -277,11 +277,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "3+ aÃ±os en anÃ¡lisis de datos o Business Intelligence",
+        "3+ años en análisis de datos o Business Intelligence",
         "SQL avanzado, Python (pandas, numpy)",
         "Experiencia con herramientas de BI (Power BI, Tableau, Looker)",
-        "Pensamiento analÃ­tico y storytelling con datos",
-        "Experiencia en logÃ­stica o supply chain es un plus"
+        "Pensamiento analítico y storytelling con datos",
+        "Experiencia en logística o supply chain es un plus"
       ],
       en: [
         "3+ years in data analysis or Business Intelligence",
@@ -299,16 +299,16 @@ export const jobs: Job[] = [
     location: "Remoto (Global)",
     mode: "Remoto",
     level: "Mid-Level",
-    salary: "$55,000 â $75,000 USD",
+    salary: "$55,000 — $75,000 USD",
     tags: ["Figma", "Design Systems", "User Research"],
     description: {
-      es: "DiseÃ±arÃ¡s experiencias digitales que simplifiquen la complejidad de la logÃ­stica global. Cada pixel cuenta cuando mueves el mundo.",
+      es: "Diseñarás experiencias digitales que simplifiquen la complejidad de la logística global. Cada pixel cuenta cuando mueves el mundo.",
       en: "You'll design digital experiences that simplify global logistics complexity. Every pixel counts when you move the world."
     },
     responsibilities: {
       es: [
-        "DiseÃ±ar interfaces intuitivas para nuestra plataforma de tracking y operaciones",
-        "Conducir investigaciÃ³n de usuarios y tests de usabilidad",
+        "Diseñar interfaces intuitivas para nuestra plataforma de tracking y operaciones",
+        "Conducir investigación de usuarios y tests de usabilidad",
         "Mantener y evolucionar el design system",
         "Crear prototipos de alta fidelidad en Figma",
         "Colaborar estrechamente con desarrollo y producto"
@@ -323,11 +323,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "3+ aÃ±os de experiencia en UX/UI design para productos digitales",
-        "Portfolio demostrando diseÃ±o de productos complejos simplificados",
+        "3+ años de experiencia en UX/UI design para productos digitales",
+        "Portfolio demostrando diseño de productos complejos simplificados",
         "Dominio de Figma y herramientas de prototipado",
         "Experiencia con design systems y design tokens",
-        "Mentalidad data-driven para decisiones de diseÃ±o"
+        "Mentalidad data-driven para decisiones de diseño"
       ],
       en: [
         "3+ years of experience in UX/UI design for digital products",
@@ -343,12 +343,12 @@ export const jobs: Job[] = [
     title: { es: "Business Development Manager", en: "Business Development Manager" },
     dept: "Comercial",
     location: "Miami, FL",
-    mode: "HÃ­brido",
+    mode: "Híbrido",
     level: "Senior",
-    salary: "$80,000 â $110,000 USD",
+    salary: "$80,000 — $110,000 USD",
     tags: ["Ventas B2B", "Logistics Sales", "New Business"],
     description: {
-      es: "ExpandirÃ¡s nuestra cartera de clientes conectando empresas con soluciones logÃ­sticas que transforman sus operaciones. Hunter mindset, resultados reales.",
+      es: "Expandirás nuestra cartera de clientes conectando empresas con soluciones logísticas que transforman sus operaciones. Hunter mindset, resultados reales.",
       en: "You'll expand our client portfolio by connecting companies with logistics solutions that transform their operations. Hunter mindset, real results."
     },
     responsibilities: {
@@ -369,11 +369,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "5+ aÃ±os en desarrollo de negocio B2B en logÃ­stica o freight forwarding",
+        "5+ años en desarrollo de negocio B2B en logística o freight forwarding",
         "Track record comprobado de cierre de cuentas corporativas",
-        "Network en la industria logÃ­stica de EE.UU. y LATAM",
-        "Habilidades excepcionales de presentaciÃ³n y negociaciÃ³n",
-        "InglÃ©s y espaÃ±ol nativos"
+        "Network en la industria logística de EE.UU. y LATAM",
+        "Habilidades excepcionales de presentación y negociación",
+        "Inglés y español nativos"
       ],
       en: [
         "5+ years in B2B business development in logistics or freight forwarding",
@@ -388,22 +388,22 @@ export const jobs: Job[] = [
     id: 9,
     title: { es: "Pricing Analyst", en: "Pricing Analyst" },
     dept: "Comercial",
-    location: "Ciudad de PanamÃ¡, PanamÃ¡",
+    location: "Ciudad de Panamá, Panamá",
     mode: "Presencial",
     level: "Junior",
-    salary: "$35,000 â $48,000 USD",
-    tags: ["Cotizaciones", "AnÃ¡lisis", "Excel avanzado"],
+    salary: "$35,000 — $48,000 USD",
+    tags: ["Cotizaciones", "Análisis", "Excel avanzado"],
     description: {
-      es: "ConstruirÃ¡s cotizaciones competitivas que ganan negocios y mantienen mÃ¡rgenes saludables. El puente entre operaciones y el cliente.",
+      es: "Construirás cotizaciones competitivas que ganan negocios y mantienen márgenes saludables. El puente entre operaciones y el cliente.",
       en: "You'll build competitive quotes that win business and maintain healthy margins. The bridge between operations and the customer."
     },
     responsibilities: {
       es: [
-        "Elaborar cotizaciones para servicios marÃ­timos, aÃ©reos y terrestres",
+        "Elaborar cotizaciones para servicios marítimos, aéreos y terrestres",
         "Analizar tarifas de mercado y competencia",
         "Mantener base de datos de tarifas actualizada",
         "Coordinar con agentes y partners para obtener mejores rates",
-        "Apoyar al equipo comercial con anÃ¡lisis de rentabilidad"
+        "Apoyar al equipo comercial con análisis de rentabilidad"
       ],
       en: [
         "Develop quotes for maritime, air, and ground services",
@@ -415,11 +415,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "1-2 aÃ±os de experiencia en pricing logÃ­stico o freight forwarding",
-        "Excel avanzado (tablas dinÃ¡micas, fÃ³rmulas complejas)",
-        "Perfil numÃ©rico y orientado al detalle",
-        "InglÃ©s intermedio-avanzado",
-        "Capacidad para trabajar bajo presiÃ³n con mÃºltiples solicitudes"
+        "1-2 años de experiencia en pricing logístico o freight forwarding",
+        "Excel avanzado (tablas dinámicas, fórmulas complejas)",
+        "Perfil numérico y orientado al detalle",
+        "Inglés intermedio-avanzado",
+        "Capacidad para trabajar bajo presión con múltiples solicitudes"
       ],
       en: [
         "1-2 years of experience in logistics pricing or freight forwarding",
@@ -434,21 +434,21 @@ export const jobs: Job[] = [
     id: 10,
     title: { es: "People & Culture Specialist", en: "People & Culture Specialist" },
     dept: "People",
-    location: "Ciudad de PanamÃ¡, PanamÃ¡",
-    mode: "HÃ­brido",
+    location: "Ciudad de Panamá, Panamá",
+    mode: "Híbrido",
     level: "Mid-Level",
-    salary: "$40,000 â $55,000 USD",
+    salary: "$40,000 — $55,000 USD",
     tags: ["HR", "Cultura", "Talent", "Engagement"],
     description: {
-      es: "SerÃ¡s arquitecto/a de la experiencia del empleado, diseÃ±ando programas que hagan de Trading Solutions un lugar donde el talento excepcional quiere estar.",
+      es: "Serás arquitecto/a de la experiencia del empleado, diseñando programas que hagan de Trading Solutions un lugar donde el talento excepcional quiere estar.",
       en: "You'll be the architect of the employee experience, designing programs that make Trading Solutions a place where exceptional talent wants to be."
     },
     responsibilities: {
       es: [
-        "DiseÃ±ar e implementar iniciativas de cultura y engagement",
+        "Diseñar e implementar iniciativas de cultura y engagement",
         "Gestionar programas de onboarding y desarrollo",
-        "Coordinar evaluaciones de desempeÃ±o y career paths",
-        "Analizar mÃ©tricas de People y proponer mejoras",
+        "Coordinar evaluaciones de desempeño y career paths",
+        "Analizar métricas de People y proponer mejoras",
         "Liderar proyectos de bienestar y wellness"
       ],
       en: [
@@ -461,11 +461,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "3+ aÃ±os de experiencia en HR o People Operations",
-        "Experiencia diseÃ±ando programas de cultura organizacional",
+        "3+ años de experiencia en HR o People Operations",
+        "Experiencia diseñando programas de cultura organizacional",
         "Conocimiento de herramientas de HR Tech",
-        "InglÃ©s y espaÃ±ol fluido",
-        "PasiÃ³n por crear experiencias excepcionales para empleados"
+        "Inglés y español fluido",
+        "Pasión por crear experiencias excepcionales para empleados"
       ],
       en: [
         "3+ years of experience in HR or People Operations",
@@ -483,10 +483,10 @@ export const jobs: Job[] = [
     location: "Miami, FL",
     mode: "Presencial",
     level: "Junior",
-    salary: "$40,000 â $52,000 USD",
+    salary: "$40,000 — $52,000 USD",
     tags: ["Contabilidad", "AP/AR", "ERP"],
     description: {
-      es: "MantendrÃ¡s los nÃºmeros que sostienen nuestra operaciÃ³n global. PrecisiÃ³n, velocidad y una mentalidad de mejora continua.",
+      es: "Mantendrás los números que sostienen nuestra operación global. Precisión, velocidad y una mentalidad de mejora continua.",
       en: "You'll maintain the numbers that support our global operations. Precision, speed, and a continuous improvement mindset."
     },
     responsibilities: {
@@ -495,7 +495,7 @@ export const jobs: Job[] = [
         "Realizar conciliaciones bancarias y contables",
         "Procesar facturas y pagos a proveedores internacionales",
         "Apoyar cierres mensuales y reportes financieros",
-        "Colaborar con el equipo de operaciones en facturaciÃ³n"
+        "Colaborar con el equipo de operaciones en facturación"
       ],
       en: [
         "Manage accounts payable and accounts receivable",
@@ -507,11 +507,11 @@ export const jobs: Job[] = [
     },
     requirements: {
       es: [
-        "1-3 aÃ±os de experiencia en contabilidad",
+        "1-3 años de experiencia en contabilidad",
         "Conocimiento de US GAAP",
         "Experiencia con ERP (SAP, Oracle, NetSuite o similar)",
         "Excel avanzado",
-        "InglÃ©s fluido"
+        "Inglés fluido"
       ],
       en: [
         "1-3 years of experience in accounting",
