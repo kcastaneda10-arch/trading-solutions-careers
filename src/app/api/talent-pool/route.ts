@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query += ' AND (full_name ILIKE $' + (params.length + 1) + ' OR email ILIKE $' + (params.length + 1) + ' OR current_role ILIKE $' + (params.length + 1) + ')';
+      query += ' AND (full_name ILIKE $' + (params.length + 1) + ' OR email ILIKE $' + (params.length + 1) + ' OR "current_role" ILIKE $' + (params.length + 1) + ')';
       params.push(`%${search}%`);
     }
 
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     const result = await sql(
       `INSERT INTO talent_pool (
-        full_name, email, phone, current_role, years_experience,
+        full_name, email, phone, "current_role", years_experience,
         skills, education, languages, location, linkedin_url,
         cv_data, cv_filename, summary, tags, source, notes
       ) VALUES (
