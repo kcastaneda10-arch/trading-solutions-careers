@@ -134,7 +134,7 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {([
-              { key: "ops" as const, dept: "Operaciones", img: "photo-1578575437130-527eed3abbec", alt: locale === "es" ? "Operaciones marÃ­timas" : "Maritime operations" },
+              { key: "ops" as const, dept: "Operaciones", img: "photo-1578575437130-527eed3abbec", alt: locale === "es" ? "Operaciones marítimas" : "Maritime operations" },
               { key: "corporate" as const, dept: "Corporate", img: "photo-1497366216548-37526070297c", alt: "Corporate" },
               { key: "commercial" as const, dept: "Comercial", img: "photo-1600880292203-757bb62b4baf", alt: locale === "es" ? "Comercial" : "Commercial" },
             ]).map((d) => (
@@ -179,7 +179,7 @@ export default function HomePage() {
                 }}
               >
                 <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-3">
-                  {exp.num} â {exp.label}
+                  {exp.num} — {exp.label}
                 </p>
                 <h3 className="text-xl font-bold mb-2">{exp.title}</h3>
                 <p className="text-sm text-gray-300 leading-relaxed">{exp.desc}</p>
