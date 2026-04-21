@@ -1,0 +1,307 @@
+"use client";
+
+import React, { useState, useMemo } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import {
+  Brain,
+  Clock,
+  CheckCircle2,
+  Globe,
+  ArrowRight,
+  ShieldCheck,
+  FileText,
+  Languages,
+} from "lucide-react";
+import {
+  assessments,
+  assessmentTokens,
+  type AssessmentMeta,
+} from "@/data/assessments";
+import { jobs } from "@/data/jobs";
+
+export default function AssessmentLanding() {
+  const params = useParams<{ token: string }>();
+  const token = assessmentTokens.find((t) => t.token === params.token);
+
+  const [lang, setLang] = useState<"es" | "en">(token?.language ?? "es");
+  const [agreed, setAgreed] = useState(false);
+  const [started, setStarted] = useState<AssessmentMeta | null>(null);
+
+  const job = useMemo(
+    () => jobs.find((j) => j.slug === token?.jobSlug),
+    [token]
+  );
+  const tests = useMemo(() => {
+    if (!token) return [] as typeof assessments;
+    return assessments.filter((a) => token.assessmentIds.includes(a.id));
+  }, [token]);
+
+  const totalDuration = tests.reduce((acc, t) => acc + t.duration, 0);
+  const totalQuestions = tests.reduce((acc, t) => acc + t.questions, 0);
+
+  const t = (es: string, en: string) => (lang === "es" ? es : en);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center max-w-md p-8">
+          <h1 className="text-2xl font-bold mb-3">Token inválido</h1>
+          <p className="text-gray-500">
+            El enlace de evaluación no existe o ha expirado. Contacta a{" "}
+            <a
+              className="underline"
+              href="mailto:jointheteam@tradingsolutions.com"
+            >
+              jointheteam@tradingsolutions.com
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (started) {
+    return <TestRunner meta={started} lang={lang} onExit={() => setStarted(null)} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Top thin bar */}
+      <div className="fixed top-0 inset-x-0 z-50 h-8 bg-black text-white flex items-center justify-between px-6">
+        <span className="text-[11px] tracking-[0.2em] font-semibold">
+          TRADING SOLUTIONS · CAREERS
+        </span>
+        <button
+          onClick={() => setLang(lang === "es" ? "en" : "es")}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-white/80 hover:text-white"
+        >
+          <Globe className="w-3 h-3" />
+          {lang === "es" ? "EN" : "ES"}
+        </button>
+      </div>
+
+      <div className="pt-14 pb-24 max-w-3xl mx-auto px-6">
+        {/* Breadcrumb / title */}
+        <p className="text-xs tracking-[0.18em] font-semibold text-gray-500 uppercase mb-4">
+          {t("Evaluación de selección", "Hiring assessment")}
+        </p>
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
+          {t("Bienvenido, ", "Welcome, ")}
+          {token.candidate.split(" ")[0]}.
+        </h1>
+        <p className="text-gray-600 text-lg leading-relaxed max-w-2xl mb-2">
+          {t(
+            "Has sido invitado a completar la evaluación para la posición ",
+            "You have been invited to complete the assessment for the "
+          )}
+          <b>{job?.title[lang]}</b>
+          {t(" en Trading Solutions Barranquilla.", " role at Trading Solutions Barranquilla.")}
+        </p>
+        <p className="text-gray-500 text-sm">
+          {t("Token: ", "Token: ")}
+          <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{token.token}</code>
+        </p>
+
+        {/* Summary block */}
+        <div className="mt-10 grid grid-cols-3 gap-4 border-y border-gray-200 py-6">
+          <div>
+            <div className="text-[11px] tracking-[0.15em] text-gray-500 font-semibold uppercase mb-1">
+              {t("Pruebas", "Tests")}
+            </div>
+            <div className="text-2xl font-bold">{tests.length}</div>
+          </div>
+          <div>
+            <div className="text-[11px] tracking-[0.15em] text-gray-500 font-semibold uppercase mb-1">
+              {t("Duración estimada", "Estimated time")}
+            </div>
+            <div className="text-2xl font-bold">{totalDuration} min</div>
+          </div>
+          <div>
+            <div className="text-[11px] tracking-[0.15em] text-gray-500 font-semibold uppercase mb-1">
+              {t("Preguntas totales", "Total questions")}
+            </div>
+            <div className="text-2xl font-bold">{totalQuestions}</div>
+          </div>
+        </div>
+
+        {/* Tests list */}
+        <h2 className="mt-10 text-xl font-bold">
+          {t("Las pruebas que tomarás", "The tests you will take")}
+        </h2>
+        <p className="text-gray-500 text-sm mt-1 mb-5">
+          {t(
+            "Puedes hacerlas en el orden que prefieras. Cada prueba se guarda automáticamente.",
+            "You can take them in any order. Each test is auto-saved."
+          )}
+        </p>
+        <div className="space-y-3">
+          {tests.map((a) => (
+            <div
+              key={a.id}
+              className="border border-gray-200 rounded-2xl p-5 flex gap-5 items-start hover:border-black transition-colors"
+            >
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0"
+                style={{ background: a.color }}
+              >
+                <IconForAssessment id={a.id} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-base">{a.title[lang]}</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">{a.summary[lang]}</p>
+                  </div>
+                  <button
+                    onClick={() => agreed && setStarted(a)}
+                    disabled={!agreed}
+                    className="pill-btn pill-btn-primary text-xs whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ padding: "8px 16px" }}
+                  >
+                    {t("Empezar", "Start")} <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="flex gap-4 mt-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {a.duration} min
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    {a.questions} {t("preguntas", "questions")}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Brain className="w-3 h-3" />
+                    {a.dimensions.length} {t("dimensiones", "dimensions")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Consent */}
+        <div className="mt-10 bg-gray-50 rounded-2xl p-6">
+          <h3 className="font-bold text-base mb-3 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            {t("Consentimiento y privacidad", "Consent and privacy")}
+          </h3>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {t(
+              "Tus respuestas y resultados se almacenan cifrados en la plataforma interna de Trading Solutions y solo son visibles para el equipo de reclutamiento. Los datos se usan exclusivamente para evaluar tu candidatura y se conservan 24 meses según nuestra política de retención.",
+              "Your answers and results are stored encrypted in the Trading Solutions internal platform and only visible to the recruiting team. Data is used solely to evaluate your application and retained for 24 months per our retention policy."
+            )}
+          </p>
+          <label className="flex items-center gap-2 mt-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="w-4 h-4 accent-black"
+            />
+            <span className="text-sm">
+              {t(
+                "He leído y acepto los términos de uso.",
+                "I have read and accept the terms of use."
+              )}
+            </span>
+          </label>
+        </div>
+
+        <p className="mt-10 text-xs text-gray-400 text-center">
+          <Languages className="inline w-3 h-3 mr-1" />
+          {t(
+            "Cualquier duda, escríbenos a ",
+            "Any questions, email us at "
+          )}
+          <a
+            className="underline hover:text-black"
+            href="mailto:jointheteam@tradingsolutions.com"
+          >
+            jointheteam@tradingsolutions.com
+          </a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Simple runner (sample questions) ---------- */
+function TestRunner({
+  meta,
+  lang,
+  onExit,
+}: {
+  meta: AssessmentMeta;
+  lang: "es" | "en";
+  onExit: () => void;
+}) {
+  const t = (es: string, en: string) => (lang === "es" ? es : en);
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="fixed top-0 inset-x-0 z-50 h-12 bg-black text-white flex items-center justify-between px-6">
+        <button onClick={onExit} className="text-xs text-white/80 hover:text-white">
+          ← {t("Salir", "Exit")}
+        </button>
+        <span className="text-[11px] tracking-[0.2em] font-semibold">
+          {meta.title[lang]}
+        </span>
+        <span className="text-xs text-white/80">
+          <Clock className="inline w-3 h-3 mr-1" />
+          {meta.duration} min
+        </span>
+      </div>
+      <div className="pt-24 max-w-2xl mx-auto px-6 pb-24 text-center">
+        <div
+          className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-white mb-6"
+          style={{ background: meta.color }}
+        >
+          <IconForAssessment id={meta.id} big />
+        </div>
+        <h1 className="text-3xl font-bold mb-3">{meta.title[lang]}</h1>
+        <p className="text-gray-600 max-w-lg mx-auto">
+          {meta.summary[lang]}
+        </p>
+        <div className="my-8 p-5 bg-gray-50 rounded-2xl text-left max-w-lg mx-auto">
+          <p className="text-xs tracking-[0.15em] text-gray-500 font-semibold uppercase mb-2">
+            {t("Esta prueba mide", "This test measures")}
+          </p>
+          <ul className="space-y-1.5">
+            {meta.dimensions.map((d) => (
+              <li key={d} className="flex items-start gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                {d}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <button className="pill-btn pill-btn-primary">
+          {t("Comenzar ahora", "Start now")} <ArrowRight className="w-4 h-4" />
+        </button>
+        <p className="text-xs text-gray-400 mt-4">
+          {t(
+            "Puedes pausar en cualquier momento. Tu progreso se guarda automáticamente.",
+            "You can pause anytime. Your progress is auto-saved."
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function IconForAssessment({
+  id,
+  big = false,
+}: {
+  id: AssessmentMeta["id"];
+  big?: boolean;
+}) {
+  const cls = big ? "w-7 h-7" : "w-5 h-5";
+  if (id === "factor_x_cognitivo") return <Brain className={cls} />;
+  if (id === "factor_x_actitudinal") return <CheckCircle2 className={cls} />;
+  if (id === "betesa_leadership") return <ShieldCheck className={cls} />;
+  if (id === "english_proficiency") return <Languages className={cls} />;
+  return <FileText className={cls} />;
+}
