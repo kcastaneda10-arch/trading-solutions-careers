@@ -34,14 +34,13 @@ export async function GET(request: Request) {
       clientSecret: "",
       redirectUri: `${origin}/api/linkedin/callback`,
       companyId: process.env.LINKEDIN_COMPANY_ID ?? "",
-      scope: [
-        "openid",
-        "profile",
-        "email",
-        "r_organization_social",
-        "w_organization_social",
-        "rw_organization_admin",
-      ],
+      // Scopes autorizados con los productos activados actualmente:
+      //   - Sign In with LinkedIn using OpenID Connect  → openid, profile, email
+      //   - Share on LinkedIn                           → w_member_social
+      // Los scopes de organización (w_organization_social, rw_organization_admin)
+      // requieren productos adicionales (Marketing Developer Platform o Community
+      // Management API) que se solicitan después de la aprobación de LinkedIn.
+      scope: ["openid", "profile", "email", "w_member_social"],
     },
     state
   );
