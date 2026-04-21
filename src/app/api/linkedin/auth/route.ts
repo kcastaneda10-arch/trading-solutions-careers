@@ -4,12 +4,12 @@
  * Redirige al admin corporativo a la pantalla de consentimiento
  * de LinkedIn con los scopes requeridos para el ATS.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { buildAuthUrl } from "@/lib/linkedin";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const origin = `${url.protocol}//${url.host}`;
 
@@ -46,12 +46,20 @@ export async function GET(request: Request) {
   );
 
   const response = NextResponse.redirect(authUrl);
-  response.cookies.set("li_oauth_state", state, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: url.protocol === "https:",
-    path: "/",
-    maxAge: 600,
-  });
+  // Usar Set-Cookie directo para asegurar que se envía en redirects 307.
+  const isHttps = url.protocol === "https:";
+  response.headers.append(
+    "Set-Cookie",
+    [
+      `li_oauth_state=${encodeURIComponent(state)}`,
+      "Path=/",
+      "HttpOnly",
+      isHttps ? "Secure" : "",
+      "SameSite=Lax",
+      "Max-Age=600",
+    ]
+      .filter(Boolean)
+      .join("; ")
+  );
   return response;
 }

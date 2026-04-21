@@ -4,12 +4,12 @@
  * Intercambia el code por un access_token y lo guarda en una cookie
  * httpOnly (o en DB si tienes una).
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { exchangeCodeForToken } from "@/lib/linkedin";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -25,14 +25,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "missing_credentials" }, { status: 500 });
   }
 
-  // CSRF check
-  const cookieState = request.headers
-    .get("cookie")
-    ?.split(";")
-    .find((c) => c.trim().startsWith("li_oauth_state="))
-    ?.split("=")[1];
-  if (!state || state !== cookieState) {
-    return NextResponse.json({ error: "state_mismatch" }, { status: 400 });
+  // CSRF check usando la API oficial de cookies de Next.js.
+  // El valor viene URL-encoded porque así lo seteamos en /api/linkedin/auth.
+  const rawCookieState = request.cookies.get("li_oauth_state")?.value;
+  const cookieState = rawCookieState
+    ? decodeURIComponent(rawCookieState)
+    : undefined;
+  if (!state || !cookieState || state !== cookieState) {
+    return NextResponse.json(
+      {
+        error: "state_mismatch",
+        hint:
+          "Si persiste: asegúrate de iniciar el OAuth en el mismo navegador (sin modo incógnito ni cookies bloqueadas) y no cerrar la pestaña intermedia.",
+        debug: {
+          hasState: !!state,
+          hasCookie: !!cookieState,
+          equal: state === cookieState,
+        },
+      },
+      { status: 400 }
+    );
   }
 
   const origin = `${url.protocol}//${url.host}`;
