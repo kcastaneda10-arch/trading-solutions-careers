@@ -112,7 +112,19 @@ export async function exchangeCodeForToken(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  if (!res.ok) throw new Error(`LinkedIn token exchange failed: ${res.status}`);
+  if (!res.ok) {
+    const txt = await res.text();
+    // Diagnóstico: incluye status + cuerpo + snippet del config (sin secreto)
+    const diag = {
+      status: res.status,
+      linkedinResponse: txt.slice(0, 500),
+      clientIdSent: cfg.clientId,
+      clientIdLength: cfg.clientId.length,
+      secretLength: cfg.clientSecret.length,
+      redirectUri: cfg.redirectUri,
+    };
+    throw new Error(`LinkedIn token exchange failed: ${JSON.stringify(diag)}`);
+  }
   const data = await res.json();
   return {
     accessToken: data.access_token,
