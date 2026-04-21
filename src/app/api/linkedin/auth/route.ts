@@ -1,11 +1,11 @@
 /**
  * GET /api/linkedin/auth
  * Inicia el flujo OAuth 2.0 de LinkedIn.
- * Redirige al admin corporativo a la pantalla de consentimiento
- * de LinkedIn con los scopes requeridos para el ATS.
+ * El state se firma con HMAC (stateless) — no depende de cookies.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAuthUrl } from "@/lib/linkedin";
+import { issueState } from "@/lib/linkedin-state";
 
 export const runtime = "nodejs";
 
@@ -25,8 +25,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // state = CSRF protection. En producción guardar en cookie httpOnly signed.
-  const state = crypto.randomUUID();
+  // State firmado con HMAC — auto-verificable sin cookies.
+  let state: string;
+  try {
+    state = issueState();
+  } catch {
+    return NextResponse.json(
+      { error: "LINKEDIN_CLIENT_SECRET missing" },
+      { status: 500 }
+    );
+  }
 
   const authUrl = buildAuthUrl(
     {
@@ -45,21 +53,5 @@ export async function GET(request: NextRequest) {
     state
   );
 
-  const response = NextResponse.redirect(authUrl);
-  // Usar Set-Cookie directo para asegurar que se envía en redirects 307.
-  const isHttps = url.protocol === "https:";
-  response.headers.append(
-    "Set-Cookie",
-    [
-      `li_oauth_state=${encodeURIComponent(state)}`,
-      "Path=/",
-      "HttpOnly",
-      isHttps ? "Secure" : "",
-      "SameSite=Lax",
-      "Max-Age=600",
-    ]
-      .filter(Boolean)
-      .join("; ")
-  );
-  return response;
+  return NextResponse.redirect(authUrl);
 }
