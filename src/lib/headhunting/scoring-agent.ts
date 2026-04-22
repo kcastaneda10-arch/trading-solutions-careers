@@ -19,7 +19,24 @@ import type {
   IdealProfile,
 } from './types';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+// Lazy init del cliente Anthropic: NO instanciar al cargar el módulo
+// (si no, el build de Next.js rompe cuando ANTHROPIC_API_KEY no existe
+// durante la etapa "Collecting page data").
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (_anthropic) return _anthropic;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY is not configured');
+  _anthropic = new Anthropic({ apiKey: key });
+  return _anthropic;
+}
+const anthropic = new Proxy({} as Anthropic, {
+  get(_t, prop) {
+    const c = getAnthropic() as unknown as Record<PropertyKey, unknown>;
+    const v = c[prop];
+    return typeof v === 'function' ? (v as (...args: unknown[]) => unknown).bind(c) : v;
+  },
+});
 const MODEL = 'claude-sonnet-4-20250514';
 
 // ─── Score a single response ─────────────────────────────────────

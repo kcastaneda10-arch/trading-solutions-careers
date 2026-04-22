@@ -241,6 +241,58 @@ const VACANCIES: VacancySeed[] = [
     apply_email: 'jointheteam@tradingsolutions.com',
     posted_at: '2026-04-14',
   },
+  {
+    id: 5,
+    slug: 'lead-accounting-finance-officer',
+    title_es: 'Líder de Contabilidad y Finanzas',
+    title_en: 'Lead Accounting & Finance Officer',
+    department: 'Finanzas',
+    location: 'Barranquilla, Atlántico, Colombia',
+    work_mode: 'Presencial',
+    employment_type: 'full-time',
+    level: 'Senior',
+    salary_range: 'Competitivo según experiencia',
+    tags: ['Contabilidad', 'IFRS/NIIF', 'Cumplimiento Tributario', 'Reportes Financieros', 'ERP (SAP/Oracle)', 'Consolidación', 'Inglés B1+'],
+    description_es:
+      'Buscamos un Líder de Contabilidad y Finanzas para garantizar la integridad financiera y el cumplimiento normativo multi-país a medida que escalamos nuestras operaciones globales. Este rol será clave para anclar nuestras operaciones contables en múltiples jurisdicciones, asegurando reportes financieros sólidos, cumplimiento tributario internacional y un marco de gobernanza que soporte el crecimiento de Trading Solutions como compañía global de freight forwarding.',
+    description_en:
+      'We are hiring a Lead Accounting & Finance Officer to drive financial integrity and multi-country compliance as we scale our global operations. This role anchors accounting operations across multiple jurisdictions, ensuring rock-solid financial reporting, international tax compliance, and the governance framework that allows Trading Solutions to scale as a global freight forwarding company.',
+    responsibilities_es: [
+      'Liderar y fortalecer la función contable, estableciendo estándares de precisión, oportunidad y cumplimiento regulatorio en todas las entidades',
+      'Gestionar los cierres mensuales y anuales, asegurando reportes financieros impecables alineados con regulaciones locales y políticas corporativas',
+      'Liderar la estrategia de cumplimiento tributario internacional en todos los países donde opera Trading Solutions',
+      'Coordinar la contabilidad multi-entidad y transfronteriza, incluyendo estados financieros consolidados para holdings y subsidiarias internacionales',
+      'Preparar reportes financieros de alto impacto para la gerencia, auditores externos y stakeholders clave',
+      'Establecer controles internos robustos, marcos de gobernanza y prácticas de mitigación de riesgos',
+    ],
+    responsibilities_en: [
+      'Lead and strengthen the accounting function, setting standards for accuracy, timeliness, and full regulatory compliance across all entities',
+      'Own the monthly and annual closing cycles, ensuring flawless financial reporting aligned with local regulations and corporate policies',
+      'Drive international tax compliance strategy across every country where Trading Solutions operates',
+      'Coordinate multi-entity and cross-border accounting, including consolidated financial statements for holding structures and international subsidiaries',
+      'Prepare and deliver high-impact financial reports for senior management, external auditors, and key stakeholders',
+      'Establish and maintain robust internal financial controls, governance frameworks, and risk mitigation practices',
+    ],
+    requirements_es: [
+      'Título profesional en Contaduría Pública',
+      '3-5 años de experiencia progresiva en contabilidad corporativa, reportes financieros o roles afines',
+      'Experiencia comprobada gestionando declaraciones tributarias, cierres mensuales/anuales y cumplimiento regulatorio',
+      'Mentalidad analítica con excepcional atención al detalle y precisión de datos',
+      'Inglés nivel B1+ (intermedio o superior); B2-C1 deseable',
+      'Deseable: conocimiento de IFRS/NIIF, ERP (SAP/Oracle) y experiencia en logística internacional o freight forwarding',
+    ],
+    requirements_en: [
+      "Bachelor's degree in Accounting",
+      '3-5 years of progressive experience in corporate accounting, financial reporting, or related finance roles',
+      'Proven track record managing tax filings, monthly/annual closings, and regulatory compliance',
+      'Strong analytical mindset with exceptional attention to detail and data accuracy',
+      'English proficiency at B1+ level (intermediate or above); B2-C1 is a plus',
+      'Preferred: working knowledge of IFRS/NIIF, ERP systems (SAP/Oracle), and experience in freight forwarding or international logistics',
+    ],
+    linkedin_url: 'https://www.linkedin.com/jobs/view/4376444434/',
+    apply_email: 'jointheteam@tradingsolutions.com',
+    posted_at: '2026-04-17',
+  },
 ];
 
 export async function GET(request: NextRequest) {
