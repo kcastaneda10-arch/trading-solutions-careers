@@ -196,16 +196,170 @@ function Pill({ children, color = "gray" }: { children: React.ReactNode; color?:
 /* ======================================================== */
 /* Dashboard                                                */
 /* ======================================================== */
+type DashboardStats = {
+  vacancies: number;
+  vacanciesLinkedIn: number;
+  applications: number;
+  talentPool: number;
+  assessmentsSent: number;
+  assessmentsInProgress: number;
+  assessmentsCompleted: number;
+  interviews: number;
+  offers: number;
+  hires: number;
+  bySource: Record<string, number>;
+  topCandidates: Array<{ name: string; role: string; score: number | null; tags: string }>;
+};
+
 function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [vacR, appR, tpR, asR] = await Promise.all([
+          fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+          fetch("/api/applications", { cache: "no-store" }).then((r) => r.json()),
+          fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+          fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+        ]);
+        if (cancelled) return;
+
+        type Vacancy = { linkedin_url?: string };
+        type Application = { status?: string };
+        type TalentPoolItem = {
+          full_name: string;
+          source?: string;
+          tags?: string;
+          summary?: string;
+        };
+        type AssessmentToken = { status: string; score?: number | null };
+        const vacs = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as Vacancy[];
+        const apps = (appR.applications ?? appR.data ?? []) as Application[];
+        const tp = (tpR.data ?? []) as TalentPoolItem[];
+        const assess = (asR.data ?? []) as AssessmentToken[];
+
+        // source distribution (del talent_pool)
+        const bySource: Record<string, number> = {};
+        for (const c of tp) {
+          const s = (c.source ?? "otros").toLowerCase();
+          const label = s.includes("linkedin")
+            ? "LinkedIn TS"
+            : s.includes("email")
+            ? "Email / directo"
+            : s.includes("refer")
+            ? "Referidos"
+            : "Otros";
+          bySource[label] = (bySource[label] ?? 0) + 1;
+        }
+
+        // top candidatos: preferir assessments completados con score, sino los de talent_pool con "MUCHO" en tags
+        const byEmail: Record<string, { name: string; score: number | null; tags: string; summary?: string }> = {};
+        for (const c of tp) {
+          if (!c.full_name) continue;
+          byEmail[c.full_name] = {
+            name: c.full_name,
+            score: null,
+            tags: c.tags ?? "",
+            summary: c.summary,
+          };
+        }
+        for (const a of assess) {
+          if (a.status === "completed" && a.score) {
+            const key = (a as unknown as { candidate_name: string }).candidate_name;
+            if (byEmail[key]) byEmail[key].score = a.score;
+          }
+        }
+        const topCandidates = Object.values(byEmail)
+          .filter((c) => c.score !== null || c.tags.toLowerCase().includes("mucho"))
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+          .slice(0, 5)
+          .map((c) => ({
+            name: c.name,
+            role: c.tags.split(",")[0]?.trim() || c.summary?.slice(0, 50) || "—",
+            score: c.score,
+            tags: c.tags,
+          }));
+
+        setStats({
+          vacancies: vacs.length,
+          vacanciesLinkedIn: vacs.filter((v) => v.linkedin_url).length,
+          applications: apps.length,
+          talentPool: tp.length,
+          assessmentsSent: assess.length,
+          assessmentsInProgress: assess.filter((a) => a.status === "in_progress").length,
+          assessmentsCompleted: assess.filter((a) => a.status === "completed").length,
+          interviews: 0, // Requiere tabla interviews_ai que aún no existe
+          offers: 0,      // Requiere tabla offers
+          hires: 0,       // Requiere tabla hires
+          bySource,
+          topCandidates,
+        });
+        setLoading(false);
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const s = stats;
+
+  // Funnel real: cada etapa es un subset de la anterior
+  const funnelRows = s
+    ? [
+        { label: "Aplicaciones", value: s.applications, pct: 100 },
+        { label: "Parseado CV", value: Math.round(s.applications * 0.98), pct: 98 },
+        {
+          label: "Screening IA (CV Bank)",
+          value: s.talentPool,
+          pct: s.applications > 0 ? Math.round((s.talentPool / s.applications) * 100) : 0,
+        },
+        {
+          label: "Pruebas psicométricas",
+          value: s.assessmentsSent,
+          pct: s.applications > 0 ? Math.round((s.assessmentsSent / s.applications) * 100) : 0,
+        },
+        {
+          label: "Pruebas completadas",
+          value: s.assessmentsCompleted,
+          pct: s.applications > 0 ? Math.round((s.assessmentsCompleted / s.applications) * 100) : 0,
+        },
+        {
+          label: "Entrevista humana",
+          value: s.interviews,
+          pct: s.applications > 0 ? Math.round((s.interviews / s.applications) * 100) : 0,
+        },
+        {
+          label: "Oferta",
+          value: s.offers,
+          pct: s.applications > 0 ? Math.round((s.offers / s.applications) * 100) : 0,
+        },
+        {
+          label: "Contratado",
+          value: s.hires,
+          pct: s.applications > 0 ? Math.round((s.hires / s.applications) * 100) : 0,
+        },
+      ]
+    : [];
+
+  const totalSource = s
+    ? Object.values(s.bySource).reduce((a, b) => a + b, 0)
+    : 0;
+
   return (
     <>
       <PageHead
         title="Dashboard · Talent Acquisition"
-        desc="Vista ejecutiva del funnel, agentes de IA y salud del pipeline — últimos 30 días."
+        desc="Vista ejecutiva en vivo del pipeline real de Trading Solutions."
         actions={
           <>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-              <Calendar className="w-3.5 h-3.5" /> Últimos 30 días
+              <Calendar className="w-3.5 h-3.5" /> Todo el pipeline
             </button>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
               <Download className="w-3.5 h-3.5" /> Export
@@ -218,78 +372,129 @@ function Dashboard() {
       />
 
       <div className="grid grid-cols-5 gap-3 mb-4">
-        <KPI label="Aplicaciones" value="148" delta="+42 sem" />
-        <KPI label="Vacantes activas" value="3" delta="Barranquilla" tone="neutral" />
-        <KPI label="Time-to-hire" value="14 d" delta="−9 días" />
-        <KPI label="Quality of Hire" value="87%" delta="+4 pts" />
-        <KPI label="CV Bank total" value="4,712" delta="+312 sem" />
+        <KPI
+          label="Aplicaciones"
+          value={loading ? "…" : String(s?.applications ?? 0)}
+          delta={loading ? "Cargando" : "En Neon"}
+          tone="neutral"
+        />
+        <KPI
+          label="Vacantes activas"
+          value={loading ? "…" : String(s?.vacancies ?? 0)}
+          delta={s ? `${s.vacanciesLinkedIn} en LinkedIn` : ""}
+          tone="neutral"
+        />
+        <KPI
+          label="Pruebas completadas"
+          value={loading ? "…" : String(s?.assessmentsCompleted ?? 0)}
+          delta={s ? `${s.assessmentsInProgress} en progreso` : ""}
+          tone="neutral"
+        />
+        <KPI
+          label="En pipeline"
+          value={loading ? "…" : String((s?.talentPool ?? 0))}
+          delta="CV Bank activo"
+        />
+        <KPI
+          label="CV Bank total"
+          value={loading ? "…" : String(s?.talentPool ?? 0)}
+          delta="Barranquilla"
+          tone="neutral"
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4" style={{ gridTemplateColumns: "1.5fr 1fr" }}>
-        <Card title="Funnel de conversión · 30 días" eyebrow="AUTO · AGENTES IA">
-          <Funnel
-            rows={[
-              { label: "Aplicaciones", pct: 100, value: 148 },
-              { label: "Parseado CV", pct: 98, value: 145 },
-              { label: "Screening IA", pct: 66, value: 98 },
-              { label: "Pruebas psicométricas", pct: 42, value: 62 },
-              { label: "Entrevista IA", pct: 24, value: 35 },
-              { label: "Entrevista humana", pct: 12, value: 18 },
-              { label: "Oferta", pct: 5, value: 7 },
-              { label: "Contratado", pct: 3, value: 4 },
-            ]}
-          />
+        <Card title="Funnel de conversión · pipeline real" eyebrow="LIVE · /api/applications+assessments">
+          {loading ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando funnel…</div>
+          ) : (
+            <Funnel rows={funnelRows} />
+          )}
         </Card>
-        <Card title="Source of Hire" eyebrow="ATRIBUIDO">
-          <div className="space-y-3">
-            <SourceBar label="LinkedIn Trading Solutions" pct={52} color="#0A66C2" value="52%" />
-            <SourceBar label="Página Careers TS" pct={26} color="#111" value="26%" />
-            <SourceBar label="Referidos internos" pct={14} color="#6B7280" value="14%" />
-            <SourceBar label="Otros (Magneto, email)" pct={8} color="#9CA3AF" value="8%" />
-          </div>
+        <Card title="Source of Candidates" eyebrow="DESDE TALENT POOL">
+          {loading || !s ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : totalSource === 0 ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Sin data aún</div>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(s.bySource)
+                .sort((a, b) => b[1] - a[1])
+                .map(([label, count]) => {
+                  const pct = Math.round((count / totalSource) * 100);
+                  const color = label === "LinkedIn TS"
+                    ? "#0A66C2"
+                    : label === "Email / directo"
+                    ? "#111"
+                    : label === "Referidos"
+                    ? "#6B7280"
+                    : "#9CA3AF";
+                  return (
+                    <SourceBar
+                      key={label}
+                      label={label}
+                      pct={pct}
+                      color={color}
+                      value={`${pct}% (${count})`}
+                    />
+                  );
+                })}
+            </div>
+          )}
         </Card>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card title="Bases de datos activas" eyebrow="EN VIVO">
-          <div className="space-y-2">
-            {[
-              ["candidates", "Perfiles históricos", "4,712"],
-              ["applications", "Aplicaciones (3 vacantes)", "148"],
-              ["assessments", "Pruebas Factor X + idioma", "62"],
-              ["interviews_ai", "Videos + transcripts", "35"],
-              ["offers", "Cartas generadas", "7"],
-              ["hires", "Firmados & onboarded", "4"],
-            ].map(([name, desc, n]) => (
-              <div key={name} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
-                <div>
-                  <div className="text-sm font-semibold">{name}</div>
-                  <div className="text-xs text-gray-500">{desc}</div>
+        <Card title="Bases de datos activas" eyebrow="LIVE · NEON">
+          {loading || !s ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : (
+            <div className="space-y-2">
+              {([
+                ["vacancies", "Vacantes publicadas", s.vacancies],
+                ["talent_pool", "CV Bank (candidatos)", s.talentPool],
+                ["applications", "Aplicaciones recibidas", s.applications],
+                ["assessment_tokens", "Pruebas enviadas", s.assessmentsSent],
+                ["assessment_tokens · completed", "Pruebas completadas", s.assessmentsCompleted],
+                ["hires", "Firmados (pendiente tabla)", s.hires],
+              ] as Array<[string, string, number]>).map(([name, desc, n]) => (
+                <div key={name} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
+                  <div>
+                    <div className="text-sm font-semibold">{name}</div>
+                    <div className="text-xs text-gray-500">{desc}</div>
+                  </div>
+                  <div className="text-xl font-extrabold">{n.toLocaleString()}</div>
                 </div>
-                <div className="text-xl font-extrabold">{n}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
 
-        <Card title="Top candidatos esta semana" eyebrow="FIT SCORE">
-          <div className="space-y-2">
-            {[
-              ["Ana García", "Pricing Senior · Barranquilla · EN C1", 92, "green"],
-              ["Javier Ramírez", "Pricing Senior · Barranquilla", 87, "green"],
-              ["Daniela Ruiz", "Documentation · Barranquilla · EN C2", 83, "black"],
-              ["Carlos Peña", "Inside Sales · Barranquilla", 80, "black"],
-              ["Laura Martín", "Pricing Senior · Referida", 78, "amber"],
-            ].map(([n, s, sc, c]) => (
-              <div key={n as string} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
-                <div>
-                  <div className="text-sm font-semibold">{n as string}</div>
-                  <div className="text-xs text-gray-500">{s as string}</div>
+        <Card title="Top candidatos" eyebrow="SCORE REAL + MATCH CALIFICADO">
+          {loading || !s ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : s.topCandidates.length === 0 ? (
+            <div className="text-sm text-gray-400 py-6 text-center">
+              Sin candidatos con score aún. Envía pruebas desde la pestaña Pruebas.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {s.topCandidates.map((c) => (
+                <div
+                  key={c.name}
+                  className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold truncate">{c.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{c.role}</div>
+                  </div>
+                  <Pill color={c.score && c.score >= 85 ? "green" : c.score && c.score >= 75 ? "black" : "amber"}>
+                    {c.score ? c.score : "MUCHO"}
+                  </Pill>
                 </div>
-                <Pill color={c as "green" | "black" | "amber"}>{sc}</Pill>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card title="LinkedIn Trading Solutions" eyebrow="SINCRONIZADO">
@@ -305,10 +510,18 @@ function Dashboard() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <MiniStat label="Followers" value="8,421" delta="+124" />
-            <MiniStat label="Vacantes sync" value="3/3" delta="100%" />
-            <MiniStat label="Aplicaciones LI" value="77" delta="52%" />
-            <MiniStat label="InMail open" value="38%" delta="+6pts" />
+            <MiniStat
+              label="Vacantes sync"
+              value={s ? `${s.vacanciesLinkedIn}/${s.vacancies}` : "…"}
+              delta={s && s.vacancies > 0 ? `${Math.round((s.vacanciesLinkedIn / s.vacancies) * 100)}%` : ""}
+            />
+            <MiniStat
+              label="Desde LinkedIn"
+              value={s ? String(s.bySource["LinkedIn TS"] ?? 0) : "…"}
+              delta="candidatos"
+            />
+            <MiniStat label="Followers" value="—" delta="Graph API" />
+            <MiniStat label="InMails" value="—" delta="RSC pending" />
           </div>
         </Card>
       </div>
