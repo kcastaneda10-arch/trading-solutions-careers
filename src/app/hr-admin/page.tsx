@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   LayoutDashboard,
   Briefcase,
@@ -368,12 +368,61 @@ function MiniStat({ label, value, delta }: { label: string; value: string; delta
 /* ======================================================== */
 /* Vacantes                                                 */
 /* ======================================================== */
+type LiveVacancy = {
+  id: number;
+  slug: string;
+  title: string;
+  title_es?: string;
+  title_en?: string;
+  department: string;
+  location: string;
+  work_mode: string;
+  level?: string;
+  linkedin_url?: string;
+  apply_email?: string;
+  posted_at?: string;
+  status?: string;
+};
+
 function Vacantes() {
+  const [vacancies, setVacancies] = useState<LiveVacancy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/vacancies", { cache: "no-store" });
+        const j = await r.json();
+        if (!cancelled) {
+          const list = Array.isArray(j) ? j : j.data ?? [];
+          setVacancies(list);
+          setLoading(false);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "fetch_failed");
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const active = vacancies.filter((v) => !v.status || v.status === "active");
+
   return (
     <>
       <PageHead
         title="Vacantes · Requisiciones activas"
-        desc="3 vacantes publicadas · Sincronizadas con Careers TS y LinkedIn Trading Solutions."
+        desc={
+          loading
+            ? "Cargando desde Neon…"
+            : `${active.length} vacante(s) publicadas en Careers TS y LinkedIn Trading Solutions.`
+        }
         actions={
           <>
             <button className="pill-btn text-xs bg-[#0A66C2] text-white hover:bg-[#084D94]" style={{ padding: "9px 14px" }}>
@@ -387,42 +436,59 @@ function Vacantes() {
       />
 
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Activas" value="3" delta="Todas en BAQ" tone="neutral" />
-        <KPI label="Publicadas en LinkedIn" value="3" delta="100% sync" />
-        <KPI label="Aplicaciones (30d)" value="148" delta="+42 sem" />
-        <KPI label="Avg time-to-shortlist" value="4 min" delta="vs 3 días manual" />
+        <KPI label="Activas" value={loading ? "…" : String(active.length)} delta="En Neon" tone="neutral" />
+        <KPI label="En LinkedIn" value={String(active.filter((v) => v.linkedin_url).length)} delta="100% sync" />
+        <KPI label="Departamentos" value={String(new Set(active.map((v) => v.department)).size)} delta="Áreas" tone="neutral" />
+        <KPI label="Fuente de verdad" value="Neon" delta="DATABASE_URL" />
       </div>
 
-      <Card title="Requisiciones activas" eyebrow="SYNC CAREERS + LINKEDIN TS">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-800">
+          Error cargando vacantes desde el backend: <code>{error}</code>
+        </div>
+      )}
+
+      <Card title="Requisiciones activas" eyebrow="LIVE · API /api/vacancies">
         <div className="space-y-2">
-          {jobs.map((j) => {
-            const apps = j.id === 1 ? 52 : j.id === 2 ? 48 : 48;
-            const li = j.id === 1 ? 28 : j.id === 2 ? 24 : 25;
+          {loading && (
+            <div className="text-sm text-gray-500 py-6 text-center">Cargando…</div>
+          )}
+          {!loading && active.length === 0 && !error && (
+            <div className="text-sm text-gray-500 py-6 text-center">
+              Sin vacantes aún. Llama a <code>POST /api/init-db</code> para sembrar.
+            </div>
+          )}
+          {active.map((v) => {
+            const title = v.title_es ?? v.title ?? v.title_en ?? v.slug;
+            const linkedinId = v.linkedin_url?.split("/jobs/view/")[1]?.replace(/\/$/, "");
             return (
               <div
-                key={j.id}
+                key={v.id}
                 className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3"
               >
                 <div>
                   <div className="text-sm font-bold">
-                    {j.title.es} · {j.dept}
+                    {title} · {v.department}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {j.location} · {j.mode} · {j.level} · Publicada {j.postedAt}
+                    {v.location} · {v.work_mode} · {v.level ?? "—"}
+                    {v.posted_at ? ` · Publicada ${new Date(v.posted_at).toISOString().slice(0, 10)}` : ""}
                   </div>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <Pill color="black">{apps} apl.</Pill>
-                  <Pill color="blue">LinkedIn · {li}</Pill>
-                  <a
-                    href={j.linkedinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#0A66C2] p-1"
-                    title="Ver en LinkedIn"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                  <Pill color="black">id={v.id}</Pill>
+                  {linkedinId && <Pill color="blue">LI · {linkedinId}</Pill>}
+                  {v.linkedin_url && (
+                    <a
+                      href={v.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0A66C2] p-1"
+                      title="Ver en LinkedIn"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
                 </div>
               </div>
             );
@@ -731,12 +797,53 @@ function Entrevistas() {
 /* ======================================================== */
 /* Pruebas Psicométricas                                    */
 /* ======================================================== */
+type LiveToken = {
+  id: number;
+  token: string;
+  candidate_name: string;
+  candidate_email: string;
+  vacancy_id: number | null;
+  vacancy_slug: string | null;
+  vacancy_title_es?: string | null;
+  assessment_ids: string | null;
+  status: string;
+  score: number | null;
+  sent_at: string;
+  completed_at: string | null;
+  source: string | null;
+};
+
 function Pruebas() {
+  const [tokens, setTokens] = useState<LiveToken[]>([]);
+  const [vacs, setVacs] = useState<LiveVacancy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sendModal, setSendModal] = useState(false);
+  const [importModal, setImportModal] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [tr, vr] = await Promise.all([
+        fetch("/api/assessments", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      setTokens(tr.data ?? []);
+      setVacs(Array.isArray(vr) ? vr : vr.data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   const stats = {
-    sent: assessmentTokens.length,
-    completed: assessmentTokens.filter((t) => t.status === "completed").length,
-    inProgress: assessmentTokens.filter((t) => t.status === "in_progress").length,
+    sent: tokens.length,
+    completed: tokens.filter((t) => t.status === "completed").length,
+    inProgress: tokens.filter((t) => t.status === "in_progress").length,
   };
+
   return (
     <>
       <PageHead
@@ -744,10 +851,18 @@ function Pruebas() {
         desc="Migradas desde Elevare. Base para el Fit Score cognitivo y cultural. 5 módulos, 12+ dimensiones."
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-              Ver librería
+            <button
+              className="pill-btn pill-btn-outline text-xs"
+              style={{ padding: "9px 14px" }}
+              onClick={() => setImportModal(true)}
+            >
+              <Plus className="w-3.5 h-3.5" /> Importar candidatos (CSV)
             </button>
-            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: "9px 14px" }}>
+            <button
+              className="pill-btn pill-btn-primary text-xs"
+              style={{ padding: "9px 14px" }}
+              onClick={() => setSendModal(true)}
+            >
               <Plus className="w-3.5 h-3.5" /> Enviar prueba
             </button>
           </>
@@ -755,7 +870,7 @@ function Pruebas() {
       />
 
       <div className="grid grid-cols-4 gap-3 mb-5">
-        <KPI label="Tokens enviados" value={String(stats.sent)} delta="Última sem" tone="neutral" />
+        <KPI label="Tokens enviados" value={loading ? "…" : String(stats.sent)} delta="Total en Neon" tone="neutral" />
         <KPI label="En progreso" value={String(stats.inProgress)} delta="Activos" tone="neutral" />
         <KPI label="Completadas" value={String(stats.completed)} delta="Score listo" />
         <KPI label="Tiempo prom. candidato" value="88 min" delta="5 pruebas" tone="neutral" />
@@ -789,29 +904,74 @@ function Pruebas() {
         ))}
       </div>
 
-      <Card title="Pruebas enviadas a candidatos" eyebrow="TOKEN-BASED · TRAZABILIDAD">
+      <Card title="Pruebas enviadas a candidatos" eyebrow="LIVE · API /api/assessments">
         <div className="space-y-2">
-          {assessmentTokens.map((t) => {
-            const job = jobs.find((j) => j.slug === t.jobSlug);
+          {loading && (
+            <div className="text-sm text-gray-500 py-6 text-center">Cargando…</div>
+          )}
+          {!loading && tokens.length === 0 && (
+            <div className="text-sm text-gray-500 py-8 text-center">
+              No hay pruebas enviadas aún. Click en <b>Enviar prueba</b> para empezar.
+            </div>
+          )}
+          {tokens.map((t) => {
+            const numAssessments = (t.assessment_ids ?? "")
+              .split(",")
+              .filter(Boolean).length;
             const statusColor: "green" | "amber" | "gray" =
-              t.status === "completed" ? "green" : t.status === "in_progress" ? "amber" : "gray";
+              t.status === "completed"
+                ? "green"
+                : t.status === "in_progress"
+                ? "amber"
+                : "gray";
+            const origin =
+              typeof window !== "undefined" ? window.location.origin : "";
+            const link = `${origin}/assessment/${t.token}`;
             return (
-              <div key={t.token} className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3">
-                <div className="flex-1">
-                  <div className="text-sm font-bold">{t.candidate}</div>
-                  <div className="text-xs text-gray-500">
-                    {job?.title.es} · {t.assessmentIds.length} pruebas · Enviada {t.sentAt}
-                    {t.completedAt && ` · Completada ${t.completedAt}`}
+              <div
+                key={t.id}
+                className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold truncate">
+                    {t.candidate_name}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {t.vacancy_title_es ?? t.vacancy_slug ?? "—"} · {numAssessments} pruebas · {t.candidate_email}
+                    {t.source === "linkedin_recruiter" && " · via LinkedIn"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Pill color={statusColor}>{t.status.toUpperCase()}</Pill>
-                  {t.score && <Pill color="black">{t.score}/100</Pill>}
+                  {t.score !== null && t.score !== undefined && (
+                    <Pill color="black">{t.score}/100</Pill>
+                  )}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(link);
+                    }}
+                    className="p-1.5 border border-gray-200 rounded-lg hover:border-black text-[11px] font-medium px-2"
+                    title="Copiar link"
+                  >
+                    Copiar link
+                  </button>
+                  <a
+                    href={`mailto:${t.candidate_email}?subject=${encodeURIComponent(
+                      "Trading Solutions · Evaluación"
+                    )}&body=${encodeURIComponent(
+                      `Hola ${t.candidate_name.split(" ")[0]},\n\nPor favor completa la evaluación aquí:\n${link}\n\nEl link es válido 30 días.`
+                    )}`}
+                    className="p-1.5 border border-gray-200 rounded-lg hover:border-black text-[11px] font-medium px-2"
+                    title="Abrir email"
+                  >
+                    mailto:
+                  </a>
                   <a
                     href={`/assessment/${t.token}`}
                     target="_blank"
+                    rel="noopener noreferrer"
                     className="p-1.5 border border-gray-200 rounded-lg hover:border-black"
-                    title="Ver token del candidato"
+                    title="Abrir como candidato"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
@@ -821,7 +981,356 @@ function Pruebas() {
           })}
         </div>
       </Card>
+
+      {sendModal && (
+        <SendAssessmentModal
+          vacancies={vacs}
+          onClose={() => setSendModal(false)}
+          onCreated={async () => {
+            await refresh();
+          }}
+        />
+      )}
+      {importModal && (
+        <ImportCSVModal
+          onClose={() => setImportModal(false)}
+          onImported={async () => {
+            await refresh();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/* ===== modal: Enviar prueba ===== */
+function SendAssessmentModal({
+  vacancies,
+  onClose,
+  onCreated,
+}: {
+  vacancies: LiveVacancy[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [vacancyId, setVacancyId] = useState<number | null>(vacancies[0]?.id ?? null);
+  const [language, setLanguage] = useState<"es" | "en">("es");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ link: string; mailto: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const send = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const vac = vacancies.find((v) => v.id === vacancyId);
+      const r = await fetch("/api/assessments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidate_name: name,
+          candidate_email: email,
+          vacancy_id: vacancyId,
+          vacancy_slug: vac?.slug ?? null,
+          language,
+          source: "manual",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setErr(j.error ?? "error");
+      } else {
+        setResult({ link: j.link, mailto: j.mailto });
+        onCreated();
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+        <h3 className="text-lg font-bold mb-4">Enviar prueba Factor X</h3>
+        {!result ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Nombre completo</label>
+              <input
+                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                placeholder="Ana García"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Email</label>
+              <input
+                type="email"
+                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                placeholder="ana@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Vacante</label>
+                <select
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  value={vacancyId ?? ""}
+                  onChange={(e) => setVacancyId(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">(Sin vacante específica)</option>
+                  {vacancies.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.title_es ?? v.title ?? v.slug}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Idioma del test</label>
+                <select
+                  className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as "es" | "en")}
+                >
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+            {err && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
+                {err}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-3">
+              <button
+                className="pill-btn pill-btn-outline text-xs"
+                style={{ padding: "9px 14px" }}
+                onClick={onClose}
+                disabled={saving}
+              >
+                Cancelar
+              </button>
+              <button
+                className="pill-btn pill-btn-primary text-xs"
+                style={{ padding: "9px 14px" }}
+                disabled={!name || !email || saving}
+                onClick={send}
+              >
+                {saving ? "Creando…" : "Crear token"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-900 font-medium">
+              Token creado en Neon. Envía ahora por tu canal preferido:
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Link del candidato</label>
+              <div className="flex gap-2 mt-1">
+                <input
+                  readOnly
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono"
+                  value={result.link}
+                />
+                <button
+                  className="pill-btn pill-btn-outline text-xs"
+                  style={{ padding: "9px 14px" }}
+                  onClick={() => navigator.clipboard.writeText(result.link)}
+                >
+                  Copiar
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <a
+                href={result.mailto}
+                className="pill-btn pill-btn-primary text-xs flex-1 justify-center"
+                style={{ padding: "9px 14px" }}
+              >
+                Abrir email (mailto:)
+              </a>
+              <button
+                className="pill-btn pill-btn-outline text-xs"
+                style={{ padding: "9px 14px" }}
+                onClick={onClose}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===== modal: Import CSV desde LinkedIn Recruiter ===== */
+function ImportCSVModal({
+  onClose,
+  onImported,
+}: {
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: Array<{ email: string; reason: string }>;
+  } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const parseCSV = (csv: string) => {
+    // Heurística simple: separar por líneas, detectar header por presencia de "email"
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length === 0) return [];
+    const header = lines[0].toLowerCase().split(/[,;\t]/).map((h) => h.trim());
+    const idx = (label: string) =>
+      header.findIndex((h) => h.includes(label.toLowerCase()));
+    const emailIdx = idx("email");
+    if (emailIdx < 0) return [];
+    const firstIdx = idx("first");
+    const lastIdx = idx("last");
+    const fullIdx = idx("name");
+    const phoneIdx = idx("phone");
+    const companyIdx = idx("company");
+    const titleIdx = idx("title");
+    const liIdx = idx("linkedin");
+    const locIdx = idx("location");
+    return lines.slice(1).map((line) => {
+      const cols = line.split(/[,;\t]/).map((c) => c.trim().replace(/^"|"$/g, ""));
+      return {
+        first_name: firstIdx >= 0 ? cols[firstIdx] : undefined,
+        last_name: lastIdx >= 0 ? cols[lastIdx] : undefined,
+        full_name:
+          fullIdx >= 0 && fullIdx !== firstIdx && fullIdx !== lastIdx
+            ? cols[fullIdx]
+            : undefined,
+        email: cols[emailIdx],
+        phone: phoneIdx >= 0 ? cols[phoneIdx] : undefined,
+        company: companyIdx >= 0 ? cols[companyIdx] : undefined,
+        title: titleIdx >= 0 ? cols[titleIdx] : undefined,
+        linkedin_url: liIdx >= 0 ? cols[liIdx] : undefined,
+        location: locIdx >= 0 ? cols[locIdx] : undefined,
+      };
+    });
+  };
+
+  const doImport = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const candidates = parseCSV(text);
+      if (candidates.length === 0) {
+        setErr("No se detectaron filas válidas. Asegúrate de que el CSV tenga columna 'Email'.");
+        setSaving(false);
+        return;
+      }
+      const r = await fetch("/api/candidates/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidates,
+          source: "linkedin_recruiter",
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setErr(j.error ?? "error");
+      } else {
+        setResult({ imported: j.imported, skipped: j.skipped, errors: j.errors ?? [] });
+        onImported();
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl p-6">
+        <h3 className="text-lg font-bold mb-2">Importar candidatos · CSV</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Exporta la lista desde LinkedIn Recruiter (o Talent Hub) y pega aquí el contenido.
+          Columnas soportadas: First Name, Last Name, Email, Phone, Current Company, Current Title,
+          LinkedIn URL, Location.
+        </p>
+        {!result ? (
+          <>
+            <textarea
+              className="w-full h-56 border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono"
+              placeholder={`First Name,Last Name,Email,Phone,Current Company,Current Title,LinkedIn URL,Location\nAna,García,ana@mail.com,+57...,Kuehne+Nagel,Ops Senior,https://linkedin.com/in/ana,Barranquilla`}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            {err && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 mt-2">
+                {err}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-3">
+              <button
+                className="pill-btn pill-btn-outline text-xs"
+                style={{ padding: "9px 14px" }}
+                onClick={onClose}
+                disabled={saving}
+              >
+                Cancelar
+              </button>
+              <button
+                className="pill-btn pill-btn-primary text-xs"
+                style={{ padding: "9px 14px" }}
+                onClick={doImport}
+                disabled={!text.trim() || saving}
+              >
+                {saving ? "Importando…" : "Importar al CV Bank"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-900">
+              <b>{result.imported}</b> candidatos importados al CV Bank ·{" "}
+              {result.skipped > 0 && <span>{result.skipped} omitidos</span>}
+            </div>
+            {result.errors.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                <b>Omitidos:</b>
+                <ul className="mt-1 list-disc pl-5">
+                  {result.errors.slice(0, 5).map((e, i) => (
+                    <li key={i}>
+                      {e.email}: {e.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button
+                className="pill-btn pill-btn-primary text-xs"
+                style={{ padding: "9px 14px" }}
+                onClick={onClose}
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

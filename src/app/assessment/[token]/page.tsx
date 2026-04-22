@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import Link from "next/link";
+import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Brain,
@@ -15,26 +14,75 @@ import {
 } from "lucide-react";
 import {
   assessments,
-  assessmentTokens,
   type AssessmentMeta,
+  type AssessmentId,
 } from "@/data/assessments";
-import { jobs } from "@/data/jobs";
+
+type TokenData = {
+  token: string;
+  candidate_name: string;
+  candidate_email: string;
+  vacancy_id: number | null;
+  vacancy_slug: string | null;
+  vacancy_title_es?: string | null;
+  vacancy_title_en?: string | null;
+  assessment_ids: string | null;
+  language: "es" | "en";
+  status: string;
+  expires_at: string | null;
+};
 
 export default function AssessmentLanding() {
   const params = useParams<{ token: string }>();
-  const token = assessmentTokens.find((t) => t.token === params.token);
+  const [token, setToken] = useState<TokenData | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [lang, setLang] = useState<"es" | "en">(token?.language ?? "es");
+  const [lang, setLang] = useState<"es" | "en">("es");
   const [agreed, setAgreed] = useState(false);
   const [started, setStarted] = useState<AssessmentMeta | null>(null);
 
-  const job = useMemo(
-    () => jobs.find((j) => j.slug === token?.jobSlug),
-    [token]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/assessments/${params.token}`, {
+          cache: "no-store",
+        });
+        const j = await r.json();
+        if (cancelled) return;
+        if (!r.ok) {
+          setLoadErr(j.error ?? "not_found");
+        } else {
+          setToken(j.data as TokenData);
+          setLang((j.data?.language as "es" | "en") ?? "es");
+          // Marcar como in_progress la primera vez que abre el link
+          if (j.data?.status === "sent") {
+            fetch(`/api/assessments/${params.token}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "in_progress" }),
+            }).catch(() => {});
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setLoadErr(e instanceof Error ? e.message : "error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.token]);
+
   const tests = useMemo(() => {
-    if (!token) return [] as typeof assessments;
-    return assessments.filter((a) => token.assessmentIds.includes(a.id));
+    if (!token) return [] as AssessmentMeta[];
+    const ids = (token.assessment_ids ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) as AssessmentId[];
+    return assessments.filter((a) => ids.includes(a.id));
   }, [token]);
 
   const totalDuration = tests.reduce((acc, t) => acc + t.duration, 0);
@@ -42,11 +90,24 @@ export default function AssessmentLanding() {
 
   const t = (es: string, en: string) => (lang === "es" ? es : en);
 
-  if (!token) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Cargando tu evaluación…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadErr || !token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center max-w-md p-8">
-          <h1 className="text-2xl font-bold mb-3">Token inválido</h1>
+          <h1 className="text-2xl font-bold mb-3">
+            {loadErr === "expired" ? "Enlace expirado" : "Token inválido"}
+          </h1>
           <p className="text-gray-500">
             El enlace de evaluación no existe o ha expirado. Contacta a{" "}
             <a
@@ -89,14 +150,18 @@ export default function AssessmentLanding() {
         </p>
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
           {t("Bienvenido, ", "Welcome, ")}
-          {token.candidate.split(" ")[0]}.
+          {token.candidate_name.split(" ")[0]}.
         </h1>
         <p className="text-gray-600 text-lg leading-relaxed max-w-2xl mb-2">
           {t(
             "Has sido invitado a completar la evaluación para la posición ",
             "You have been invited to complete the assessment for the "
           )}
-          <b>{job?.title[lang]}</b>
+          <b>
+            {lang === "es"
+              ? token.vacancy_title_es ?? token.vacancy_slug ?? ""
+              : token.vacancy_title_en ?? token.vacancy_slug ?? ""}
+          </b>
           {t(" en Trading Solutions Barranquilla.", " role at Trading Solutions Barranquilla.")}
         </p>
         <p className="text-gray-500 text-sm">

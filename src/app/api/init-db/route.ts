@@ -282,6 +282,33 @@ export async function GET(request: NextRequest) {
     await sql(`CREATE INDEX IF NOT EXISTS idx_matching_vacancy ON matching_results(vacancy_id)`);
     await sql(`CREATE INDEX IF NOT EXISTS idx_matching_candidate ON matching_results(candidate_id)`);
 
+    // 3b) Tabla assessment_tokens (pruebas psicométricas enviadas a candidatos)
+    await sql(`
+      CREATE TABLE IF NOT EXISTS assessment_tokens (
+        id SERIAL PRIMARY KEY,
+        token VARCHAR(255) UNIQUE NOT NULL,
+        candidate_id INTEGER REFERENCES talent_pool(id) ON DELETE SET NULL,
+        candidate_name VARCHAR(255) NOT NULL,
+        candidate_email VARCHAR(255) NOT NULL,
+        vacancy_id INTEGER REFERENCES vacancies(id) ON DELETE SET NULL,
+        vacancy_slug VARCHAR(255),
+        assessment_ids TEXT,
+        language VARCHAR(5) DEFAULT 'es',
+        status VARCHAR(50) DEFAULT 'sent',
+        score INTEGER,
+        results JSONB,
+        source VARCHAR(100) DEFAULT 'manual',
+        sent_at TIMESTAMP DEFAULT NOW(),
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '30 days')
+      )
+    `);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_token ON assessment_tokens(token)`);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_email ON assessment_tokens(candidate_email)`);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_vacancy ON assessment_tokens(vacancy_id)`);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_status ON assessment_tokens(status)`);
+
     // 4) Reset + seed: IDs 1/2/3 de jobs.ts como fuente de verdad
     await sql(`TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE`);
 
