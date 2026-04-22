@@ -409,6 +409,14 @@ export async function GET(request: NextRequest) {
     await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_vacancy ON assessment_tokens(vacancy_id)`);
     await sql(`CREATE INDEX IF NOT EXISTS idx_assessment_status ON assessment_tokens(status)`);
 
+    // 3c) Parser CV: columnas para la extracción estructurada con Claude
+    //     cv_parsed_data JSONB  → {skills_inferidas, years_experience, education_level,
+    //                              languages, seniority, industries, titles_held, strengths}
+    //     cv_parsed_at TIMESTAMP → para invalidar cache cuando cambia el CV
+    await sql(`ALTER TABLE talent_pool ADD COLUMN IF NOT EXISTS cv_parsed_data JSONB`);
+    await sql(`ALTER TABLE talent_pool ADD COLUMN IF NOT EXISTS cv_parsed_at TIMESTAMP`);
+    await sql(`CREATE INDEX IF NOT EXISTS idx_talent_pool_parsed_at ON talent_pool(cv_parsed_at)`);
+
     // 4) Reset + seed: IDs 1/2/3 de jobs.ts como fuente de verdad
     await sql(`TRUNCATE TABLE vacancies RESTART IDENTITY CASCADE`);
 
