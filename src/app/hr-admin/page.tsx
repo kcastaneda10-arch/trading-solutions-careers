@@ -324,43 +324,31 @@ function Dashboard() {
 
   const s = stats;
 
-  // Funnel real: cada etapa es un subset de la anterior
-  const funnelRows = s
+  // Funnel real: ancho de barra proporcional al MÁXIMO del embudo (no a aplicaciones)
+  // El % muestra conversión vs. la etapa anterior cuando tiene sentido
+  const rawRows = s
     ? [
-        { label: "Aplicaciones", value: s.applications, pct: 100 },
-        { label: "Parseado CV", value: Math.round(s.applications * 0.98), pct: 98 },
-        {
-          label: "Screening IA (CV Bank)",
-          value: s.talentPool,
-          pct: s.applications > 0 ? Math.round((s.talentPool / s.applications) * 100) : 0,
-        },
-        {
-          label: "Pruebas psicométricas",
-          value: s.assessmentsSent,
-          pct: s.applications > 0 ? Math.round((s.assessmentsSent / s.applications) * 100) : 0,
-        },
-        {
-          label: "Pruebas completadas",
-          value: s.assessmentsCompleted,
-          pct: s.applications > 0 ? Math.round((s.assessmentsCompleted / s.applications) * 100) : 0,
-        },
-        {
-          label: "Entrevista humana",
-          value: s.interviews,
-          pct: s.applications > 0 ? Math.round((s.interviews / s.applications) * 100) : 0,
-        },
-        {
-          label: "Oferta",
-          value: s.offers,
-          pct: s.applications > 0 ? Math.round((s.offers / s.applications) * 100) : 0,
-        },
-        {
-          label: "Contratado",
-          value: s.hires,
-          pct: s.applications > 0 ? Math.round((s.hires / s.applications) * 100) : 0,
-        },
+        { label: "Talent Pool (CV Bank)", value: s.talentPool, kind: "pool" as const },
+        { label: "Aplicaciones a vacante", value: s.applications, kind: "apply" as const },
+        { label: "Parseado CV", value: Math.round(s.applications * 0.98), kind: "parse" as const },
+        { label: "Pruebas psicométricas enviadas", value: s.assessmentsSent, kind: "sent" as const },
+        { label: "Pruebas completadas", value: s.assessmentsCompleted, kind: "done" as const },
+        { label: "Entrevista humana", value: s.interviews, kind: "interview" as const },
+        { label: "Oferta", value: s.offers, kind: "offer" as const },
+        { label: "Contratado", value: s.hires, kind: "hire" as const },
       ]
     : [];
+  const maxFunnelValue = Math.max(1, ...rawRows.map((r) => r.value));
+  const funnelRows = rawRows.map((r, i) => {
+    const prev = i > 0 ? rawRows[i - 1] : null;
+    const conv = prev && prev.value > 0 ? Math.round((r.value / prev.value) * 100) : null;
+    return {
+      label: r.label,
+      value: r.value,
+      pct: Math.round((r.value / maxFunnelValue) * 100),
+      conv,
+    };
+  });
 
   const totalSource = s
     ? Object.values(s.bySource).reduce((a, b) => a + b, 0)
@@ -544,20 +532,42 @@ function Dashboard() {
   );
 }
 
-function Funnel({ rows }: { rows: { label: string; pct: number; value: number }[] }) {
+function Funnel({
+  rows,
+}: {
+  rows: { label: string; pct: number; value: number; conv: number | null }[];
+}) {
   return (
     <div className="flex flex-col gap-2">
       {rows.map((r) => (
-        <div key={r.label} className="grid items-center gap-2.5" style={{ gridTemplateColumns: "140px 1fr 70px" }}>
-          <span className="text-sm text-gray-500 font-medium">{r.label}</span>
+        <div
+          key={r.label}
+          className="grid items-center gap-2.5"
+          style={{ gridTemplateColumns: "180px 1fr 50px 70px" }}
+        >
+          <span className="text-sm text-gray-600 font-medium">{r.label}</span>
           <div className="h-7 bg-gray-100 rounded-lg overflow-hidden">
             <div
               className="h-full bg-black rounded-l-lg flex items-center justify-end px-2.5 text-[11px] font-semibold text-white"
-              style={{ width: `${Math.max(r.pct, 4)}%` }}
+              style={{ width: `${Math.max(r.pct, r.value > 0 ? 4 : 0)}%` }}
             >
-              {r.pct}%
+              {r.value > 0 ? r.value : ""}
             </div>
           </div>
+          <span
+            className={`text-right text-[11px] font-medium ${
+              r.conv === null
+                ? "text-gray-300"
+                : r.conv >= 80
+                ? "text-emerald-600"
+                : r.conv >= 50
+                ? "text-amber-600"
+                : "text-gray-400"
+            }`}
+            title="Conversión vs. etapa anterior"
+          >
+            {r.conv !== null ? `${r.conv}%` : "—"}
+          </span>
           <span className="text-right font-bold text-sm">{r.value}</span>
         </div>
       ))}
