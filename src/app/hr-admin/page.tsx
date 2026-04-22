@@ -24,6 +24,7 @@ import {
   Share2,
   Play,
   ExternalLink,
+  LogOut,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
@@ -82,6 +83,20 @@ export default function HRAdminPage() {
               </span>
               Kelly Castañeda
             </div>
+            <button
+              onClick={async () => {
+                try {
+                  await fetch("/api/hr-admin/login", { method: "DELETE" });
+                } finally {
+                  window.location.href = "/hr-admin/login";
+                }
+              }}
+              title="Cerrar sesión"
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded-full hover:bg-white/10 transition-colors"
+            >
+              <LogOut className="w-[14px] h-[14px]" />
+              Salir
+            </button>
           </div>
         </div>
       </header>
@@ -711,89 +726,201 @@ function Vacantes() {
 /* ======================================================== */
 /* Pipeline Kanban                                          */
 /* ======================================================== */
+type LiveCandidate = {
+  id: number;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  source: string | null;
+  tags: string | null;
+  notes: string | null;
+  summary: string | null;
+};
+
+type PipelineStage = "aplicacion" | "pruebas" | "completada" | "entrevista" | "oferta";
+
 function Pipeline() {
-  const stages = [
-    { label: "APLICACIÓN", count: 52 },
-    { label: "SCREENING", count: 22 },
-    { label: "PRUEBAS", count: 9 },
-    { label: "ENTREVISTA IA", count: 5 },
-    { label: "ENTREVISTA HUMANA", count: 2 },
-    { label: "OFERTA & FIRMA", count: 1 },
+  const [vacs, setVacs] = useState<LiveVacancy[]>([]);
+  const [vacancyId, setVacancyId] = useState<number | null>(null);
+  const [tokens, setTokens] = useState<LiveToken[]>([]);
+  const [pool, setPool] = useState<LiveCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1. Cargar vacantes y seleccionar la primera por defecto
+  useEffect(() => {
+    (async () => {
+      const r = await fetch("/api/vacancies", { cache: "no-store" });
+      const j = await r.json();
+      const list = (Array.isArray(j) ? j : j.data ?? []) as LiveVacancy[];
+      setVacs(list);
+      if (list.length > 0 && vacancyId === null) setVacancyId(list[0].id);
+    })();
+  }, [vacancyId]);
+
+  // 2. Cargar talent_pool + assessments cada vez que cambia la vacante
+  useEffect(() => {
+    if (!vacancyId) return;
+    setLoading(true);
+    (async () => {
+      try {
+        const [tpR, asR] = await Promise.all([
+          fetch("/api/talent-pool?limit=500", { cache: "no-store" }).then((r) => r.json()),
+          fetch(`/api/assessments?vacancy_id=${vacancyId}&limit=500`, { cache: "no-store" }).then((r) => r.json()),
+        ]);
+        setPool((tpR.data ?? []) as LiveCandidate[]);
+        setTokens((asR.data ?? []) as LiveToken[]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [vacancyId]);
+
+  const currentVac = vacs.find((v) => v.id === vacancyId);
+  const slug = currentVac?.slug ?? "";
+
+  // 3. Filtrar candidatos del pool que aplican a esta vacante (por tags o notes)
+  const candidatesForVacancy = useMemo(() => {
+    if (!slug) return [] as LiveCandidate[];
+    return pool.filter((c) => {
+      const hay = `${c.tags ?? ""} ${c.notes ?? ""}`.toLowerCase();
+      return hay.includes(slug.toLowerCase()) || hay.includes(currentVac?.title_es?.toLowerCase() ?? "z__");
+    });
+  }, [pool, slug, currentVac]);
+
+  // 4. Mapear cada candidato al stage según su token de assessment
+  const tokenByEmail = useMemo(() => {
+    const m: Record<string, LiveToken> = {};
+    for (const t of tokens) m[t.candidate_email.toLowerCase()] = t;
+    return m;
+  }, [tokens]);
+
+  function stageFor(c: LiveCandidate): PipelineStage {
+    const t = tokenByEmail[c.email.toLowerCase()];
+    if (!t) return "aplicacion";
+    if (t.status === "completed") {
+      const s = t.score ?? 0;
+      if (s >= 85) return "oferta";
+      if (s >= 70) return "entrevista";
+      return "completada";
+    }
+    if (t.status === "in_progress" || t.status === "sent" || t.status === "expired") return "pruebas";
+    return "aplicacion";
+  }
+
+  const stages: { id: PipelineStage; label: string }[] = [
+    { id: "aplicacion", label: "APLICACIÓN" },
+    { id: "pruebas", label: "PRUEBA ENVIADA" },
+    { id: "completada", label: "PRUEBA COMPLETA" },
+    { id: "entrevista", label: "ENTREVISTA HUMANA" },
+    { id: "oferta", label: "OFERTA & FIRMA" },
   ];
-  const cards: Record<number, { name: string; meta: string; score: number; src: string; color: "green" | "black" | "amber" }[]> = {
-    0: [
-      { name: "Ana García", meta: "4.5 años · Panamá → BAQ · EN C1", score: 92, src: "LinkedIn TS", color: "green" },
-      { name: "Javier Ramírez", meta: "6 años · BAQ · EN C1", score: 87, src: "LinkedIn TS", color: "green" },
-      { name: "Lorena Díaz", meta: "3 años · BAQ · EN B2", score: 79, src: "Careers TS", color: "black" },
-      { name: "Pedro Castillo", meta: "2 años · BAQ · EN B2", score: 64, src: "LinkedIn TS", color: "amber" },
-    ],
-    1: [
-      { name: "María Ortiz", meta: "3 años · BAQ · EN B1", score: 74, src: "LinkedIn TS", color: "amber" },
-      { name: "Daniela Ruiz", meta: "5 años · BAQ · EN C2", score: 83, src: "Careers TS", color: "black" },
-      { name: "Alberto Vásquez", meta: "4 años · BAQ", score: 81, src: "LinkedIn TS", color: "black" },
-    ],
-    2: [
-      { name: "Carolina Mena", meta: "6 años · BAQ · Factor X activo", score: 88, src: "Referida", color: "green" },
-      { name: "Luis Arroyo", meta: "5 años · Cartagena · pruebas 68%", score: 80, src: "LinkedIn TS", color: "black" },
-    ],
-    3: [
-      { name: "Ana García", meta: "Video 12 min · ▶ Grabada", score: 92, src: "LinkedIn TS", color: "green" },
-      { name: "Daniela Ruiz", meta: "Video 11 min · ▶ Grabada", score: 83, src: "Careers TS", color: "black" },
-    ],
-    4: [
-      { name: "Ana García", meta: "Agendada · Vie 10:00", score: 92, src: "Hiring Mgr", color: "green" },
-    ],
-    5: [
-      { name: "Ana García", meta: "Firmada · Ingreso 02/05", score: 92, src: "FIRMADA", color: "green" },
-    ],
+
+  const grouped: Record<PipelineStage, LiveCandidate[]> = {
+    aplicacion: [],
+    pruebas: [],
+    completada: [],
+    entrevista: [],
+    oferta: [],
   };
+  for (const c of candidatesForVacancy) grouped[stageFor(c)].push(c);
+
+  const totalApps = candidatesForVacancy.length;
 
   return (
     <>
       <PageHead
-        title="Pipeline · Pricing Senior (Barranquilla)"
-        desc="148 aplicaciones activas · Drag &amp; drop habilitado · Cambia de vacante para ver su pipeline."
+        title={`Pipeline · ${currentVac?.title_es ?? currentVac?.title ?? "—"}`}
+        desc={
+          loading
+            ? "Cargando…"
+            : `${totalApps} candidato(s) en este pipeline · Etapas según estado de la prueba Factor X`
+        }
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-              <Filter className="w-3.5 h-3.5" /> Filtrar
-            </button>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-              Cambiar vacante ▾
-            </button>
+            <select
+              value={vacancyId ?? ""}
+              onChange={(e) => setVacancyId(e.target.value ? Number(e.target.value) : null)}
+              className="pill-btn pill-btn-outline text-xs cursor-pointer"
+              style={{ padding: "9px 14px", appearance: "none" }}
+            >
+              {vacs.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.title_es ?? v.title ?? v.slug}
+                </option>
+              ))}
+            </select>
           </>
         }
       />
 
-      <div className="grid grid-cols-6 gap-2.5 overflow-x-auto">
-        {stages.map((s, i) => (
-          <div key={s.label} className="bg-white border border-gray-200 rounded-2xl p-2.5 min-h-[520px] flex flex-col">
-            <div className="flex justify-between items-center px-1 pb-2.5 border-b border-gray-200 mb-2">
-              <h4 className="text-[12px] font-bold tracking-wide m-0">{s.label}</h4>
-              <span className="text-[11px] text-gray-500 font-semibold bg-gray-100 px-2 py-0.5 rounded-full">
-                {s.count}
-              </span>
+      <div className="grid grid-cols-5 gap-2.5 overflow-x-auto">
+        {stages.map((s) => {
+          const list = grouped[s.id];
+          return (
+            <div
+              key={s.id}
+              className="bg-white border border-gray-200 rounded-2xl p-2.5 min-h-[520px] flex flex-col"
+            >
+              <div className="flex justify-between items-center px-1 pb-2.5 border-b border-gray-200 mb-2">
+                <h4 className="text-[12px] font-bold tracking-wide m-0">{s.label}</h4>
+                <span className="text-[11px] text-gray-500 font-semibold bg-gray-100 px-2 py-0.5 rounded-full">
+                  {list.length}
+                </span>
+              </div>
+              <div className="space-y-2 overflow-y-auto">
+                {loading && list.length === 0 && (
+                  <div className="text-[11px] text-gray-400 text-center py-4">Cargando…</div>
+                )}
+                {!loading && list.length === 0 && (
+                  <div className="text-[11px] text-gray-300 text-center py-4">—</div>
+                )}
+                {list.map((c) => {
+                  const t = tokenByEmail[c.email.toLowerCase()];
+                  const score = t?.score ?? null;
+                  const src = (c.source ?? "").toLowerCase();
+                  const srcLabel = src.includes("linkedin")
+                    ? "LinkedIn TS"
+                    : src.includes("elevare")
+                    ? "Elevare"
+                    : src.includes("email") || src.includes("manual")
+                    ? "Email"
+                    : src || "—";
+                  const color: "green" | "black" | "amber" = score
+                    ? score >= 85
+                      ? "green"
+                      : score >= 70
+                      ? "black"
+                      : "amber"
+                    : "gray" as "black";
+                  // Sacar primera línea de notes para meta
+                  const meta = (c.summary || c.notes || "").split("\n")[0].slice(0, 60);
+                  return (
+                    <div
+                      key={c.id}
+                      className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-black transition-colors"
+                    >
+                      <div className="text-[13px] font-semibold truncate">{c.full_name}</div>
+                      {meta && (
+                        <div className="text-[11px] text-gray-500 mt-0.5 truncate">{meta}</div>
+                      )}
+                      <div className="flex justify-between items-center mt-2">
+                        <span
+                          className={`text-[10px] font-semibold ${
+                            srcLabel === "LinkedIn TS" ? "text-[#0A66C2]" : "text-gray-600"
+                          }`}
+                        >
+                          {srcLabel === "LinkedIn TS" && "in · "}
+                          {srcLabel}
+                        </span>
+                        {score !== null && <Pill color={color}>{score}</Pill>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="space-y-2 overflow-y-auto">
-              {(cards[i] ?? []).map((c, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 cursor-grab hover:border-black transition-colors"
-                >
-                  <div className="text-[13px] font-semibold">{c.name}</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">{c.meta}</div>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className={`text-[10px] font-semibold ${c.src === "LinkedIn TS" ? "text-[#0A66C2]" : "text-gray-600"}`}>
-                      {c.src === "LinkedIn TS" && "in · "}
-                      {c.src}
-                    </span>
-                    <Pill color={c.color}>{c.score}</Pill>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -803,13 +930,108 @@ function Pipeline() {
 /* CV Bank                                                  */
 /* ======================================================== */
 function CVBank() {
-  const chips = ["Todos · 4,712", "Match > 80 · 318", "Open to Work · 942", "LinkedIn TS Followers · 1,204", "Silver medalists · 86", "Barranquilla · 1,204", "Bilingüe · 2,103"];
-  const [activeChip, setActiveChip] = useState(0);
+  const [pool, setPool] = useState<LiveCandidate[]>([]);
+  const [tokens, setTokens] = useState<LiveToken[]>([]);
+  const [vacs, setVacs] = useState<LiveVacancy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [activeChip, setActiveChip] = useState("todos");
+  const [matchVacancyId, setMatchVacancyId] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [tpR, asR, vacR] = await Promise.all([
+        fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      setPool((tpR.data ?? []) as LiveCandidate[]);
+      setTokens((asR.data ?? []) as LiveToken[]);
+      const vacList = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as LiveVacancy[];
+      setVacs(vacList);
+      if (vacList.length > 0) setMatchVacancyId(vacList[0].id);
+      setLoading(false);
+    })();
+  }, []);
+
+  const tokenByEmail = useMemo(() => {
+    const m: Record<string, LiveToken> = {};
+    for (const t of tokens) m[t.candidate_email.toLowerCase()] = t;
+    return m;
+  }, [tokens]);
+
+  // Conteos para los chips
+  const counts = useMemo(() => {
+    const total = pool.length;
+    const fromLI = pool.filter((c) => (c.source ?? "").toLowerCase().includes("linkedin")).length;
+    const fromElevare = pool.filter((c) => (c.source ?? "").toLowerCase().includes("elevare")).length;
+    const fromEmail = pool.filter((c) => (c.source ?? "").toLowerCase().includes("email") || (c.source ?? "").toLowerCase().includes("manual")).length;
+    const baq = pool.filter((c) => `${c.notes ?? ""} ${c.summary ?? ""}`.toLowerCase().includes("barranq")).length;
+    const matchedHigh = pool.filter((c) => {
+      const t = tokenByEmail[c.email.toLowerCase()];
+      return t && t.score && t.score >= 80;
+    }).length;
+    const completedAssessment = pool.filter((c) => {
+      const t = tokenByEmail[c.email.toLowerCase()];
+      return t?.status === "completed";
+    }).length;
+    return { total, fromLI, fromElevare, fromEmail, baq, matchedHigh, completedAssessment };
+  }, [pool, tokenByEmail]);
+
+  const chips = [
+    { id: "todos", label: `Todos · ${counts.total}` },
+    { id: "match80", label: `Match ≥ 80 · ${counts.matchedHigh}` },
+    { id: "evaluados", label: `Pruebas completadas · ${counts.completedAssessment}` },
+    { id: "linkedin", label: `LinkedIn TS · ${counts.fromLI}` },
+    { id: "elevare", label: `Elevare · ${counts.fromElevare}` },
+    { id: "email", label: `Email/Manual · ${counts.fromEmail}` },
+    { id: "baq", label: `Barranquilla · ${counts.baq}` },
+  ];
+
+  // Filtrado por chip + búsqueda
+  const filtered = useMemo(() => {
+    let list = pool;
+    if (activeChip === "match80")
+      list = list.filter((c) => {
+        const t = tokenByEmail[c.email.toLowerCase()];
+        return t && t.score && t.score >= 80;
+      });
+    else if (activeChip === "evaluados")
+      list = list.filter((c) => tokenByEmail[c.email.toLowerCase()]?.status === "completed");
+    else if (activeChip === "linkedin")
+      list = list.filter((c) => (c.source ?? "").toLowerCase().includes("linkedin"));
+    else if (activeChip === "elevare")
+      list = list.filter((c) => (c.source ?? "").toLowerCase().includes("elevare"));
+    else if (activeChip === "email")
+      list = list.filter((c) => {
+        const s = (c.source ?? "").toLowerCase();
+        return s.includes("email") || s.includes("manual");
+      });
+    else if (activeChip === "baq")
+      list = list.filter((c) => `${c.notes ?? ""} ${c.summary ?? ""}`.toLowerCase().includes("barranq"));
+
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      list = list.filter((c) =>
+        `${c.full_name} ${c.email} ${c.tags ?? ""} ${c.notes ?? ""} ${c.summary ?? ""}`
+          .toLowerCase()
+          .includes(s)
+      );
+    }
+    return list;
+  }, [pool, activeChip, search, tokenByEmail]);
+
+  const matchVac = vacs.find((v) => v.id === matchVacancyId);
+
   return (
     <>
       <PageHead
         title="CV Bank · Talent Pool"
-        desc="4,712 perfiles históricos + followers de LinkedIn TS. Re-matching automático cada vez que se abre una vacante."
+        desc={
+          loading
+            ? "Cargando perfiles…"
+            : `${counts.total} perfiles activos · LinkedIn TS, Elevare, Email/Manual · Re-matching contra cualquier vacante`
+        }
         actions={
           <>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
@@ -817,9 +1039,6 @@ function CVBank() {
             </button>
             <button className="pill-btn text-xs bg-[#0A66C2] text-white hover:bg-[#084D94]" style={{ padding: "9px 14px" }}>
               <Linkedin className="w-3.5 h-3.5" /> Importar LinkedIn TS
-            </button>
-            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: "9px 14px" }}>
-              <Search className="w-3.5 h-3.5" /> Match nueva vacante
             </button>
           </>
         }
@@ -830,91 +1049,131 @@ function CVBank() {
           <Search className="w-3.5 h-3.5 text-gray-500" />
           <input
             className="flex-1 bg-transparent outline-none text-sm"
-            placeholder="Busca por skill, empresa, años de experiencia…"
-            defaultValue="freight forwarding"
+            placeholder="Busca por nombre, email, empresa, skill, idioma…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-          Match contra: Pricing Senior ▾
-        </button>
+        <select
+          value={matchVacancyId ?? ""}
+          onChange={(e) => setMatchVacancyId(e.target.value ? Number(e.target.value) : null)}
+          className="pill-btn pill-btn-outline text-xs cursor-pointer"
+          style={{ padding: "9px 14px", appearance: "none" }}
+        >
+          {vacs.map((v) => (
+            <option key={v.id} value={v.id}>
+              Match contra: {v.title_es ?? v.title ?? v.slug}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="flex gap-2 flex-wrap mb-4">
-        {chips.map((c, i) => (
+        {chips.map((c) => (
           <button
-            key={c}
-            onClick={() => setActiveChip(i)}
-            className={`filter-chip ${activeChip === i ? "active" : ""}`}
+            key={c.id}
+            onClick={() => setActiveChip(c.id)}
+            className={`filter-chip ${activeChip === c.id ? "active" : ""}`}
           >
-            {c}
+            {c.label}
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
-        <KPI label="Total perfiles" value="4,712" delta="+312 sem" />
-        <KPI label="Fuente LinkedIn TS" value="2,184" delta="46%" tone="neutral" />
-        <KPI label="Match > 80 vs activas" value="318" delta="Re-match auto" />
-        <KPI label="Silver medalists" value="86" delta="Finalistas pasados" tone="neutral" />
+        <KPI label="Total perfiles" value={loading ? "…" : String(counts.total)} delta="En Neon" tone="neutral" />
+        <KPI label="Desde LinkedIn TS" value={String(counts.fromLI)} delta={`${counts.total > 0 ? Math.round((counts.fromLI / counts.total) * 100) : 0}%`} tone="neutral" />
+        <KPI label="Pruebas completadas" value={String(counts.completedAssessment)} delta="Con score Factor X" />
+        <KPI label="Mostrando" value={String(filtered.length)} delta={`de ${counts.total}`} tone="neutral" />
       </div>
 
       <h3 className="text-sm font-bold mb-3">
-        Coincidencias con vacante activa · Pricing Senior · Barranquilla
+        {matchVac
+          ? `Match contra · ${matchVac.title_es ?? matchVac.title ?? matchVac.slug}`
+          : "Coincidencias"}{" "}
+        ({filtered.length})
       </h3>
       <div className="grid grid-cols-3 gap-3">
-        {[
-          { name: "Ana García", init: "AG", role: "Senior Logistics · Kuehne+Nagel", years: "4.5 a", en: "C1", loc: "BAQ", score: 92, src: "LinkedIn TS", second: ["Doc Spec", 78] },
-          { name: "Javier Ramírez", init: "JR", role: "Ops Lead · DHL Panamá", years: "6 a", en: "C1", loc: "BAQ", score: 87, src: "LinkedIn TS", second: ["Inside Sales", 72] },
-          { name: "Daniela Ruiz", init: "DR", role: "Customs Spec · FedEx", years: "5 a", en: "C2", loc: "BAQ", score: 83, src: "Careers TS", second: ["Doc Spec", 91] },
-          { name: "Carolina Mena", init: "CM", role: "Ops Coord · Maersk", years: "6 a", en: "C1", loc: "BAQ", score: 88, src: "LinkedIn TS", second: ["Silver medalist", 0] },
-          { name: "Luis Arroyo", init: "LA", role: "Ocean Freight · Expeditors", years: "5 a", en: "C1", loc: "BAQ", score: 80, src: "LinkedIn TS", second: ["Doc Spec", 74] },
-          { name: "Laura Martín", init: "LM", role: "Freight Pricing · Hapag-Lloyd", years: "4 a", en: "C2", loc: "BAQ", score: 78, src: "Referida", second: ["Inside Sales", 68] },
-        ].map((c) => (
-          <div key={c.name} className="bg-white border border-gray-200 rounded-2xl p-4 relative">
-            <span
-              className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                c.src === "LinkedIn TS"
-                  ? "bg-[#E7F1FA] text-[#0A66C2]"
-                  : "bg-gray-100 text-gray-800"
-              }`}
-            >
-              {c.src === "LinkedIn TS" && "in · "}
-              {c.src}
-            </span>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-[13px]">
-                {c.init}
-              </div>
-              <div>
-                <div className="text-sm font-bold">{c.name}</div>
-                <div className="text-xs text-gray-500">{c.role}</div>
-              </div>
-            </div>
-            <div className="flex gap-3 text-xs text-gray-500 mt-2">
-              <div>
-                <b className="block text-black text-[13px] leading-tight">{c.years}</b>Experiencia
-              </div>
-              <div>
-                <b className="block text-black text-[13px] leading-tight">{c.en}</b>Inglés
-              </div>
-              <div>
-                <b className="block text-black text-[13px] leading-tight">{c.loc}</b>Ubicación
-              </div>
-            </div>
-            <div className="pt-2.5 mt-2.5 border-t border-gray-100 text-xs text-gray-500">
-              <div className="flex justify-between items-center mt-1">
-                <span>Match Pricing Senior</span>
-                <Pill color={c.score >= 85 ? "green" : c.score >= 75 ? "black" : "amber"}>{c.score}</Pill>
-              </div>
-              {c.second[1] !== 0 && (
-                <div className="flex justify-between items-center mt-1">
-                  <span>Match {c.second[0]}</span>
-                  <Pill color="gray">{c.second[1]}</Pill>
+        {filtered.slice(0, 60).map((c) => {
+          const t = tokenByEmail[c.email.toLowerCase()];
+          const score = t?.score ?? null;
+          const init = c.full_name
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((p) => p[0]?.toUpperCase() ?? "")
+            .join("");
+          const src = (c.source ?? "").toLowerCase();
+          const srcLabel = src.includes("linkedin")
+            ? "LinkedIn TS"
+            : src.includes("elevare")
+            ? "Elevare"
+            : src.includes("email") || src.includes("manual")
+            ? "Email"
+            : src || "—";
+          // Sacar primer "rol/empresa" del notes
+          const noteFirst = (c.notes ?? "").split("\n")[0].slice(0, 60);
+          // Detectar inglés del summary/notes
+          const engMatch = `${c.notes ?? ""} ${c.summary ?? ""}`.match(/\b(EN[:\s]*|inglés[:\s]*)?(C[12]|B[12]|A[12]|nativo|bilingüe|advanced)\b/i);
+          const en = engMatch ? engMatch[2].toUpperCase().slice(0, 2) : "—";
+          // Match calculado: si tiene assessment para esta vacante usamos ese score
+          const matchHere = matchVac && t?.vacancy_slug === matchVac.slug ? score : null;
+          return (
+            <div key={c.id} className="bg-white border border-gray-200 rounded-2xl p-4 relative">
+              <span
+                className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  srcLabel === "LinkedIn TS"
+                    ? "bg-[#E7F1FA] text-[#0A66C2]"
+                    : "bg-gray-100 text-gray-800"
+                }`}
+              >
+                {srcLabel === "LinkedIn TS" && "in · "}
+                {srcLabel}
+              </span>
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-bold text-[13px]">
+                  {init || "?"}
                 </div>
-              )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold truncate">{c.full_name}</div>
+                  <div className="text-xs text-gray-500 truncate">{noteFirst || c.email}</div>
+                </div>
+              </div>
+              <div className="flex gap-3 text-xs text-gray-500 mt-2">
+                <div>
+                  <b className="block text-black text-[13px] leading-tight">{en}</b>Inglés
+                </div>
+                <div>
+                  <b className="block text-black text-[13px] leading-tight truncate max-w-[80px]">{c.email.split("@")[0]}</b>Email
+                </div>
+              </div>
+              <div className="pt-2.5 mt-2.5 border-t border-gray-100 text-xs text-gray-500">
+                {matchHere !== null ? (
+                  <div className="flex justify-between items-center mt-1">
+                    <span>Match {matchVac?.title_es ?? matchVac?.title}</span>
+                    <Pill color={matchHere >= 85 ? "green" : matchHere >= 75 ? "black" : "amber"}>
+                      {matchHere}
+                    </Pill>
+                  </div>
+                ) : score !== null ? (
+                  <div className="flex justify-between items-center mt-1">
+                    <span>Score Factor X (otra vacante)</span>
+                    <Pill color={score >= 85 ? "green" : score >= 75 ? "black" : "amber"}>
+                      {score}
+                    </Pill>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-400 italic">Sin prueba aplicada aún</div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {filtered.length > 60 && (
+        <div className="text-center text-xs text-gray-500 mt-4">
+          Mostrando 60 de {filtered.length}. Refina con la búsqueda para ver más.
+        </div>
+      )}
     </>
   );
 }
@@ -923,80 +1182,123 @@ function CVBank() {
 /* Entrevistas IA                                           */
 /* ======================================================== */
 function Entrevistas() {
-  const rows = [
-    { name: "Ana García", role: "Pricing Senior", lang: "ES", dur: "12:04", dateLoc: "BAQ · 21 abr 2026 10:34", tags: ["Motivación alta", "Incoterms sólidos", "Liderazgo"], score: 92 },
-    { name: "Daniela Ruiz", role: "Doc. Specialist", lang: "EN", dur: "10:52", dateLoc: "BAQ · 21 abr 2026 09:12", tags: ["Compliance", "Proactiva"], score: 83 },
-    { name: "Carlos Peña", role: "Inside Sales", lang: "ES", dur: "13:18", dateLoc: "BAQ · 20 abr 2026 17:40", tags: ["CRM", "Bilingüe"], score: 80 },
-    { name: "María Ortiz", role: "Pricing Senior", lang: "ES", dur: "9:46", dateLoc: "BAQ · 20 abr 2026 11:05", tags: ["Analítica", "EN limitado"], score: 74 },
-  ];
+  // NOTA: hoy esta vista muestra los assessments Factor X completados (con scores),
+  // que son el equivalente de "entrevista IA" en este ciclo. Cuando se active el
+  // Interview Agent (video async) se agregarán aquí las grabaciones + transcripts.
+  const [tokens, setTokens] = useState<LiveToken[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch("/api/assessments?status=completed&limit=500", { cache: "no-store" });
+      const j = await r.json();
+      setTokens((j.data ?? []) as LiveToken[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  const totalScored = tokens.length;
+  const avgScore =
+    totalScored > 0
+      ? Math.round(
+          tokens.reduce((sum, t) => sum + (t.score ?? 0), 0) / totalScored
+        )
+      : 0;
+  const topScore = tokens.reduce((m, t) => Math.max(m, t.score ?? 0), 0);
+  const elevareCount = tokens.filter((t) => t.source === "elevare").length;
+
   return (
     <>
       <PageHead
-        title="Entrevistas IA · Biblioteca"
-        desc="35 entrevistas grabadas · Todas con video, transcript y score por rúbrica · Buscable por competencia."
+        title="Assessments completados · Biblioteca de resultados"
+        desc={
+          loading
+            ? "Cargando resultados Factor X…"
+            : `${totalScored} candidatos con prueba completada · Scores reales de DISC, IQ, Big Five, BETESA, McClelland y cognitivo`
+        }
         actions={
           <>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Filtrar por vacante ▾</button>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Filtrar por score ▾</button>
-            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: "9px 14px" }}>
-              <Search className="w-3.5 h-3.5" /> Buscar transcript
-            </button>
           </>
         }
       />
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Entrevistas grabadas" value="35" delta="+12 sem" />
-        <KPI label="Duración promedio" value="11 min" delta="Rango 7-18 min" tone="neutral" />
-        <KPI label="NPS candidato" value="4.6 / 5" delta="+0.3" />
-        <KPI label="Archivo total" value="12 GB" delta="Retención 24 meses" tone="neutral" />
+        <KPI label="Pruebas completadas" value={loading ? "…" : String(totalScored)} delta="Con score Factor X" />
+        <KPI label="Score promedio" value={loading ? "…" : `${avgScore}/100`} delta="Sobre completadas" tone="neutral" />
+        <KPI label="Score más alto" value={loading ? "…" : `${topScore}/100`} delta="Top candidate" />
+        <KPI label="Desde Elevare" value={String(elevareCount)} delta={`${totalScored > 0 ? Math.round((elevareCount / totalScored) * 100) : 0}%`} tone="neutral" />
       </div>
 
-      <Card title="Últimas entrevistas completadas" eyebrow="Video + transcript + rúbrica">
+      <Card title="Últimas pruebas Factor X completadas" eyebrow="LIVE · /api/assessments?status=completed">
         <div className="space-y-3">
-          {rows.map((r) => (
-            <div
-              key={r.name}
-              className="grid gap-4 items-center border border-gray-200 rounded-xl px-4 py-3"
-              style={{ gridTemplateColumns: "130px 1fr auto auto" }}
-            >
-              <div className="w-[130px] h-[76px] rounded-xl bg-gradient-to-br from-gray-800 to-black text-white flex items-center justify-center relative">
-                <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                </div>
-                <span className="absolute bottom-1.5 right-1.5 text-[10px] bg-black/60 px-1.5 py-0.5 rounded font-semibold">
-                  {r.dur}
-                </span>
-              </div>
-              <div>
-                <h4 className="text-sm font-bold m-0">{r.name} · {r.role}</h4>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {r.lang} · {r.dateLoc} · Interview Agent v2.4
-                </div>
-                <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                  {r.tags.map((t) => (
-                    <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-800 font-semibold rounded-full">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] tracking-wider text-gray-500 uppercase font-semibold">Score</div>
-                <div className="text-lg font-extrabold">{r.score}/100</div>
-              </div>
-              <div className="flex gap-1.5">
-                <button className="p-1.5 border border-gray-200 rounded-lg hover:border-black" title="Ver video">
-                  <Play className="w-3.5 h-3.5" />
-                </button>
-                <button className="p-1.5 border border-gray-200 rounded-lg hover:border-black" title="Transcript">
-                  <FileText className="w-3.5 h-3.5" />
-                </button>
-                <button className="p-1.5 border border-gray-200 rounded-lg hover:border-black" title="Compartir">
-                  <Share2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+          {loading && (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          )}
+          {!loading && tokens.length === 0 && (
+            <div className="text-sm text-gray-400 py-8 text-center">
+              Sin pruebas completadas aún.
             </div>
-          ))}
+          )}
+          {tokens
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, 40)
+            .map((t) => {
+              const completedDate = t.completed_at
+                ? new Date(t.completed_at).toLocaleDateString("es-CO", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "—";
+              const score = t.score ?? 0;
+              return (
+                <div
+                  key={t.id}
+                  className="grid gap-4 items-center border border-gray-200 rounded-xl px-4 py-3"
+                  style={{ gridTemplateColumns: "56px 1fr auto auto" }}
+                >
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-800 to-black text-white flex items-center justify-center font-bold text-sm">
+                    {t.candidate_name
+                      .split(" ")
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((p) => p[0]?.toUpperCase())
+                      .join("")}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold m-0 truncate">
+                      {t.candidate_name} · {t.vacancy_title_es ?? t.vacancy_slug ?? "—"}
+                    </h4>
+                    <div className="text-xs text-gray-500 mt-0.5 truncate">
+                      {t.candidate_email} · completada {completedDate}
+                      {t.source && ` · ${t.source}`}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] tracking-wider text-gray-500 uppercase font-semibold">Score</div>
+                    <div className="text-lg font-extrabold">{score}/100</div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <a
+                      href={`/assessment/${t.token}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 border border-gray-200 rounded-lg hover:border-black"
+                      title="Abrir token"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      className="p-1.5 border border-gray-200 rounded-lg hover:border-black"
+                      title="Reporte (próximamente)"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
         </div>
       </Card>
     </>
@@ -1223,6 +1525,17 @@ function Pruebas() {
 }
 
 /* ===== modal: Enviar prueba ===== */
+type ExistingToken = {
+  token: string;
+  status: string;
+  score: number | null;
+  sent_at: string;
+  completed_at: string | null;
+  vacancy_id: number | null;
+  vacancy_slug: string | null;
+  source: string | null;
+};
+
 function SendAssessmentModal({
   vacancies,
   onClose,
@@ -1239,6 +1552,39 @@ function SendAssessmentModal({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ link: string; mailto: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Validación de duplicados: consulta /api/assessments?email=X cuando se teclea un email válido
+  const [existing, setExisting] = useState<ExistingToken[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
+
+  useEffect(() => {
+    setExisting([]);
+    setOverrideConfirmed(false);
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+    const handle = setTimeout(async () => {
+      setChecking(true);
+      try {
+        const r = await fetch(
+          `/api/assessments?email=${encodeURIComponent(email.toLowerCase().trim())}`,
+          { cache: "no-store" }
+        );
+        const j = await r.json();
+        setExisting((j.data ?? []) as ExistingToken[]);
+      } finally {
+        setChecking(false);
+      }
+    }, 400); // debounce
+    return () => clearTimeout(handle);
+  }, [email]);
+
+  // ¿Bloquear o permitir?
+  //  - completed  → bloquear fuerte (requiere checkbox de confirmación explícita)
+  //  - expired    → warning amarillo, permitir sin confirmación
+  //  - in_progress / sent → warning azul, permitir sin confirmación
+  const sameVacancy = existing.find((t) => t.vacancy_id === vacancyId);
+  const needsOverride =
+    sameVacancy?.status === "completed" && !overrideConfirmed;
 
   const send = async () => {
     setSaving(true);
@@ -1271,6 +1617,29 @@ function SendAssessmentModal({
     }
   };
 
+  const statusLabel = (s: string) =>
+    s === "completed"
+      ? "Completada"
+      : s === "in_progress"
+      ? "En progreso"
+      : s === "expired"
+      ? "Expirada"
+      : s === "sent"
+      ? "Enviada"
+      : s;
+
+  const statusTone = (s: string) =>
+    s === "completed"
+      ? "bg-red-50 border-red-300 text-red-900"
+      : s === "expired"
+      ? "bg-amber-50 border-amber-300 text-amber-900"
+      : "bg-blue-50 border-blue-300 text-blue-900";
+
+  const vacancyName = (vid: number | null) => {
+    const v = vacancies.find((x) => x.id === vid);
+    return v ? v.title_es ?? v.title ?? v.slug : vid ? `id=${vid}` : "—";
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg p-6">
@@ -1295,7 +1664,44 @@ function SendAssessmentModal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {checking && (
+                <div className="text-[11px] text-gray-400 mt-1">
+                  Buscando si ya tiene pruebas…
+                </div>
+              )}
             </div>
+
+            {existing.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[11px] tracking-[0.08em] text-gray-500 font-semibold uppercase">
+                  ⚠ Este candidato ya tiene {existing.length} prueba(s)
+                </div>
+                {existing.map((t) => (
+                  <div
+                    key={t.token}
+                    className={`border rounded-lg p-3 text-xs ${statusTone(t.status)}`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="font-bold">{statusLabel(t.status)}</div>
+                      {t.score && (
+                        <span className="font-bold">{t.score}/100</span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px] opacity-80">
+                      Vacante: <b>{vacancyName(t.vacancy_id)}</b>
+                      {t.completed_at && (
+                        <> · completada el {new Date(t.completed_at).toLocaleDateString("es-CO")}</>
+                      )}
+                      {!t.completed_at && t.sent_at && (
+                        <> · enviada el {new Date(t.sent_at).toLocaleDateString("es-CO")}</>
+                      )}
+                      {t.source && <> · fuente: {t.source}</>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-gray-600">Vacante</label>
@@ -1324,6 +1730,22 @@ function SendAssessmentModal({
                 </select>
               </div>
             </div>
+            {sameVacancy?.status === "completed" && (
+              <label className="flex items-start gap-2 bg-red-50 border border-red-300 rounded-lg p-3 text-xs text-red-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={overrideConfirmed}
+                  onChange={(e) => setOverrideConfirmed(e.target.checked)}
+                />
+                <span>
+                  <b>Este candidato ya completó la prueba para esta vacante</b> con score{" "}
+                  <b>{sameVacancy.score}/100</b>. Marca esta casilla solo si quieres que vuelva
+                  a hacerla (re-evaluación). El nuevo token reemplaza al anterior.
+                </span>
+              </label>
+            )}
+
             {err && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
                 {err}
@@ -1341,10 +1763,16 @@ function SendAssessmentModal({
               <button
                 className="pill-btn pill-btn-primary text-xs"
                 style={{ padding: "9px 14px" }}
-                disabled={!name || !email || saving}
+                disabled={!name || !email || saving || needsOverride}
                 onClick={send}
               >
-                {saving ? "Creando…" : "Crear token"}
+                {saving
+                  ? "Creando…"
+                  : needsOverride
+                  ? "Marca la casilla para continuar"
+                  : sameVacancy
+                  ? "Reenviar prueba"
+                  : "Crear token"}
               </button>
             </div>
           </div>
@@ -1557,61 +1985,215 @@ function ImportCSVModal({
 /* Agentes IA                                               */
 /* ======================================================== */
 function Agentes() {
-  const agents: { name: string; role: string; stats: [string, string][] }[] = [
-    { name: "Job Writer Agent", role: "Copywriting + Talent Marketing", stats: [["Drafts", "3"], ["Aprob. sin edit", "78%"], ["Tiempo", "30 s"]] },
-    { name: "Intake Agent", role: "Recepción + validación", stats: [["Aplicaciones", "148"], ["Rechazos", "2.1%"], ["Tiempo", "4 s"]] },
-    { name: "CV Parser Agent", role: "OCR + NLP", stats: [["CVs parseados", "145"], ["Campos OK", "97%"], ["Tiempo", "6 s"]] },
-    { name: "Screening Agent", role: "Matching + scoring", stats: [["Scorings", "145"], ["Accuracy", "94%"], ["Tiempo", "3.2 s"]] },
-    { name: "Ranker Agent", role: "Priorización + calibración", stats: [["Rankings", "52"], ["Feedback loop", "+3 pts"], ["Tiempo", "1.8 s"]] },
-    { name: "Assessment Agent", role: "Factor X + BETESA", stats: [["Pruebas", "62"], ["Auto-score", "100%"], ["Dropoff", "22%"]] },
-    { name: "Interview Agent", role: "Video async + transcript", stats: [["Entrevistas", "35"], ["NPS", "4.6/5"], ["Dropoff", "11%"]] },
-    { name: "Report Agent", role: "Síntesis + narrativa", stats: [["One-pagers", "35"], ["Útil HM", "4.4/5"], ["Tiempo", "8 s"]] },
-    { name: "Scheduler Agent", role: "Calendarios + zonas", stats: [["Meetings", "18"], ["Auto-agend.", "94%"], ["Reagend.", "7%"]] },
-    { name: "Offer Agent", role: "Cartas + negociación", stats: [["Ofertas", "7"], ["Aceptación", "72%"], ["En banda", "100%"]] },
-    { name: "BGC + Reference Agents", role: "Verificación + voz", stats: [["Llamadas", "21"], ["Verdes", "88%"], ["Tiempo", "< 24h"]] },
-    { name: "Contract + e-Sign Agents", role: "Legal + firma", stats: [["Contratos", "4"], ["Firmas < 24h", "93%"], ["Países", "1"]] },
-  ];
+  const [stats, setStats] = useState<{
+    applications: number;
+    talentPool: number;
+    completedAssessments: number;
+    sentAssessments: number;
+    vacancies: number;
+    linkedinCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [appR, tpR, asR, vacR] = await Promise.all([
+        fetch("/api/applications", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      type App = unknown;
+      type TP = { source?: string | null };
+      type Tok = { status: string };
+      type V = unknown;
+      const apps = (appR.applications ?? appR.data ?? []) as App[];
+      const tp = (tpR.data ?? []) as TP[];
+      const tokens = (asR.data ?? []) as Tok[];
+      const vacs = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as V[];
+      setStats({
+        applications: apps.length,
+        talentPool: tp.length,
+        completedAssessments: tokens.filter((t) => t.status === "completed").length,
+        sentAssessments: tokens.length,
+        vacancies: vacs.length,
+        linkedinCount: tp.filter((c) => (c.source ?? "").toLowerCase().includes("linkedin")).length,
+      });
+    })();
+  }, []);
+
+  const s = stats;
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
+  const completionRate = s ? pct(s.completedAssessments, s.sentAssessments) : 0;
+
+  // Los agentes son conceptuales (el pipeline real). Sus números vienen del estado de la BD.
+  const agents = s
+    ? [
+        {
+          name: "Job Writer Agent",
+          role: "Redacción de vacantes (ES/EN)",
+          stats: [
+            ["Vacantes publicadas", String(s.vacancies)],
+            ["Idiomas", "2"],
+            ["Estado", "✓"],
+          ] as [string, string][],
+        },
+        {
+          name: "Intake Agent",
+          role: "Recepción de aplicaciones",
+          stats: [
+            ["Aplicaciones", String(s.applications)],
+            ["CV Bank", String(s.talentPool)],
+            ["Fuentes", "3"],
+          ] as [string, string][],
+        },
+        {
+          name: "CV Parser Agent",
+          role: "Extracción de datos de CV",
+          stats: [
+            ["Perfiles parseados", String(s.talentPool)],
+            ["Desde LinkedIn", String(s.linkedinCount)],
+            ["Cobertura", `${pct(s.linkedinCount, s.talentPool)}%`],
+          ] as [string, string][],
+        },
+        {
+          name: "Screening Agent",
+          role: "Match contra vacantes",
+          stats: [
+            ["Scorings", String(s.completedAssessments)],
+            ["Dimensiones", "24"],
+            ["Benchmark", "15 top TS"],
+          ] as [string, string][],
+        },
+        {
+          name: "Assessment Agent",
+          role: "Factor X · DISC+Big5+BETESA+McC+Cog",
+          stats: [
+            ["Enviadas", String(s.sentAssessments)],
+            ["Completadas", String(s.completedAssessments)],
+            ["Tasa", `${completionRate}%`],
+          ] as [string, string][],
+        },
+        {
+          name: "Ranker Agent",
+          role: "Top candidatos por vacante",
+          stats: [
+            ["Vacantes activas", String(s.vacancies)],
+            ["Top con score", String(s.completedAssessments)],
+            ["Estado", "✓"],
+          ] as [string, string][],
+        },
+        {
+          name: "Interview Agent",
+          role: "Video async + transcript (fase 2)",
+          stats: [
+            ["Grabaciones", "0"],
+            ["Estado", "Pendiente"],
+            ["ETA", "Q3 2026"],
+          ] as [string, string][],
+        },
+        {
+          name: "Report Agent",
+          role: "One-pagers y recomendaciones",
+          stats: [
+            ["Candidatos scored", String(s.completedAssessments)],
+            ["Blobs JSON", String(s.completedAssessments)],
+            ["Estado", "✓"],
+          ] as [string, string][],
+        },
+        {
+          name: "Scheduler Agent",
+          role: "Calendarios + entrevistas humanas",
+          stats: [
+            ["Meetings", "0"],
+            ["Estado", "Manual"],
+            ["ETA", "Q3 2026"],
+          ] as [string, string][],
+        },
+        {
+          name: "Offer Agent",
+          role: "Cartas de oferta + negociación",
+          stats: [
+            ["Ofertas enviadas", "0"],
+            ["Estado", "Pendiente"],
+            ["Tabla", "offers"],
+          ] as [string, string][],
+        },
+        {
+          name: "BGC + Reference Agents",
+          role: "Verificación + referencias laborales",
+          stats: [
+            ["Contactadas", "0"],
+            ["Estado", "Pendiente"],
+            ["Tabla", "background_checks"],
+          ] as [string, string][],
+        },
+        {
+          name: "Contract + e-Sign Agents",
+          role: "Contrato laboral + firma digital",
+          stats: [
+            ["Contratos", "0"],
+            ["Estado", "Pendiente"],
+            ["Países", "1 (CO)"],
+          ] as [string, string][],
+        },
+      ]
+    : [];
+
   return (
     <>
       <PageHead
         title="Agentes IA · Activity & performance"
-        desc="12 agentes en producción · Monitor de salud, throughput, accuracy, costo y SLA."
+        desc={
+          s
+            ? `12 agentes del pipeline · Contadores derivados de tu BD Neon · Live`
+            : "Cargando…"
+        }
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Últimas 24h ▾</button>
+            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Histórico ▾</button>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Ver logs</button>
           </>
         }
       />
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Acciones totales (24h)" value="3,204" delta="+12%" />
-        <KPI label="Accuracy promedio" value="94%" delta="+2 pts" />
-        <KPI label="Costo IA por hire" value="$12.40" delta="−28%" />
-        <KPI label="SLA cumplido" value="99.2%" delta="Uptime" tone="neutral" />
+        <KPI label="Aplicaciones procesadas" value={s ? String(s.applications) : "…"} delta="Intake + Parser" tone="neutral" />
+        <KPI label="CV Bank activo" value={s ? String(s.talentPool) : "…"} delta={s ? `${s.linkedinCount} desde LI` : ""} tone="neutral" />
+        <KPI label="Pruebas Factor X" value={s ? `${s.completedAssessments}/${s.sentAssessments}` : "…"} delta={`${completionRate}% completadas`} />
+        <KPI label="Vacantes cubiertas" value={s ? String(s.vacancies) : "…"} delta="En producción" />
       </div>
       <div className="grid grid-cols-3 gap-3">
-        {agents.map((a) => (
-          <div key={a.name} className="bg-white border border-gray-200 rounded-2xl p-4">
-            <div className="flex justify-between items-start gap-2">
-              <div>
-                <div className="text-sm font-bold">{a.name}</div>
-                <div className="text-[11px] text-gray-500 mt-0.5">{a.role}</div>
-              </div>
-              <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.1em] text-emerald-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" />
-                ON
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100">
-              {a.stats.map(([l, v]) => (
-                <div key={l}>
-                  <div className="text-[10px] tracking-[0.08em] text-gray-500 uppercase font-semibold">{l}</div>
-                  <div className="text-[15px] font-bold mt-0.5">{v}</div>
+        {agents.map((a) => {
+          const pending = a.stats.some(([, v]) => v === "Pendiente" || v === "Manual");
+          return (
+            <div key={a.name} className="bg-white border border-gray-200 rounded-2xl p-4">
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <div className="text-sm font-bold">{a.name}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">{a.role}</div>
                 </div>
-              ))}
+                {pending ? (
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.1em] text-amber-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]" />
+                    PENDIENTE
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.1em] text-emerald-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" />
+                    ON
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100">
+                {a.stats.map(([l, v]) => (
+                  <div key={l}>
+                    <div className="text-[10px] tracking-[0.08em] text-gray-500 uppercase font-semibold">{l}</div>
+                    <div className="text-[15px] font-bold mt-0.5">{v}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -1621,89 +2203,212 @@ function Agentes() {
 /* Analytics                                                */
 /* ======================================================== */
 function Analytics() {
+  const [data, setData] = useState<{
+    tokens: LiveToken[];
+    pool: LiveCandidate[];
+    vacs: LiveVacancy[];
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [asR, tpR, vacR] = await Promise.all([
+        fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      setData({
+        tokens: (asR.data ?? []) as LiveToken[],
+        pool: (tpR.data ?? []) as LiveCandidate[],
+        vacs: (Array.isArray(vacR) ? vacR : vacR.data ?? []) as LiveVacancy[],
+      });
+    })();
+  }, []);
+
+  const d = data;
+  const loading = !d;
+
+  // Métricas reales que sí podemos calcular
+  const completed = d?.tokens.filter((t) => t.status === "completed") ?? [];
+  const avgScore =
+    completed.length > 0
+      ? Math.round(completed.reduce((s, t) => s + (t.score ?? 0), 0) / completed.length)
+      : 0;
+  const avanza = completed.filter((t) => (t.score ?? 0) >= 70).length;
+  const enEspera = completed.filter((t) => (t.score ?? 0) < 70 && (t.score ?? 0) >= 50).length;
+  const noAvanza = completed.filter((t) => (t.score ?? 0) < 50).length;
+  const completionRate = d && d.tokens.length > 0 ? Math.round((completed.length / d.tokens.length) * 100) : 0;
+
+  // Source effectiveness: cuántos por fuente
+  const bySource: Record<string, number> = {};
+  for (const c of d?.pool ?? []) {
+    const s = (c.source ?? "otros").toLowerCase();
+    const label = s.includes("linkedin")
+      ? "LinkedIn TS"
+      : s.includes("elevare")
+      ? "Elevare"
+      : s.includes("email") || s.includes("manual")
+      ? "Email/Manual"
+      : "Otros";
+    bySource[label] = (bySource[label] ?? 0) + 1;
+  }
+  const maxSource = Math.max(...Object.values(bySource), 1);
+
+  // Score por vacante
+  const scoresByVac: Record<string, number[]> = {};
+  for (const t of completed) {
+    const key = t.vacancy_slug ?? "sin_vacante";
+    if (!scoresByVac[key]) scoresByVac[key] = [];
+    if (t.score) scoresByVac[key].push(t.score);
+  }
+
   return (
     <>
       <PageHead
         title="Analytics · Indicadores para mejora continua"
-        desc="Todo queda documentado para entrenar agentes, mejorar fit scores y reducir time-to-hire."
+        desc={
+          loading
+            ? "Cargando data…"
+            : "Métricas reales derivadas de las pruebas completadas. QoH, time-to-hire y cost-per-hire requieren histórico de contrataciones (pendiente)."
+        }
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Último trimestre ▾</button>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Descargar reporte</button>
+            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Todo el histórico ▾</button>
+            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Descargar CSV</button>
           </>
         }
       />
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Quality of Hire" value="87%" delta="+4 pts" />
-        <KPI label="Time-to-hire" value="14 d" delta="−9 d" />
-        <KPI label="Cost-per-hire" value="$412" delta="−38%" />
-        <KPI label="Early attrition 90d" value="3.6%" delta="−2.1 pts" />
+        <KPI
+          label="Score promedio Factor X"
+          value={loading ? "…" : `${avgScore}/100`}
+          delta={`de ${completed.length} completadas`}
+          tone="neutral"
+        />
+        <KPI
+          label="Tasa AVANZA"
+          value={loading ? "…" : `${completed.length > 0 ? Math.round((avanza / completed.length) * 100) : 0}%`}
+          delta={`${avanza}/${completed.length} pasan filtro`}
+        />
+        <KPI
+          label="Tasa de completación"
+          value={loading ? "…" : `${completionRate}%`}
+          delta={d ? `${completed.length}/${d.tokens.length} tokens` : ""}
+          tone="neutral"
+        />
+        <KPI
+          label="Hired Quality (pendiente)"
+          value="—"
+          delta="Requiere tabla hires"
+          tone="neutral"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
-        <Card title="Quality of Hire vs meta" eyebrow="POR COHORTE">
-          <svg viewBox="0 0 400 200" className="w-full h-[200px]" preserveAspectRatio="none">
-            <g stroke="#F3F4F6" strokeWidth="1">
-              <line x1="30" y1="40" x2="390" y2="40" />
-              <line x1="30" y1="80" x2="390" y2="80" />
-              <line x1="30" y1="120" x2="390" y2="120" />
-              <line x1="30" y1="160" x2="390" y2="160" />
-            </g>
-            <g fill="#000">
-              <rect x="50" y="88" width="40" height="92" rx="6" />
-              <rect x="110" y="76" width="40" height="104" rx="6" />
-              <rect x="170" y="64" width="40" height="116" rx="6" />
-              <rect x="230" y="56" width="40" height="124" rx="6" />
-              <rect x="290" y="44" width="40" height="136" rx="6" />
-            </g>
-            <line x1="30" y1="64" x2="390" y2="64" stroke="#0A66C2" strokeWidth="2" strokeDasharray="4 4" />
-            <text x="340" y="60" fontSize="10" fill="#0A66C2" fontFamily="Inter">Meta 85%</text>
-            <g fontSize="10" fill="#6B7280" fontFamily="Inter">
-              <text x="58" y="195">Q3'25</text>
-              <text x="118" y="195">Q4'25</text>
-              <text x="178" y="195">Q1'26</text>
-              <text x="238" y="195">Q2'26*</text>
-              <text x="298" y="195">Proy</text>
-            </g>
-          </svg>
+        <Card title="Distribución de resultados Factor X" eyebrow="AVANZA / EN ESPERA / NO AVANZA">
+          {loading ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : completed.length === 0 ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Sin pruebas completadas</div>
+          ) : (
+            <div className="space-y-3">
+              <SourceBar
+                label={`AVANZA (score ≥ 70)`}
+                pct={(avanza / completed.length) * 100}
+                color="#059669"
+                value={`${avanza} · ${Math.round((avanza / completed.length) * 100)}%`}
+              />
+              <SourceBar
+                label={`EN ESPERA (50-69)`}
+                pct={(enEspera / completed.length) * 100}
+                color="#F59E0B"
+                value={`${enEspera} · ${Math.round((enEspera / completed.length) * 100)}%`}
+              />
+              <SourceBar
+                label={`NO AVANZA (<50)`}
+                pct={(noAvanza / completed.length) * 100}
+                color="#DC2626"
+                value={`${noAvanza} · ${completed.length > 0 ? Math.round((noAvanza / completed.length) * 100) : 0}%`}
+              />
+            </div>
+          )}
         </Card>
-        <Card title="Effectiveness por fuente" eyebrow="HIRE / APLICACIÓN">
-          <div className="space-y-3">
-            <SourceBar label="LinkedIn TS" pct={72} color="#0A66C2" value="2.6%" />
-            <SourceBar label="Careers TS" pct={85} color="#111" value="3.1%" />
-            <SourceBar label="Referidos" pct={100} color="#059669" value="4.4%" />
-            <SourceBar label="Otros" pct={18} color="#9CA3AF" value="0.9%" />
-          </div>
+        <Card title="Candidatos por fuente" eyebrow="TALENT POOL">
+          {loading ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(bySource)
+                .sort((a, b) => b[1] - a[1])
+                .map(([label, count]) => {
+                  const color =
+                    label === "LinkedIn TS"
+                      ? "#0A66C2"
+                      : label === "Elevare"
+                      ? "#111"
+                      : label === "Email/Manual"
+                      ? "#6B7280"
+                      : "#9CA3AF";
+                  return (
+                    <SourceBar
+                      key={label}
+                      label={label}
+                      pct={(count / maxSource) * 100}
+                      color={color}
+                      value={String(count)}
+                    />
+                  );
+                })}
+            </div>
+          )}
         </Card>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Card title="Tiempo promedio por etapa (días)" eyebrow="ÚLT. 90 DÍAS">
-          <Funnel
-            rows={[
-              { label: "Aplicación → Screen", pct: 6, value: 0.1 },
-              { label: "Screen → Pruebas", pct: 14, value: 0.3 },
-              { label: "Pruebas → Entrevista IA", pct: 22, value: 1 },
-              { label: "Entrevista IA → Humana", pct: 62, value: 3 },
-              { label: "Humana → Oferta", pct: 82, value: 4 },
-              { label: "Oferta → Firma", pct: 100, value: 5.6 },
-            ]}
-          />
+        <Card title="Score promedio por vacante" eyebrow="FACTOR X">
+          {loading ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
+          ) : Object.keys(scoresByVac).length === 0 ? (
+            <div className="text-sm text-gray-400 py-6 text-center">Sin data aún</div>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(scoresByVac).map(([slug, scores]) => {
+                const vac = d?.vacs.find((v) => v.slug === slug);
+                const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+                return (
+                  <div
+                    key={slug}
+                    className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {vac?.title_es ?? vac?.title ?? slug}
+                      </div>
+                      <div className="text-xs text-gray-500">{scores.length} completadas</div>
+                    </div>
+                    <Pill color={avg >= 80 ? "green" : avg >= 70 ? "black" : "amber"}>{avg}</Pill>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
-        <Card title="Feedback loop · Agente ↔ Reclutador" eyebrow="ENTRENAMIENTO">
+        <Card title="Métricas pendientes · requieren histórico" eyebrow="ROADMAP">
           <div className="space-y-2">
             {[
-              ["Override de ranking", "Reclutador movió candidato del #12 al #3", "+18 muestras", "gray"],
-              ["Descarte manual", "Rechazo después de Entrevista IA", "+42 muestras", "gray"],
-              ["Ajuste de weight", "\"Inglés\" +15% para Pricing Senior", "Activo", "green"],
-              ["Red flag entrenada", "Incoherencia de fechas en CV", "+3% accuracy", "green"],
+              ["Time-to-hire", "Días entre aplicación y firma de contrato", "Requiere tabla hires con fechas", "amber"],
+              ["Quality of Hire", "Desempeño a 90 días del nuevo empleado", "Requiere evaluación 30-60-90", "amber"],
+              ["Cost-per-hire", "Inversión en pautas + tiempo recruiter", "Requiere budget tracking", "amber"],
+              ["Early attrition 90d", "Renuncias en primeros 90 días", "Requiere tabla hires + fecha salida", "amber"],
             ].map(([n, d, s, c]) => (
-              <div key={n as string} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
-                <div>
+              <div
+                key={n as string}
+                className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold">{n}</div>
                   <div className="text-xs text-gray-500">{d}</div>
                 </div>
-                <Pill color={c as "gray" | "green"}>{s}</Pill>
+                <Pill color={c as "amber"}>{s as string}</Pill>
               </div>
             ))}
           </div>
@@ -1717,17 +2422,49 @@ function Analytics() {
 /* LinkedIn TS                                              */
 /* ======================================================== */
 function LinkedInTS() {
+  const [vacs, setVacs] = useState<LiveVacancy[]>([]);
+  const [pool, setPool] = useState<LiveCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [vacR, tpR] = await Promise.all([
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      setVacs((Array.isArray(vacR) ? vacR : vacR.data ?? []) as LiveVacancy[]);
+      setPool((tpR.data ?? []) as LiveCandidate[]);
+      setLoading(false);
+    })();
+  }, []);
+
+  const vacsInLI = vacs.filter((v) => v.linkedin_url);
+  const fromLI = pool.filter((c) => (c.source ?? "").toLowerCase().includes("linkedin")).length;
+  const totalPool = pool.length;
+
   return (
     <>
       <PageHead
         title="LinkedIn · Trading Solutions (página de compañía)"
-        desc="Integración oficial con la cuenta corporativa. Publicación, branding, talent pool y LinkedIn Recruiter."
+        desc="Integración oficial con la cuenta corporativa. Publicación, branding y talent pool."
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Configurar</button>
-            <button className="pill-btn text-xs bg-[#0A66C2] text-white hover:bg-[#084D94]" style={{ padding: "9px 14px" }}>
+            <a
+              href="/hr-admin/linkedin-setup"
+              className="pill-btn pill-btn-outline text-xs"
+              style={{ padding: "9px 14px" }}
+            >
+              Configurar
+            </a>
+            <a
+              href="https://www.linkedin.com/talent/home"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pill-btn text-xs bg-[#0A66C2] text-white hover:bg-[#084D94]"
+              style={{ padding: "9px 14px" }}
+            >
               Abrir LinkedIn Recruiter
-            </button>
+            </a>
           </>
         }
       />
@@ -1737,66 +2474,84 @@ function LinkedInTS() {
         <div>
           <h3 className="text-lg font-bold m-0">Trading Solutions</h3>
           <div className="text-[13px] text-gray-500 mt-1">
-            linkedin.com/company/trading-solutions · Logistics &amp; Supply Chain · 201–500 empleados
+            linkedin.com/company/trading-solutions · Logistics &amp; Supply Chain · URN 1372457
           </div>
           <div className="inline-flex items-center gap-1.5 mt-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Conectado como admin corporativo · OAuth válido
+            App OAuth verificada · Yohanna Franco (admin)
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[11px] text-gray-500">Última sync</div>
-          <div className="text-sm font-bold">hace 2 minutos</div>
+          <div className="text-[11px] text-gray-500">App ID</div>
+          <div className="text-sm font-bold">230367072</div>
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <MiniStat label="Followers" value="8,421" delta="+124 sem" />
-        <MiniStat label="Empleados en LI" value="163" delta="93% del roster" />
-        <MiniStat label="Vacantes publicadas" value="3 / 3" delta="100% sync auto" />
-        <MiniStat label="Aplicaciones LI 30d" value="77" delta="52% del total" />
-        <MiniStat label="InMails enviados" value="32" delta="38% open rate" />
-        <MiniStat label="Open-to-Work en pool" value="942" delta="en base TS" />
-        <MiniStat label="Recruiter credits" value="320" delta="de 500 mes" />
-        <MiniStat label="Alumni network" value="41" delta="ex-TS" />
+        <MiniStat
+          label="Vacantes publicadas"
+          value={loading ? "…" : `${vacsInLI.length} / ${vacs.length}`}
+          delta={vacs.length > 0 ? `${Math.round((vacsInLI.length / vacs.length) * 100)}% sync` : ""}
+        />
+        <MiniStat
+          label="Candidatos desde LinkedIn"
+          value={loading ? "…" : String(fromLI)}
+          delta={totalPool > 0 ? `${Math.round((fromLI / totalPool) * 100)}% del pool` : ""}
+        />
+        <MiniStat label="Followers" value="—" delta="Requiere Graph API" />
+        <MiniStat label="InMails" value="—" delta="Requiere Recruiter API" />
+        <MiniStat label="Scopes activos" value="4" delta="openid + profile + email + w_member_social" />
+        <MiniStat label="Easy Apply webhook" value="—" delta="Requiere RSC aprobación" />
+        <MiniStat label="Empleados en LI" value="—" delta="Requiere Graph API" />
+        <MiniStat label="Alumni network" value="—" delta="Requiere Graph API" />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Card title="Vacantes sincronizadas con LinkedIn TS" eyebrow="BIDIRECCIONAL">
+        <Card title="Vacantes sincronizadas con LinkedIn TS" eyebrow="LIVE · /api/vacancies">
           <div className="space-y-2">
-            {jobs.map((j) => (
-              <div key={j.id} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
-                <div>
-                  <div className="text-sm font-bold">{j.title.es}</div>
-                  <div className="text-xs text-gray-500">
-                    Publicada {j.postedAt} · LinkedIn job ID {j.linkedinUrl.split("/jobs/view/")[1].replace("/", "")}
+            {loading && <div className="text-sm text-gray-400 py-4 text-center">Cargando…</div>}
+            {!loading &&
+              vacs.map((v) => {
+                const title = v.title_es ?? v.title ?? v.slug;
+                const liId = v.linkedin_url?.split("/jobs/view/")[1]?.replace(/\/$/, "");
+                return (
+                  <div key={v.id} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold truncate">{title}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {v.linkedin_url ? `LinkedIn job ID ${liId}` : "No publicada en LinkedIn"}
+                      </div>
+                    </div>
+                    {v.linkedin_url ? (
+                      <a href={v.linkedin_url} target="_blank" rel="noopener noreferrer">
+                        <Pill color="blue">ACTIVA</Pill>
+                      </a>
+                    ) : (
+                      <Pill color="gray">OFFLINE</Pill>
+                    )}
                   </div>
-                </div>
-                <a href={j.linkedinUrl} target="_blank" rel="noopener noreferrer">
-                  <Pill color="blue">ACTIVA</Pill>
-                </a>
-              </div>
-            ))}
+                );
+              })}
           </div>
         </Card>
 
-        <Card title="Qué hace la integración" eyebrow="CAPACIDADES">
+        <Card title="Capacidades de la integración" eyebrow="ESTADO ACTUAL">
           <div className="space-y-2">
             {[
-              ["Publicación automática", "Crear vacante → aparece en LinkedIn TS en segundos"],
-              ["Easy Apply al pipeline", "Las aplicaciones LI entran al mismo ATS"],
-              ["Enrich de perfiles", "Recomendaciones, skills, certificados, alumni"],
-              ["Filtro Open-to-Work", "Ranker Agent prioriza candidatos disponibles"],
-              ["InMail desde el ATS", "Sourcing con templates y tracking"],
-              ["Followers → CV Bank", "8,421 followers con consentimiento"],
-              ["Advocacy de empleados", "163 empleados re-comparten vacantes"],
-            ].map(([n, d]) => (
+              ["OAuth Sign In", "Usuarios se autentican con LinkedIn", true],
+              ["Share on LinkedIn", "Postear como miembro en el feed", true],
+              ["Publicación a Company Page", "Requiere Marketing Developer Platform", false],
+              ["Easy Apply al pipeline", "Requiere Recruiter System Connect", false],
+              ["InMail desde el ATS", "Requiere Recruiter API", false],
+              ["Followers → CV Bank", "Requiere Graph API", false],
+              ["Advocacy / Employee re-share", "Requiere Community Management API", false],
+            ].map(([n, d, on]) => (
               <div key={n as string} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
                 <div>
                   <div className="text-sm font-semibold">{n}</div>
                   <div className="text-xs text-gray-500">{d}</div>
                 </div>
-                <Pill color="green">ON</Pill>
+                <Pill color={on ? "green" : "amber"}>{on ? "ON" : "Pendiente"}</Pill>
               </div>
             ))}
           </div>
@@ -1810,30 +2565,72 @@ function LinkedInTS() {
 /* Bases de datos                                           */
 /* ======================================================== */
 function Datos() {
-  const tables: [string, string, string][] = [
-    ["candidates", "CV bank · perfiles", "4,712"],
-    ["applications", "Aplicaciones a vacantes", "148"],
-    ["requisitions", "Vacantes activas + cerradas", "12"],
-    ["cv_embeddings", "Vectores para matching", "4,712"],
-    ["scorings", "Fit scores históricos", "1,204"],
-    ["assessments", "Pruebas Factor X + idioma", "62"],
-    ["assessment_answers", "Respuestas individuales", "4,872"],
-    ["interviews_ai", "Video + transcript", "35"],
-    ["interview_scores", "Rúbricas + dimensiones", "35"],
-    ["offers", "Cartas generadas", "7"],
-    ["contracts", "Legal laboral + anexos", "4"],
-    ["signatures", "Logs e-Sign", "4"],
-    ["hires", "Nuevos empleados", "4"],
-    ["agent_logs", "Acciones de agentes IA", "3,204"],
-    ["recruiter_overrides", "Decisiones humanas", "60"],
-    ["linkedin_sync", "Eventos LI TS", "2,184"],
-    ["audit_trail", "Cambios inmutables", "9,812"],
+  const [counts, setCounts] = useState<Record<string, number | null>>({
+    vacancies: null,
+    talent_pool: null,
+    applications: null,
+    assessment_tokens: null,
+    assessment_tokens_completed: null,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [vacR, appR, tpR, asR] = await Promise.all([
+        fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/applications", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      type Tok = { status: string };
+      const vacs = Array.isArray(vacR) ? vacR : vacR.data ?? [];
+      const apps = appR.applications ?? appR.data ?? [];
+      const tp = tpR.data ?? [];
+      const tokens = (asR.data ?? []) as Tok[];
+      setCounts({
+        vacancies: vacs.length,
+        talent_pool: tp.length,
+        applications: apps.length,
+        assessment_tokens: tokens.length,
+        assessment_tokens_completed: tokens.filter((t) => t.status === "completed").length,
+      });
+      setLoading(false);
+    })();
+  }, []);
+
+  const fmt = (n: number | null) => (n === null ? "…" : n.toLocaleString());
+
+  // Tablas que existen ahora vs. las que vendrán con el roadmap
+  const liveTables: { name: string; desc: string; value: string | null }[] = [
+    { name: "vacancies", desc: "Vacantes activas + cerradas (Neon)", value: fmt(counts.vacancies) },
+    { name: "talent_pool", desc: "CV Bank · perfiles (Neon)", value: fmt(counts.talent_pool) },
+    { name: "applications", desc: "Aplicaciones desde /vacantes (Neon)", value: fmt(counts.applications) },
+    { name: "assessment_tokens", desc: "Pruebas Factor X enviadas (Neon)", value: fmt(counts.assessment_tokens) },
+    { name: "assessment_tokens · completed", desc: "Pruebas completadas con score", value: fmt(counts.assessment_tokens_completed) },
   ];
+
+  const futureTables: { name: string; desc: string }[] = [
+    { name: "hires", desc: "Nuevos empleados contratados" },
+    { name: "offers", desc: "Cartas de oferta generadas" },
+    { name: "contracts", desc: "Contratos laborales + anexos" },
+    { name: "signatures", desc: "Logs de firma digital e-Sign" },
+    { name: "interviews_ai", desc: "Video + transcript (fase 2)" },
+    { name: "interview_scores", desc: "Rúbricas + dimensiones de entrevistas humanas" },
+    { name: "background_checks", desc: "Verificación de antecedentes" },
+    { name: "cv_embeddings", desc: "Vectores para matching semántico" },
+    { name: "agent_logs", desc: "Acciones de cada agente IA (audit)" },
+    { name: "audit_trail", desc: "Cambios inmutables de todo el ATS" },
+  ];
+
   return (
     <>
       <PageHead
         title="Bases de datos · Schema del ATS"
-        desc="Todo lo que se guarda, se documenta y se usa como fuente de verdad para indicadores y mejora continua."
+        desc={
+          loading
+            ? "Cargando conteos…"
+            : `${liveTables.length} tablas activas en Neon con ${Object.values(counts).reduce((a, b) => (a ?? 0) + (b ?? 0), 0)?.toLocaleString()} registros totales. Roadmap: ${futureTables.length} tablas más en fase 2.`
+        }
         actions={
           <>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Export schema</button>
@@ -1841,32 +2638,54 @@ function Datos() {
           </>
         }
       />
-      <div className="grid grid-cols-4 gap-3 mb-4">
-        {tables.map(([n, d, c]) => (
-          <div key={n} className="bg-white border border-gray-200 rounded-2xl p-4 flex justify-between items-center">
-            <div>
-              <div className="text-sm font-bold">{n}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{d}</div>
+
+      <h3 className="text-sm font-bold mb-3">Tablas activas · data en vivo</h3>
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {liveTables.map((t) => (
+          <div
+            key={t.name}
+            className="bg-white border border-gray-200 rounded-2xl p-4 flex justify-between items-center"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold truncate">{t.name}</div>
+              <div className="text-xs text-gray-500 mt-0.5 truncate">{t.desc}</div>
             </div>
-            <div className="text-xl font-extrabold">{c}</div>
+            <div className="text-xl font-extrabold ml-2">{t.value}</div>
           </div>
         ))}
       </div>
-      <Card title="Relaciones principales" eyebrow="ER SIMPLIFICADO">
-        <pre className="bg-black text-gray-200 p-4 rounded-lg text-xs font-mono leading-relaxed overflow-x-auto m-0">
-{`candidates  ──1:N──▶  applications  ──N:1──▶  requisitions
-    │                       │
-    │                       ├──▶ scorings
-    │                       ├──▶ assessments ──▶ assessment_answers
-    │                       ├──▶ interviews_ai ──▶ interview_scores
-    │                       └──▶ offers ──▶ contracts ──▶ signatures ──▶ hires
-    │
-    ├──▶ cv_embeddings       (vectores para re-matching)
-    ├──▶ linkedin_sync       (LinkedIn TS followers + Easy Apply)
-    └──▶ recruiter_overrides (feedback loop de Kelly → agentes)
 
-agent_logs  ◄── registra todo lo que hacen los 12 agentes
-audit_trail ◄── inmutable, todo cambio queda documentado`}
+      <h3 className="text-sm font-bold mb-3">Roadmap · tablas que vienen en fase 2</h3>
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {futureTables.map((t) => (
+          <div
+            key={t.name}
+            className="bg-gray-50 border border-dashed border-gray-300 rounded-2xl p-4 flex justify-between items-center opacity-70"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold truncate text-gray-600">{t.name}</div>
+              <div className="text-xs text-gray-500 mt-0.5 truncate">{t.desc}</div>
+            </div>
+            <Pill color="amber">pendiente</Pill>
+          </div>
+        ))}
+      </div>
+
+      <Card title="Relaciones principales entre tablas" eyebrow="ER SIMPLIFICADO">
+        <pre className="bg-black text-gray-200 p-4 rounded-lg text-xs font-mono leading-relaxed overflow-x-auto m-0">
+{`vacancies  ──1:N──▶  applications
+    │                     │
+    │                     ├──▶ (fase 2) offers ──▶ contracts ──▶ hires
+    │                     └──▶ (fase 2) interviews_ai ──▶ interview_scores
+    │
+talent_pool ─N:M─▶ assessment_tokens ─N:1─▶ vacancies
+    │                     │
+    │                     └── status: sent | in_progress | completed | expired
+    │                         results: JSON con DISC + IQ + Big5 + BETESA + McClelland + cognitivo
+    │
+    └── source: linkedin_recruiter | elevare | email | manual
+
+Fase 2: agent_logs, audit_trail, cv_embeddings, background_checks, signatures`}
         </pre>
       </Card>
     </>
