@@ -364,9 +364,7 @@ function IconForAssessment({
   big?: boolean;
 }) {
   const cls = big ? "w-7 h-7" : "w-5 h-5";
-  if (id === "factor_x_cognitivo") return <Brain className={cls} />;
-  if (id === "factor_x_actitudinal") return <CheckCircle2 className={cls} />;
-  if (id === "betesa_leadership") return <ShieldCheck className={cls} />;
-  if (id === "english_proficiency") return <Languages className={cls} />;
-  return <FileText className={cls} />;
+  // Sólo hay un test ahora: factor_x_ts
+  void id;
+  return <Brain className={cls} />;
 }

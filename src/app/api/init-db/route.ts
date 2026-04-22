@@ -193,6 +193,54 @@ const VACANCIES: VacancySeed[] = [
     apply_email: 'jointheteam@tradingsolutions.com',
     posted_at: '2026-04-14',
   },
+  {
+    id: 4,
+    slug: 'pricing-junior',
+    title_es: 'Pricing Junior',
+    title_en: 'Junior Pricing Analyst',
+    department: 'Comercial',
+    location: 'Barranquilla, Atlántico, Colombia',
+    work_mode: 'Presencial',
+    employment_type: 'full-time',
+    level: 'Junior',
+    salary_range: '$3.0M - $4.0M COP',
+    tags: ['Pricing', 'Freight Forwarding', 'Cotizaciones', 'Inglés B1-B2', 'Junior'],
+    description_es:
+      'Serás parte del equipo de pricing de Trading Solutions apoyando la generación de cotizaciones, análisis de tarifas con carriers y respuestas a RFQs. Rol de entrada ideal para profesionales de comercio exterior que quieren especializarse en freight forwarding.',
+    description_en:
+      "You'll support the pricing team at Trading Solutions by generating quotations, analyzing carrier rates, and responding to RFQs. Entry-level role ideal for international trade professionals specializing in freight forwarding.",
+    responsibilities_es: [
+      'Generar cotizaciones marítimas, aéreas y terrestres para cuentas comerciales',
+      'Solicitar y comparar tarifas con carriers, co-loaders y agentes',
+      'Mantener el pricing sheet y el banco de tarifas vigentes',
+      'Dar soporte a Inside Sales en cotizaciones urgentes',
+      'Monitorear tendencias de tarifas por ruta y reportar al Senior',
+    ],
+    responsibilities_en: [
+      'Generate ocean, air, and ground freight quotations for commercial accounts',
+      'Request and compare rates with carriers, co-loaders, and agents',
+      'Maintain the pricing sheet and active rates database',
+      'Support Inside Sales with urgent quotations',
+      'Monitor rate trends per route and report to the Senior',
+    ],
+    requirements_es: [
+      '1-2 años de experiencia en comercio exterior, freight forwarding o logística',
+      'Manejo de Excel avanzado y cálculo de costos',
+      'Inglés intermedio (B1 mínimo, B2 deseable)',
+      'Técnico o profesional en Comercio Internacional / Admin Negocios Internacionales',
+      'Atención al detalle y habilidad para priorizar bajo presión',
+    ],
+    requirements_en: [
+      '1-2 years in international trade, freight forwarding, or logistics',
+      'Advanced Excel and cost calculation skills',
+      'Intermediate English (B1 minimum, B2 preferred)',
+      "Technical or Bachelor's in International Trade / International Business",
+      'Attention to detail and ability to prioritize under pressure',
+    ],
+    linkedin_url: '',
+    apply_email: 'jointheteam@tradingsolutions.com',
+    posted_at: '2026-04-14',
+  },
 ];
 
 export async function GET(request: NextRequest) {

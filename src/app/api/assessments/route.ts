@@ -104,10 +104,11 @@ export async function POST(req: NextRequest) {
     const sql = neon(process.env.DATABASE_URL!);
     const token = generateToken();
     const language = body.language ?? "es";
+    // Default: la prueba única Factor X · Trading Solutions (migrada de Elevare)
     const assessmentIds =
       body.assessment_ids && body.assessment_ids.length > 0
         ? body.assessment_ids.join(",")
-        : "factor_x_cognitivo,factor_x_actitudinal,english_proficiency,role_simulation";
+        : "factor_x_ts";
     const source = body.source ?? "manual";
 
     const inserted = await sql`

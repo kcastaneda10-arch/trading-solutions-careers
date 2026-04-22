@@ -26,11 +26,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
-import {
-  assessments,
-  assessmentTokens,
-  type AssessmentMeta,
-} from "@/data/assessments";
+import { factorXTS } from "@/data/assessments";
 
 type Tab =
   | "dashboard"
@@ -876,32 +872,42 @@ function Pruebas() {
         <KPI label="Tiempo prom. candidato" value="88 min" delta="5 pruebas" tone="neutral" />
       </div>
 
-      <h3 className="text-sm font-bold mb-3">Catálogo de pruebas</h3>
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {assessments.map((a: AssessmentMeta) => (
-          <div key={a.id} className="bg-white border border-gray-200 rounded-2xl p-4">
-            <div className="flex items-start gap-3 mb-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0"
-                style={{ background: a.color }}
-              >
-                <Brain className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm">{a.title.es}</div>
-                <div className="text-xs text-gray-500">
-                  {a.required ? "Obligatoria" : "Opcional por rol"}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 leading-relaxed">{a.summary.es}</p>
-            <div className="flex gap-3 mt-3 text-[11px] text-gray-500 font-semibold">
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{a.duration} min</span>
-              <span className="flex items-center gap-1"><FileText className="w-3 h-3" />{a.questions} preg.</span>
-              <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{a.dimensions.length} dim.</span>
+      <h3 className="text-sm font-bold mb-3">La prueba aplicada a todos los candidatos</h3>
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6">
+        <div className="flex items-start gap-4 mb-4">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-white flex-shrink-0"
+            style={{ background: factorXTS.color }}
+          >
+            <Brain className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-base">{factorXTS.title.es}</div>
+            <p className="text-xs text-gray-600 leading-relaxed mt-1">{factorXTS.summary.es}</p>
+            <div className="flex gap-4 mt-3 text-[11px] text-gray-500 font-semibold">
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{factorXTS.duration} min</span>
+              <span className="flex items-center gap-1"><FileText className="w-3 h-3" />{factorXTS.questions} preguntas</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />{factorXTS.dimensions.length} dimensiones</span>
+              <span className="flex items-center gap-1">{factorXTS.sections.length} secciones</span>
             </div>
           </div>
-        ))}
+        </div>
+        <div className="border-t border-gray-100 pt-3 mt-2">
+          <div className="text-[11px] tracking-[0.1em] text-gray-500 font-semibold uppercase mb-2">
+            Secciones de la prueba
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {factorXTS.sections.map((s, idx) => (
+              <div key={s.id} className="border border-gray-100 rounded-lg px-3 py-2">
+                <div className="text-[11px] text-gray-400 font-mono">{String(idx + 1).padStart(2, "0")}</div>
+                <div className="text-xs font-bold mt-0.5">{s.name}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">
+                  {s.questions} preg · {s.duration} min
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <Card title="Pruebas enviadas a candidatos" eyebrow="LIVE · API /api/assessments">
