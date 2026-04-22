@@ -4,7 +4,13 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { Resend } from 'resend';
 import crypto from 'crypto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend(): Resend {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+  return new Resend(key);
+}
 
 export async function POST(req: NextRequest) {
   const authError = requireAdmin(req);
@@ -60,7 +66,7 @@ export async function POST(req: NextRequest) {
     const vacancyTitle = candidate.ht_vacancies?.title || 'la vacante';
     const senderEmail = candidate.ht_clients?.sender_email || 'kcastaneda@tradingsolutions.com';
 
-    // Send invitation email via Resend
+    const resend = getResend();
     const { error: emailError } = await resend.emails.send({
       from: `Kelly Castaneda <${senderEmail}>`,
       to: candidate.email,
