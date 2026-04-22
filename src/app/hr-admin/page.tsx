@@ -1368,8 +1368,8 @@ function Pruebas() {
   return (
     <>
       <PageHead
-        title="Pruebas Psicométricas · Factor X"
-        desc="Migradas desde Elevare. Base para el Fit Score cognitivo y cultural. 5 módulos, 12+ dimensiones."
+        title="Evaluación de Competencias TS"
+        desc="Una sola evaluación integral del candidato. Calibrada contra los top performers de Trading Solutions. Output: Match% y recomendación accionable."
         actions={
           <>
             <button
@@ -1653,7 +1653,7 @@ function SendAssessmentModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg p-6">
-        <h3 className="text-lg font-bold mb-4">Enviar prueba Factor X</h3>
+        <h3 className="text-lg font-bold mb-4">Enviar evaluación al candidato</h3>
         {!result ? (
           <div className="space-y-3">
             <div>

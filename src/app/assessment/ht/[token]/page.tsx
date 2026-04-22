@@ -1001,7 +1001,7 @@ export default function AssessmentPage() {
 
                 <p className="font-semibold" style={{ color: TS_COLORS.black }}>6. Encargado y canales de atención</p>
                 <p>
-                  El tratamiento de datos es realizado a través de la plataforma <strong>ELEVARE Career</strong>, que actúa como Encargado del Tratamiento. Para ejercer sus derechos como titular, puede comunicarse a través del correo electrónico del área de Talento Humano de la Empresa o al correo de la plataforma indicado en la política de privacidad disponible en el sitio web.
+                  El tratamiento de datos es realizado a través de la plataforma de evaluación de <strong>TRADING SOLUTIONS S.A.S.</strong>, que actúa también como Encargado del Tratamiento. Para ejercer sus derechos como titular, puede comunicarse al correo del área de Talento Humano: <strong>kcastaneda@tradingsolutions.com</strong>.
                 </p>
 
                 <p className="font-semibold" style={{ color: TS_COLORS.black }}>7. Carácter facultativo</p>
@@ -1022,7 +1022,7 @@ export default function AssessmentPage() {
                   onChange={(e) => setHabeasAccepted(e.target.checked)}
                 />
                 <span style={{ color: TS_COLORS.darkText }} className="text-sm leading-relaxed">
-                  Declaro que he leído y comprendido la Política de Protección de Datos Personales. Autorizo de manera libre, expresa, previa e informada a <strong>TRADING SOLUTIONS S.A.S.</strong> y a <strong>ELEVARE Career</strong> para recolectar, almacenar, usar y tratar mis datos personales, incluidos datos sensibles derivados de la evaluación psicométrica, conforme a las finalidades aquí descritas y en cumplimiento de la Ley 1581 de 2012.
+                  Declaro que he leído y comprendido la Política de Protección de Datos Personales. Autorizo de manera libre, expresa, previa e informada a <strong>TRADING SOLUTIONS S.A.S.</strong> para recolectar, almacenar, usar y tratar mis datos personales, incluidos datos sensibles derivados de la evaluación psicométrica, conforme a las finalidades aquí descritas y en cumplimiento de la Ley 1581 de 2012.
                 </span>
               </label>
 
