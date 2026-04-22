@@ -156,8 +156,7 @@ export async function parseCV(
   });
 
   const text = response.content
-    .filter((c): c is { type: "text"; text: string } => c.type === "text")
-    .map((c) => c.text)
+    .map((c) => (c.type === "text" ? c.text : ""))
     .join("")
     .trim();
 
