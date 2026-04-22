@@ -1,0 +1,1291 @@
+{
+ "results": [
+  {
+   "candidate_name": "Valentina Ferrer",
+   "candidate_email": "valentinaferrer42@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-15",
+   "match_pct": 99,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 99,
+    "recommendation": "AVANZA",
+    "iq": 117.6,
+    "disc": {
+     "D": 55.8,
+     "I": 50.3,
+     "S": 55.1,
+     "C": 56.7
+    },
+    "big_five": {
+     "conscientiousness": 83.4,
+     "neuroticism": 27.4,
+     "extraversion": 84.1,
+     "openness": 45.4,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 77,
+     "Bd": 70.6,
+     "Fd": 61.6
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.6,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 81.9,
+     "attention_memory": 83.6,
+     "perceptual_speed": 78,
+     "nonverbal_reasoning": 48.5
+    },
+    "dimensiones": {
+     "cognitivo": 66,
+     "comportamental": 69.7,
+     "caracter": 73.1,
+     "bienestar": 62.2
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Andres Millano",
+   "candidate_email": "andres.milano25@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-18",
+   "match_pct": 87.3,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 87.3,
+    "recommendation": "AVANZA",
+    "iq": 124.1,
+    "disc": {
+     "D": 67.7,
+     "I": 50.3,
+     "S": 51.8,
+     "C": 75.5
+    },
+    "big_five": {
+     "conscientiousness": 82.2,
+     "neuroticism": 21.1,
+     "extraversion": 66.5,
+     "openness": 53.7,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 69.6,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 53.3
+    },
+    "dimensiones": {
+     "cognitivo": 7.8,
+     "comportamental": 7.3,
+     "caracter": 7.1,
+     "bienestar": 7.3
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Edilberto Nicolas Liduena",
+   "candidate_email": "eliduena095@gmail.com",
+   "phone": null,
+   "vacancy_slug": "senior-pricing-analyst",
+   "vacancy_id": 1,
+   "status": "expired",
+   "completed_at": "2026-04-17",
+   "match_pct": 87.2,
+   "recommendation": "AVANZA"
+  },
+  {
+   "candidate_name": "Michelle Borda",
+   "candidate_email": "anabordag@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 82.5,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82.5,
+    "recommendation": "AVANZA",
+    "iq": 125.3,
+    "disc": {
+     "D": 65.7,
+     "I": 55.5,
+     "S": 47.1,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 85.4,
+     "neuroticism": 29.9,
+     "extraversion": 66.5,
+     "openness": 65.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 69.1
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 75.6,
+     "attention_memory": 90.2,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 54.9
+    },
+    "dimensiones": {
+     "cognitivo": 7.8,
+     "comportamental": 7.3,
+     "caracter": 7.8,
+     "bienestar": 7.4
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Saray Barrios",
+   "candidate_email": "saraybarrios1511@hotmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 82.5,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82.5,
+    "recommendation": "AVANZA",
+    "iq": 120.2,
+    "disc": {
+     "D": 65.7,
+     "I": 55.5,
+     "S": 31.6,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 86.5,
+     "neuroticism": 29.9,
+     "extraversion": 85,
+     "openness": 65.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 103.5,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 75.7
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.5,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 75.6,
+     "attention_memory": 90.2,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 48.6
+    },
+    "dimensiones": {
+     "cognitivo": 7.3,
+     "comportamental": 7.4,
+     "caracter": 7.8,
+     "bienestar": 7.2
+    },
+    "red_flags": "Estabilidad significativamente por debajo del promedio del benchmark (-15.5 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Anggelyne Estrada",
+   "candidate_email": "anggelyneestrada@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-16",
+   "match_pct": 82.4,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82.4,
+    "recommendation": "AVANZA",
+    "iq": 125.3,
+    "disc": {
+     "D": 59.8,
+     "I": 68.6,
+     "S": 31.6,
+     "C": 75.5
+    },
+    "big_five": {
+     "conscientiousness": 87.6,
+     "neuroticism": 32.4,
+     "extraversion": 85,
+     "openness": 67.2,
+     "agreeableness": 41.6
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.6,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 78.9,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 54.9
+    },
+    "dimensiones": {
+     "cognitivo": 7.4,
+     "comportamental": 7.5,
+     "caracter": 7.8,
+     "bienestar": 7.5
+    },
+    "red_flags": "Estabilidad (31.6) está por debajo del rango mínimo ideal y significativamente bajo comparado con el promedio del benchmark (47.1)"
+   }
+  },
+  {
+   "candidate_name": "Keren Cabrera",
+   "candidate_email": "kerencabrera8@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-19",
+   "match_pct": 82.3,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82.3,
+    "recommendation": "AVANZA",
+    "iq": 118.2,
+    "disc": {
+     "D": 55.8,
+     "I": 55.5,
+     "S": 31.6,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 85.4,
+     "neuroticism": 29.9,
+     "extraversion": 85,
+     "openness": 73.9,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 81.2,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 74.7,
+     "attention_memory": 79.8,
+     "perceptual_speed": 79.2,
+     "nonverbal_reasoning": 47
+    },
+    "dimensiones": {
+     "cognitivo": 6.7,
+     "comportamental": 7.4,
+     "caracter": 7.5,
+     "bienestar": 7.5
+    },
+    "red_flags": "Estabilidad significativamente por debajo del promedio del benchmark (-15.5 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Manuel Meza Villanueva",
+   "candidate_email": "manuelmeza0211@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-21",
+   "match_pct": 82,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82,
+    "recommendation": "AVANZA",
+    "iq": 122.1,
+    "disc": {
+     "D": 59.8,
+     "I": 60.8,
+     "S": 47.1,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 85.4,
+     "neuroticism": 32.4,
+     "extraversion": 48.1,
+     "openness": 70.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 90.2,
+     "perceptual_speed": 85.9,
+     "nonverbal_reasoning": 53.3
+    },
+    "dimensiones": {
+     "cognitivo": 7.6,
+     "comportamental": 7.5,
+     "caracter": 7.7,
+     "bienestar": 7.4
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Loraine Santiz Coronell",
+   "candidate_email": "lorainesantizc@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-16",
+   "match_pct": 82,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 82,
+    "recommendation": "AVANZA",
+    "iq": 124.1,
+    "disc": {
+     "D": 61.8,
+     "I": 68.6,
+     "S": 47.1,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 80,
+     "neuroticism": 34.9,
+     "extraversion": 66.5,
+     "openness": 63.8,
+     "agreeableness": 41.6
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 78.9,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 50.7
+    },
+    "dimensiones": {
+     "cognitivo": 6.9,
+     "comportamental": 7.7,
+     "caracter": 7.4,
+     "bienestar": 7.5
+    },
+    "red_flags": "Atención y Memoria por debajo del promedio del benchmark (-9.0 puntos); Velocidad Perceptual por debajo del promedio del benchmark (-7.8 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Kenny Jose Robles Gonzalez",
+   "candidate_email": "robleskenny21@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-16",
+   "match_pct": 78.5,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.5,
+    "recommendation": "AVANZA",
+    "iq": 121.5,
+    "disc": {
+     "D": 61.8,
+     "I": 63.4,
+     "S": 54.9,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 84.3,
+     "neuroticism": 29.9,
+     "extraversion": 48.1,
+     "openness": 63.8,
+     "agreeableness": 42.7
+    },
+    "betesa": {
+     "Fi": 103.5,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 82.3
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.7,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 78.9,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 52.2
+    },
+    "dimensiones": {
+     "cognitivo": 7,
+     "comportamental": 7.5,
+     "caracter": 7.8,
+     "bienestar": 7.3
+    },
+    "red_flags": "Velocidad Perceptual significativamente por debajo del promedio del benchmark (-7.8 puntos); Atención y Memoria por debajo del rango típico de alto rendimiento (-9.0 puntos); Extraversión considerablemente más baja que el perfil típico (-18.4 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Mauricio Romero",
+   "candidate_email": "maurirom123@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 78.5,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.5,
+    "recommendation": "AVANZA",
+    "iq": 122.8,
+    "disc": {
+     "D": 59.8,
+     "I": 45.1,
+     "S": 47.1,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 83.3,
+     "neuroticism": 24.9,
+     "extraversion": 66.5,
+     "openness": 70.5,
+     "agreeableness": 38.3
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 73.8,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.7
+    },
+    "cognitivo": {
+     "verbal_comprehension": 77.3,
+     "attention_memory": 79.8,
+     "perceptual_speed": 79.2,
+     "nonverbal_reasoning": 52.8
+    },
+    "dimensiones": {
+     "cognitivo": 7.2,
+     "comportamental": 7.4,
+     "caracter": 7.1,
+     "bienestar": 7.4
+    },
+    "red_flags": "Velocidad Perceptual ligeramente por debajo del promedio del benchmark (79.2 vs 85.9)"
+   }
+  },
+  {
+   "candidate_name": "Jeinner Vargas",
+   "candidate_email": "jeinnervargas23@gmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 78.5,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.5,
+    "recommendation": "AVANZA",
+    "iq": 117.6,
+    "disc": {
+     "D": 61.8,
+     "I": 55.5,
+     "S": 47.1,
+     "C": 73.2
+    },
+    "big_five": {
+     "conscientiousness": 87.6,
+     "neuroticism": 27.4,
+     "extraversion": 66.5,
+     "openness": 68.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 64.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 85.9,
+     "nonverbal_reasoning": 53.8
+    },
+    "dimensiones": {
+     "cognitivo": 7.2,
+     "comportamental": 7.6,
+     "caracter": 7.7,
+     "bienestar": 7.4
+    },
+    "red_flags": "Comprensión Verbal ligeramente por debajo del rango ideal mínimo (64.1 vs 65 requerido); Comprensión Verbal por debajo de la media del benchmark (-8.8 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Daniel Gracia",
+   "candidate_email": "daniel.gracia1924@gmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 78.2,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.2,
+    "recommendation": "AVANZA",
+    "iq": 113.7,
+    "disc": {
+     "D": 59.8,
+     "I": 63.4,
+     "S": 54.9,
+     "C": 73.2
+    },
+    "big_five": {
+     "conscientiousness": 86.5,
+     "neuroticism": 29.9,
+     "extraversion": 66.5,
+     "openness": 60.4,
+     "agreeableness": 42.7
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 81.2,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 43.3
+    },
+    "dimensiones": {
+     "cognitivo": 6.4,
+     "comportamental": 7.6,
+     "caracter": 7.7,
+     "bienestar": 7.4
+    },
+    "red_flags": "Atención y Memoria ligeramente por debajo del rango ideal mínimo (81.2 vs 85 requerido); Razonamiento No Verbal por debajo de la media del benchmark (-6.3 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Aaron Vizcaino",
+   "candidate_email": "aaronvizcaino48@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 78.2,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.2,
+    "recommendation": "AVANZA",
+    "iq": 116.3,
+    "disc": {
+     "D": 59.8,
+     "I": 58.2,
+     "S": 58,
+     "C": 75.5
+    },
+    "big_five": {
+     "conscientiousness": 85.4,
+     "neuroticism": 32.4,
+     "extraversion": 85,
+     "openness": 50.4,
+     "agreeableness": 41.6
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.5,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 85.9,
+     "nonverbal_reasoning": 47
+    },
+    "dimensiones": {
+     "cognitivo": 7.2,
+     "comportamental": 7.2,
+     "caracter": 7.8,
+     "bienestar": 7.4
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Karla Delgado",
+   "candidate_email": "karla.deltorres@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "completed",
+   "completed_at": "2026-04-19",
+   "match_pct": 78.2,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 78.2,
+    "recommendation": "AVANZA",
+    "iq": 117.6,
+    "disc": {
+     "D": 61.8,
+     "I": 71.2,
+     "S": 47.1,
+     "C": 75.5
+    },
+    "big_five": {
+     "conscientiousness": 85.4,
+     "neuroticism": 32.4,
+     "extraversion": 85,
+     "openness": 68.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 47
+    },
+    "dimensiones": {
+     "cognitivo": 7.3,
+     "comportamental": 7.6,
+     "caracter": 7.8,
+     "bienestar": 7.4
+    },
+    "red_flags": null
+   }
+  },
+  {
+   "candidate_name": "Marcela Melo",
+   "candidate_email": "toya302@hotmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "expired",
+   "completed_at": "2026-04-18",
+   "match_pct": 78.2,
+   "recommendation": "AVANZA"
+  },
+  {
+   "candidate_name": "Juliana Escorcia Silva",
+   "candidate_email": "julianaescorcia04@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 72.3,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 72.3,
+    "recommendation": "AVANZA",
+    "iq": 116.3,
+    "disc": {
+     "D": 53.8,
+     "I": 60.8,
+     "S": 47.1,
+     "C": 37.9
+    },
+    "big_five": {
+     "conscientiousness": 79,
+     "neuroticism": 19.9,
+     "extraversion": 85,
+     "openness": 65.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 88.2,
+     "Bi": 66.4,
+     "Bd": 70.6,
+     "Fd": 75.7
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 48.6
+    },
+    "dimensiones": {
+     "cognitivo": 7.3,
+     "comportamental": 7.4,
+     "caracter": 6.3,
+     "bienestar": 7.5
+    },
+    "red_flags": "Cumplimiento significativamente por debajo del rango ideal y del promedio de top performers"
+   }
+  },
+  {
+   "candidate_name": "Andrea Florez",
+   "candidate_email": "andrea941338@gmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 72,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 72,
+    "recommendation": "AVANZA",
+    "iq": 112.4,
+    "disc": {
+     "D": 59.8,
+     "I": 60.8,
+     "S": 54.9,
+     "C": 80.3
+    },
+    "big_five": {
+     "conscientiousness": 84.3,
+     "neuroticism": 32.4,
+     "extraversion": 48.1,
+     "openness": 65.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 64.1,
+     "attention_memory": 74.4,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 47
+    },
+    "dimensiones": {
+     "cognitivo": 6.1,
+     "comportamental": 7.5,
+     "caracter": 7.7,
+     "bienestar": 7.3
+    },
+    "red_flags": "Attention and Memory muy por debajo del benchmark (74.4 vs mean 87.9, umbral 79); Atención y Memoria significativamente por debajo del promedio de top performers (74.4 vs 87.9); Comprensión Verbal ligeramente por debajo del rango ideal y del benchmark"
+   }
+  },
+  {
+   "candidate_name": "Sheldon Smith",
+   "candidate_email": "smithgarnicas@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 72,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 72,
+    "recommendation": "AVANZA",
+    "iq": 107.3,
+    "disc": {
+     "D": 47.9,
+     "I": 55.5,
+     "S": 47.1,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 82.2,
+     "neuroticism": 27.4,
+     "extraversion": 75.7,
+     "openness": 63.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.5,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 64.1,
+     "attention_memory": 90.2,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 40.7
+    },
+    "dimensiones": {
+     "cognitivo": 6.2,
+     "comportamental": 7.2,
+     "caracter": 7.3,
+     "bienestar": 7.4
+    },
+    "red_flags": "Coeficiente Intelectual por debajo del promedio del benchmark (107.3 vs 117.6); Dominancia ligeramente por debajo del rango ideal mínimo requerido"
+   }
+  },
+  {
+   "candidate_name": "Luisa Fernanda Morron Arias",
+   "candidate_email": "luisamorron195@gmail.com",
+   "phone": null,
+   "vacancy_slug": "senior-pricing-analyst",
+   "vacancy_id": 1,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 72,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 72,
+    "recommendation": "AVANZA",
+    "iq": 108.6,
+    "disc": {
+     "D": 67.7,
+     "I": 66,
+     "S": 31.6,
+     "C": 68.5
+    },
+    "big_five": {
+     "conscientiousness": 84.3,
+     "neuroticism": 29.9,
+     "extraversion": 75.7,
+     "openness": 68.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 99.9,
+     "Bi": 84.4,
+     "Bd": 70.6,
+     "Fd": 88.8
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.5,
+     "poder": 4.7
+    },
+    "cognitivo": {
+     "verbal_comprehension": 75.6,
+     "attention_memory": 90.2,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 41.7
+    },
+    "dimensiones": {
+     "cognitivo": 6.5,
+     "comportamental": 7.5,
+     "caracter": 7.8,
+     "bienestar": 7.5
+    },
+    "red_flags": "Coeficiente Intelectual por debajo del rango ideal (108.6 vs 115-140 requerido); Estabilidad significativamente por debajo de la media del benchmark (-15.5 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Pedro Lavado",
+   "candidate_email": "opdw10@gmail.com",
+   "phone": "+573044702342",
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "completed",
+   "completed_at": "2026-04-21",
+   "match_pct": 72,
+   "recommendation": "AVANZA",
+   "results_blob": {
+    "match_pct": 72,
+    "recommendation": "AVANZA",
+    "iq": 124.1,
+    "disc": {
+     "D": 63.7,
+     "I": 50.3,
+     "S": 31.6,
+     "C": 73.2
+    },
+    "big_five": {
+     "conscientiousness": 82.2,
+     "neuroticism": 17.4,
+     "extraversion": 85,
+     "openness": 68.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 103.5,
+     "Bi": 69.6,
+     "Bd": 70.6,
+     "Fd": 75.7
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.3,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 79.1,
+     "attention_memory": 92.4,
+     "perceptual_speed": 88.5,
+     "nonverbal_reasoning": 52.2
+    },
+    "dimensiones": {
+     "cognitivo": 7.8,
+     "comportamental": 7.4,
+     "caracter": 7.1,
+     "bienestar": 7.4
+    },
+    "red_flags": "Influencia ligeramente por debajo del rango ideal mínimo (50.3 vs 60 requerido)"
+   }
+  },
+  {
+   "candidate_name": "Brandy Vasquez",
+   "candidate_email": "brandyvasquez@gmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 68,
+   "recommendation": "EN ESPERA",
+   "results_blob": {
+    "match_pct": 68,
+    "recommendation": "EN ESPERA",
+    "iq": 114.4,
+    "disc": {
+     "D": 63.7,
+     "I": 63.4,
+     "S": 54.9,
+     "C": 80.3
+    },
+    "big_five": {
+     "conscientiousness": 84.3,
+     "neuroticism": 29.9,
+     "extraversion": 85,
+     "openness": 65.5,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 103.5,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 75.7
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.7,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 59.6,
+     "attention_memory": 74.4,
+     "perceptual_speed": 78.1,
+     "nonverbal_reasoning": 49.6
+    },
+    "dimensiones": {
+     "cognitivo": 6.4,
+     "comportamental": 7.6,
+     "caracter": 7.6,
+     "bienestar": 7.3
+    },
+    "red_flags": "Attention and Memory muy por debajo del benchmark (74.4 vs mean 87.9, umbral 79); Comprensión Verbal significativamente por debajo del promedio del benchmark (-13.3 puntos); Atención y Memoria por debajo del rango mínimo requerido y del benchmark (-13.5 puntos)"
+   }
+  },
+  {
+   "candidate_name": "Meliza Redondo",
+   "candidate_email": "poloredondo@hotmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-17",
+   "match_pct": 62.4,
+   "recommendation": "EN ESPERA",
+   "results_blob": {
+    "match_pct": 62.4,
+    "recommendation": "EN ESPERA",
+    "iq": 101.5,
+    "disc": {
+     "D": 55.8,
+     "I": 60.8,
+     "S": 47.1,
+     "C": 73.2
+    },
+    "big_five": {
+     "conscientiousness": 81.1,
+     "neuroticism": 27.4,
+     "extraversion": 66.5,
+     "openness": 72.2,
+     "agreeableness": 42.7
+    },
+    "betesa": {
+     "Fi": 95.2,
+     "Bi": 80.2,
+     "Bd": 70.6,
+     "Fd": 82.3
+    },
+    "mcclelland": {
+     "logros": 4.4,
+     "afiliacion": 4.7,
+     "poder": 4.5
+    },
+    "cognitivo": {
+     "verbal_comprehension": 64.1,
+     "attention_memory": 78.9,
+     "perceptual_speed": 70.4,
+     "nonverbal_reasoning": 41.7
+    },
+    "dimensiones": {
+     "cognitivo": 5.5,
+     "comportamental": 7.4,
+     "caracter": 7.3,
+     "bienestar": 7.3
+    },
+    "red_flags": "IQ muy por debajo del benchmark (101.5 vs mean 117.6, umbral 105); Perceptual Speed muy por debajo del benchmark (70.4 vs mean 85.9, umbral 76); IQ por debajo del mínimo histórico de top performers (105); Coeficiente Intelectual significativamente por debajo del benchmark (101.5 vs 117.6 promedio); Velocidad Perceptual más de 2 desviaciones estándar por debajo del benchmark; Atención y Memoria por debajo del rango típico de alto rendimiento; Comprensión Verbal por debajo del estándar de la organización"
+   }
+  },
+  {
+   "candidate_name": "Edilberto Nicolas Liduena",
+   "candidate_email": "eliduena095@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "completed",
+   "completed_at": "2026-04-22",
+   "match_pct": 52,
+   "recommendation": "EN ESPERA",
+   "results_blob": {
+    "match_pct": 52,
+    "recommendation": "EN ESPERA",
+    "iq": 106,
+    "disc": {
+     "D": 45.9,
+     "I": 55.5,
+     "S": 54.9,
+     "C": 33.2
+    },
+    "big_five": {
+     "conscientiousness": 75.8,
+     "neuroticism": 21.1,
+     "extraversion": 66.5,
+     "openness": 63.8,
+     "agreeableness": 40.5
+    },
+    "betesa": {
+     "Fi": 76.4,
+     "Bi": 77,
+     "Bd": 70.6,
+     "Fd": 62.6
+    },
+    "mcclelland": {
+     "logros": 4.5,
+     "afiliacion": 4.3,
+     "poder": 4.8
+    },
+    "cognitivo": {
+     "verbal_comprehension": 66.7,
+     "attention_memory": 81.2,
+     "perceptual_speed": 80.7,
+     "nonverbal_reasoning": 39.1
+    },
+    "dimensiones": {
+     "cognitivo": 5.6,
+     "comportamental": 7.1,
+     "caracter": 6.4,
+     "bienestar": 7.3
+    },
+    "red_flags": "Coeficiente Intelectual por debajo del mínimo requerido (106 vs 110 mínimo); Cumplimiento significativamente bajo comparado con el perfil ideal y benchmark; Frontal Izquierdo por debajo del promedio de top performers (-15.3 puntos); Rendimiento cognitivo general por debajo del estándar de la organización"
+   }
+  },
+  {
+   "candidate_name": "Luisa Fernanda Morron Arias",
+   "candidate_email": "luisamorron195@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Juan Escorcia",
+   "candidate_email": "juanescorciarodriguez@hotmail.com",
+   "phone": null,
+   "vacancy_slug": "customer-documentation-specialist",
+   "vacancy_id": 3,
+   "status": "expired",
+   "completed_at": "2026-04-17",
+   "match_pct": 0,
+   "recommendation": "PENDIENTE"
+  },
+  {
+   "candidate_name": "Melany Hernandez",
+   "candidate_email": "melahndez@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Shirly Tejada",
+   "candidate_email": "sptejadam@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Karen Garcia",
+   "candidate_email": "gkaren0925@gmail.com",
+   "phone": null,
+   "vacancy_slug": "pricing-junior",
+   "vacancy_id": 4,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Keren Cabrera",
+   "candidate_email": "kerencabrera8@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Carlos De La Cruz",
+   "candidate_email": "dlccarlosa@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Carlos Gutierrez",
+   "candidate_email": "carlosdaniel301099@gmail.com",
+   "phone": "+573208880291",
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  },
+  {
+   "candidate_name": "Óscar Daza",
+   "candidate_email": "oscardazamolina1409@gmail.com",
+   "phone": null,
+   "vacancy_slug": "inside-sales-support",
+   "vacancy_id": 2,
+   "status": "in_progress",
+   "completed_at": null,
+   "match_pct": null,
+   "recommendation": null
+  }
+ ]
+}
