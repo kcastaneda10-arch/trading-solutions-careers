@@ -797,9 +797,55 @@ function Vacantes() {
   const [statsByVacancy, setStatsByVacancy] = useState<Record<number, VacancyAppStats>>({});
   const [showJobWriter, setShowJobWriter] = useState(false);
   const [showMarketResearch, setShowMarketResearch] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [screeningModal, setScreeningModal] = useState<ScreeningModalData | null>(null);
   const [agentModal, setAgentModal] = useState<AgentDetailModalData | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  // Filtros por vacante (key = vacancy_id)
+  const [filterByVacancy, setFilterByVacancy] = useState<Record<number, { search: string; status: string; sort: 'score' | 'date' | 'name' }>>({});
+  const [selectedCandidates, setSelectedCandidates] = useState<Record<number, Set<number>>>({});
+
+  function getFilters(vid: number) {
+    return filterByVacancy[vid] ?? { search: '', status: 'all', sort: 'score' as const };
+  }
+  function setFilter(vid: number, patch: Partial<{ search: string; status: string; sort: 'score' | 'date' | 'name' }>) {
+    setFilterByVacancy((prev) => ({ ...prev, [vid]: { ...getFilters(vid), ...patch } }));
+  }
+  function toggleSelect(vid: number, candId: number) {
+    setSelectedCandidates((prev) => {
+      const cur = new Set(prev[vid] ?? []);
+      if (cur.has(candId)) cur.delete(candId);
+      else cur.add(candId);
+      return { ...prev, [vid]: cur };
+    });
+  }
+  async function bulkSendTest(vid: number, candidates: Array<{ id: number; name: string; email: string }>, vacancyTitle: string) {
+    if (candidates.length === 0) return;
+    if (!confirm(`Enviar prueba Elevare a ${candidates.length} candidatos?`)) return;
+    setActionBusy(`bulk-${vid}`);
+    let ok = 0;
+    for (const c of candidates) {
+      try {
+        await fetch('/api/assessments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidate_name: c.name,
+            candidate_email: c.email,
+            vacancy_id: vid,
+            vacancy_title: vacancyTitle,
+            send_email: true,
+            source: 'bulk_send_from_vacantes',
+          }),
+        });
+        ok += 1;
+      } catch { /* sigue */ }
+    }
+    setActionBusy(null);
+    alert(`✓ Pruebas enviadas: ${ok}/${candidates.length}`);
+    setSelectedCandidates((prev) => ({ ...prev, [vid]: new Set() }));
+    window.location.reload();
+  }
 
   // Cargar vacantes
   useEffect(() => {
@@ -881,10 +927,17 @@ function Vacantes() {
               assessmentScore: token?.score ?? null,
             };
           });
+          // TODOS los candidatos (no solo top 8). El filtro/orden se aplica
+          // en la UI con controles. Excluimos hired/rejected del ranking
+          // operativo pero los mostramos en la vista filtrada.
           stats.topRanking = enriched
-            .filter((c) => c.status !== 'rejected' && c.score !== null)
-            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-            .slice(0, 8);
+            .sort((a, b) => {
+              // hired al final, rejected aún más al final
+              const sw = (s: string) => s === 'hired' ? -1 : s === 'rejected' ? -2 : 0;
+              const diff = sw(b.status) - sw(a.status);
+              if (diff !== 0) return diff;
+              return (b.score ?? 0) - (a.score ?? 0);
+            });
           out[v.id] = stats;
         } catch { /* ignore single-vacancy errors */ }
       }));
@@ -938,6 +991,9 @@ function Vacantes() {
         desc={loading ? 'Cargando desde Neon…' : `${active.length} activa(s) · ${closed.length} cerrada(s) · ${totalApplications} aplicaciones totales`}
         actions={
           <>
+            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: '9px 14px' }} onClick={() => setShowSettings(true)}>
+              ⚙ Email & Calendly
+            </button>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: '9px 14px' }} onClick={exportToExcel}>
               <Download className="w-3.5 h-3.5" /> Export Excel
             </button>
@@ -1050,18 +1106,113 @@ function Vacantes() {
                     <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba Elevare" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'assessment' })} />
                   </div>
 
-                  {/* Ranking post-screening */}
+                  {/* Ranking + filtros + bulk */}
                   <div>
-                    <div className="text-xs uppercase text-gray-500 font-semibold mb-2 tracking-wider">Ranking post-screening · top {stats?.topRanking.length ?? 0}</div>
-                    {!stats || stats.topRanking.length === 0 ? (
+                    {(() => {
+                      const f = getFilters(v.id);
+                      const sel = selectedCandidates[v.id] ?? new Set<number>();
+                      const all = stats?.topRanking ?? [];
+                      // aplicar filtros
+                      const filtered = all.filter((c) => {
+                        if (f.search) {
+                          const q = f.search.toLowerCase();
+                          if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false;
+                        }
+                        if (f.status !== 'all' && c.status !== f.status) return false;
+                        return true;
+                      });
+                      filtered.sort((a, b) => {
+                        if (f.sort === 'score') return (b.score ?? 0) - (a.score ?? 0);
+                        if (f.sort === 'name') return a.name.localeCompare(b.name);
+                        return 0; // date sort = original order
+                      });
+                      const selectedList = Array.from(sel).map((id) => all.find((c) => c.id === id)).filter(Boolean) as typeof all;
+                      const sendableSelected = selectedList.filter((c) => c.assessmentStatus === 'none');
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-2 gap-2">
+                            <div className="text-xs uppercase text-gray-500 font-semibold tracking-wider">
+                              Candidatos · {filtered.length} de {all.length}
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <input
+                                type="text"
+                                placeholder="Buscar por nombre o email…"
+                                value={f.search}
+                                onChange={(e) => setFilter(v.id, { search: e.target.value })}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                                style={{ width: 200 }}
+                              />
+                              <select
+                                value={f.status}
+                                onChange={(e) => setFilter(v.id, { status: e.target.value })}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                              >
+                                <option value="all">Todos los status</option>
+                                <option value="reviewing">Reviewing</option>
+                                <option value="new">New</option>
+                                <option value="interview">Interview</option>
+                                <option value="offer">Offer</option>
+                                <option value="hired">Hired</option>
+                                <option value="rejected">Rejected</option>
+                              </select>
+                              <select
+                                value={f.sort}
+                                onChange={(e) => setFilter(v.id, { sort: e.target.value as 'score' | 'date' | 'name' })}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                              >
+                                <option value="score">↓ Score</option>
+                                <option value="name">A-Z nombre</option>
+                                <option value="date">Por fecha</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Bulk action bar */}
+                          {sel.size > 0 && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2 flex items-center gap-2">
+                              <div className="text-sm text-blue-900 flex-1">
+                                {sel.size} candidato{sel.size > 1 ? 's' : ''} seleccionado{sel.size > 1 ? 's' : ''}
+                                {sendableSelected.length < sel.size && (
+                                  <span className="text-blue-700 ml-2">({sendableSelected.length} sin prueba enviada)</span>
+                                )}
+                              </div>
+                              <button
+                                disabled={sendableSelected.length === 0 || actionBusy === `bulk-${v.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  bulkSendTest(v.id, sendableSelected, v.title_es ?? v.title ?? '');
+                                }}
+                                className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {actionBusy === `bulk-${v.id}` ? 'Enviando…' : `✉ Enviar prueba a ${sendableSelected.length}`}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedCandidates((prev) => ({ ...prev, [v.id]: new Set() }));
+                                }}
+                                className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-white"
+                              >
+                                Limpiar
+                              </button>
+                            </div>
+                          )}
+
+                    {!stats || filtered.length === 0 ? (
                       <div className="text-sm text-gray-400 py-4 bg-white rounded-lg border border-gray-200 text-center">
-                        Sin candidatos rankeados aún en esta vacante.
+                        {all.length === 0 ? 'Sin candidatos en esta vacante.' : 'Ningún candidato cumple los filtros.'}
                       </div>
                     ) : (
                       <div className="space-y-1.5">
-                        {stats.topRanking.map((c, idx) => {
+                        {filtered.map((c, idx) => {
                           const dot = c.light === 'green' ? '#10B981' : c.light === 'amber' ? '#F59E0B' : c.light === 'red' ? '#EF4444' : '#9CA3AF';
                           const hasAssessment = c.assessmentStatus !== 'none';
+                          const isSelected = sel.has(c.id);
                           const assessmentDone = c.assessmentStatus === 'completed';
 
                           // Botón principal asessment (contextual)
@@ -1154,7 +1305,14 @@ function Vacantes() {
                           }
 
                           return (
-                            <div key={c.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                            <div key={c.id} className={`flex items-center gap-2 bg-white rounded-lg border px-3 py-2 ${isSelected ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'}`}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => { e.stopPropagation(); toggleSelect(v.id, c.id); }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="cursor-pointer"
+                              />
                               <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}</span>
                               <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot, flexShrink: 0 }} />
                               <div className="text-sm font-medium flex-1 min-w-0 truncate">{c.name}</div>
@@ -1188,6 +1346,9 @@ function Vacantes() {
                         })}
                       </div>
                     )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex gap-2 pt-2 border-t border-gray-200">
@@ -1229,9 +1390,141 @@ function Vacantes() {
 
       {showJobWriter && <JobWriterModal onClose={() => setShowJobWriter(false)} />}
       {showMarketResearch && <MarketResearchModal vacancies={vacancies} onClose={() => setShowMarketResearch(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {screeningModal && <ScreeningDetailModal data={screeningModal} onClose={() => setScreeningModal(null)} />}
       {agentModal && <AgentDetailModal agent={agentModal.agent} onClose={() => setAgentModal(null)} />}
     </>
+  );
+}
+
+function SettingsModal({ onClose }: { onClose: () => void }) {
+  const [config, setConfig] = useState<{ email_from: string; email_bcc: string; email_reply_to: string; booking_url: string; resend_domain_status: string } | null>(null);
+  const [bookingDraft, setBookingDraft] = useState('');
+  const [bccDraft, setBccDraft] = useState('');
+  const [replyToDraft, setReplyToDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch('/api/recruiter-config');
+      const j = await r.json();
+      setConfig(j);
+      setBookingDraft(j.booking_url ?? '');
+      setBccDraft(j.email_bcc ?? '');
+      setReplyToDraft(j.email_reply_to ?? '');
+    })();
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await fetch('/api/recruiter-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_url: bookingDraft, email_bcc: bccDraft, email_reply_to: replyToDraft }),
+      });
+      alert('✓ Configuración guardada');
+      onClose();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+          <div>
+            <div className="text-lg font-bold">Email & Agenda</div>
+            <div className="text-xs text-gray-500">Configuración del envío de invitaciones y agendamiento de entrevistas</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div className="px-6 py-5 space-y-5 text-sm">
+
+          {/* FROM */}
+          <div>
+            <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">From (remitente · EMAIL_FROM env var)</div>
+            <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs break-all">
+              {config ? config.email_from : 'cargando…'}
+            </div>
+            {config && config.resend_domain_status !== 'verified_ts' && (
+              <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                <strong>⚠ Para que salga desde @tradingsolutions.com (no Elevare):</strong>
+                <ol className="list-decimal ml-4 mt-1 space-y-0.5">
+                  <li>En Resend (resend.com → Domains) agrega <code>tradingsolutions.com</code></li>
+                  <li>Como tradingsolutions.com está en Google Workspace, copias los 3 registros DNS (SPF, DKIM, DMARC) y los pegas en Google Domains o el proveedor donde compraste el dominio</li>
+                  <li>Espera ~10 min, click "Verify" en Resend</li>
+                  <li>En Vercel → Settings → Environment Variables, edita <code>EMAIL_FROM</code>:</li>
+                </ol>
+                <code className="block mt-1 bg-white p-2 rounded">{`Trading Solutions Recruiting <noreply@tradingsolutions.com>`}</code>
+                <div className="mt-1 text-gray-600">Recomendado: usa <code>noreply@</code> o <code>jointheteam@</code> como From, y configura abajo tu correo personal en Reply-To para que las respuestas de candidatos te lleguen directo.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Reply-To */}
+          <div>
+            <label className="text-xs uppercase font-semibold text-gray-500 tracking-wider block mb-1">Reply-To (a quién responde el candidato)</label>
+            <input
+              type="email"
+              value={replyToDraft}
+              onChange={(e) => setReplyToDraft(e.target.value)}
+              placeholder="kcastaneda@tradingsolutions.com"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Si el candidato hace click en "Responder", el correo te llega aquí (no a la bandeja noreply).
+              Recomendado: tu correo de TS o Yohanna.
+            </div>
+          </div>
+
+          {/* BCC */}
+          <div>
+            <label className="text-xs uppercase font-semibold text-gray-500 tracking-wider block mb-1">BCC (copia oculta · registro)</label>
+            <input
+              type="email"
+              value={bccDraft}
+              onChange={(e) => setBccDraft(e.target.value)}
+              placeholder="kcastaneda@tradingsolutions.com"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Cada email saliente te llega también acá como copia oculta — el candidato no ve este correo.
+              Útil para auditoría y registro sin entrar a Resend.
+            </div>
+          </div>
+
+          {/* Booking URL */}
+          <div>
+            <label className="text-xs uppercase font-semibold text-gray-500 tracking-wider block mb-1">URL de agendamiento · entrevistas</label>
+            <input
+              type="url"
+              value={bookingDraft}
+              onChange={(e) => setBookingDraft(e.target.value)}
+              placeholder="https://calendar.app.google/xxxxxxxxx"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+            <div className="text-xs text-gray-500 mt-1 space-y-1">
+              <div><strong>Recomendado · Google Calendar Appointment Schedules</strong> (incluido en tu Google Workspace TS, sin Calendly aparte):</div>
+              <ol className="list-decimal ml-5">
+                <li>En Google Calendar (con tu cuenta @tradingsolutions.com), click <strong>+ Create</strong> → <strong>Appointment schedule</strong></li>
+                <li>Define "Entrevista TS · 30 min", elige tus disponibilidades</li>
+                <li>Activa Google Meet automático</li>
+                <li>Guarda y copia el <strong>"Booking page URL"</strong> (algo como <code>calendar.app.google/...</code>)</li>
+                <li>Pégalo arriba</li>
+              </ol>
+              <div>El sistema lo incluye automáticamente como botón "Agenda tu entrevista" en el correo cuando muevas un candidato a <code>interview</code>.</div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-gray-200 flex gap-2">
+            <button onClick={save} disabled={saving} className="pill-btn pill-btn-primary text-sm flex-1 disabled:opacity-50">
+              {saving ? 'Guardando…' : 'Guardar configuración'}
+            </button>
+            <button onClick={onClose} className="pill-btn pill-btn-outline text-sm">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

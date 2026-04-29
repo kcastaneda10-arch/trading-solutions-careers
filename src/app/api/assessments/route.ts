@@ -213,6 +213,17 @@ export async function POST(req: NextRequest) {
     let emailStatus: { sent: boolean; id?: string; error?: string } = { sent: false };
     if (body.send_email) {
       try {
+        // Pull config dinámica (reply_to, bcc, booking_url) de recruiter_config
+        let dynamicBcc = EMAIL_BCC;
+        let dynamicReplyTo: string | null = null;
+        try {
+          const cfgRows = await sql`SELECT * FROM recruiter_config WHERE id = 1`;
+          if (cfgRows.length > 0) {
+            dynamicBcc = (cfgRows[0].email_bcc as string) || EMAIL_BCC;
+            dynamicReplyTo = (cfgRows[0].email_reply_to as string) || null;
+          }
+        } catch { /* tabla no existe aún — usa env vars */ }
+
         const resend = getResend();
         const { subject: emailSubject, html } = buildEmailHtml({
           candidate_name: body.candidate_name,
@@ -223,9 +234,10 @@ export async function POST(req: NextRequest) {
         const result = await resend.emails.send({
           from: EMAIL_FROM,
           to: body.candidate_email,
-          bcc: EMAIL_BCC,
+          bcc: dynamicBcc,
           subject: emailSubject,
           html,
+          ...(dynamicReplyTo ? { replyTo: dynamicReplyTo } : {}),
         });
         if (result.error) {
           emailStatus = { sent: false, error: result.error.message ?? String(result.error) };
