@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { TS_SCENARIOS } from '@/lib/headhunting/scenarios-ts';
+import { TS_BENCHMARK_STATS, TS_DNA_PATTERNS } from '@/lib/headhunting/calibration-data';
 
 type Phase = 'loading' | 'welcome' | 'habeas_data' | 'camera_setup' | 'assessment' | 'review' | 'complete' | 'error' | 'expired';
 
@@ -106,6 +108,14 @@ const TS_TYPOGRAPHY = {
 export default function AssessmentPage() {
   const params = useParams();
   const token = params.token as string;
+  // Preview mode: cuando el token es 'preview', el runner usa los escenarios
+  // locales (TS_SCENARIOS) y NO guarda nada al backend. Se usa desde el HR
+  // Admin para que Kelly y Yohanna vean la prueba EXACTAMENTE como la ve un
+  // candidato real, sin necesidad de invitar a alguien.
+  const isPreview = token === 'preview';
+  // Session ID estable para todo el run preview (se mantiene mientras la página vive)
+  const previewSessionRef = useRef<string>(`preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [previewReport, setPreviewReport] = useState<null | Record<string, unknown>>(null);
 
   // Load Inter from Google Fonts
   useEffect(() => {
@@ -155,6 +165,32 @@ export default function AssessmentPage() {
   useEffect(() => {
     async function loadAssessment() {
       try {
+        // ─── PREVIEW MODE: usa TS_SCENARIOS local sin hit a Supabase ───
+        if (isPreview) {
+          const mapped: AssessmentData = {
+            token: 'preview',
+            candidate_name: 'Preview · HR Admin',
+            vacancy_title: 'Factor X · Trading Solutions',
+            client_name: 'Trading Solutions',
+            scenarios: TS_SCENARIOS.map((s, i) => ({
+              id: `preview-${i}`,
+              block: s.block,
+              type: s.scenario_type,
+              scenario_text: s.scenario_text,
+              options: s.options ?? [],
+              target_columns: s.target_columns,
+              time_limit_seconds: s.time_limit_seconds,
+              competency_label: s.competency_label,
+              order_index: s.order_index,
+            })),
+          };
+          setAssessmentData(mapped);
+          setStartTime(Date.now());
+          setScenarioStartTime(Date.now());
+          setPhase('welcome');
+          return;
+        }
+
         const res = await fetch(
           `/api/headhunting/assessment/validate?token=${encodeURIComponent(token)}`
         );
@@ -354,6 +390,9 @@ export default function AssessmentPage() {
       snapshotsRef.current.push(snapshot);
 
       const capturedAt = new Date().toISOString();
+      // En preview no subimos snapshots (no se requieren para revisión interna),
+      // pero conservamos el conteo en local para mostrarlo en el reporte.
+      if (isPreview) return;
       // Upload in background (don't block UI)
       try {
         await fetch('/api/headhunting/assessment/snapshot', {
@@ -485,28 +524,48 @@ export default function AssessmentPage() {
         const answerChanges = scenarioInteractions.filter((log) => log.type === 'answer_changed').length;
         const hoverCount = scenarioInteractions.filter((log) => log.type === 'option_hovered').length;
 
-        await fetch('/api/headhunting/assessment/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token,
-            scenario_id: scenarioId,
-            response_text: resp.text,
-            response_data: resp.data,
-            time_spent_seconds: elapsedSeconds,
-            is_final: isFinal,
-            tab_switch_count: tabSwitchCount,
-            tab_switch_events: tabSwitchEventsRef.current,
-            camera_snapshots_count: snapshotsRef.current.length,
-            response_metadata: {
-              time_to_first_interaction_ms: timeToFirstInteraction,
-              time_to_final_answer_ms: elapsedSeconds * 1000,
-              answer_changes: answerChanges,
-              tab_switches_during_question: tabSwitchCount,
-              interaction_count: scenarioInteractions.length,
-            },
-          }),
-        });
+        if (isPreview) {
+          // Preview mode: guarda en assessment_preview_responses (Neon)
+          const scenarioObj = assessmentData?.scenarios.find((s) => s.id === scenarioId);
+          const idx = assessmentData?.scenarios.findIndex((s) => s.id === scenarioId) ?? -1;
+          await fetch('/api/assessment-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: previewSessionRef.current,
+              scenario_index: idx,
+              scenario_id: scenarioId,
+              block: scenarioObj?.block,
+              response_text: resp.text,
+              response_data: resp.data,
+              time_spent_seconds: elapsedSeconds,
+              tab_switch_count: tabSwitchCount,
+            }),
+          });
+        } else {
+          await fetch('/api/headhunting/assessment/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token,
+              scenario_id: scenarioId,
+              response_text: resp.text,
+              response_data: resp.data,
+              time_spent_seconds: elapsedSeconds,
+              is_final: isFinal,
+              tab_switch_count: tabSwitchCount,
+              tab_switch_events: tabSwitchEventsRef.current,
+              camera_snapshots_count: snapshotsRef.current.length,
+              response_metadata: {
+                time_to_first_interaction_ms: timeToFirstInteraction,
+                time_to_final_answer_ms: elapsedSeconds * 1000,
+                answer_changes: answerChanges,
+                tab_switches_during_question: tabSwitchCount,
+                interaction_count: scenarioInteractions.length,
+              },
+            }),
+          });
+        }
         setLastSaveTime(Date.now());
       } catch (err) {
         console.error('Error saving response:', err);
@@ -577,7 +636,53 @@ export default function AssessmentPage() {
     setPhase('loading');
 
     try {
-      // Save all remaining responses as final
+      if (isPreview) {
+        // Preview: guarda todas las respuestas finales y pide reporte con benchmarks
+        if (assessmentData) {
+          for (let i = 0; i < assessmentData.scenarios.length; i++) {
+            const scenario = assessmentData.scenarios[i];
+            const resp = responses[scenario.id];
+            if (resp && (resp.text.trim() || resp.data?.option_index !== undefined)) {
+              await fetch('/api/assessment-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: previewSessionRef.current,
+                  scenario_index: i,
+                  scenario_id: scenario.id,
+                  block: scenario.block,
+                  response_text: resp.text,
+                  response_data: resp.data,
+                  time_spent_seconds: Math.round((Date.now() - startTime) / 1000 / Math.max(1, assessmentData.scenarios.length)),
+                  tab_switch_count: tabSwitchCount,
+                }),
+              });
+            }
+          }
+        }
+        const completeRes = await fetch('/api/assessment-preview?op=complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: previewSessionRef.current,
+            total_time_seconds: Math.round((Date.now() - startTime) / 1000),
+            tab_switch_count: tabSwitchCount,
+            camera_enabled: cameraEnabled,
+          }),
+        });
+        if (completeRes.ok) {
+          const data = await completeRes.json();
+          setPreviewReport(data.report);
+          setPhase('complete');
+        } else {
+          throw new Error('Preview complete failed');
+        }
+        // Stop camera
+        if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Save all remaining responses as final (ruta normal con token real)
       if (assessmentData) {
         for (const scenario of assessmentData.scenarios) {
           const resp = responses[scenario.id];
@@ -1628,6 +1733,88 @@ export default function AssessmentPage() {
 
   // Render complete phase
   if (phase === 'complete') {
+    // ── PREVIEW MODE: muestra reporte con benchmarks ──
+    if (isPreview && previewReport) {
+      const r = previewReport as {
+        by_dimension?: Record<string, { score: number; benchmark_mean: number; benchmark_std: number; vs_mean: number; status: string; n_scenarios: number }>;
+        overall_match?: number;
+        ts_dna_summary?: string;
+        ts_dna_traits?: Array<{ trait: string; direction: string; benchmark: number; note: string }>;
+        responses_count?: number;
+        scenarios_total?: number;
+      };
+      const dims = Object.entries(r.by_dimension ?? {});
+      // Ordenar: in_range primero, luego over, luego under
+      dims.sort((a, b) => {
+        const order = { in_range: 0, over: 1, under: 2, no_benchmark: 3 } as Record<string, number>;
+        return (order[a[1].status] ?? 4) - (order[b[1].status] ?? 4);
+      });
+      return (
+        <div className="min-h-screen" style={{ backgroundColor: TS_COLORS.offWhite, fontFamily: TS_TYPOGRAPHY.fontFamily }}>
+          <div className="max-w-4xl mx-auto px-6 py-10">
+            <div className="mb-8">
+              <div className="text-xs uppercase tracking-widest mb-2" style={{ color: TS_COLORS.mediumGray }}>Preview · Reporte interno</div>
+              <h1 className="text-3xl font-bold mb-2" style={{ color: TS_COLORS.black }}>Resultado de la evaluación</h1>
+              <p style={{ color: TS_COLORS.mediumGray }}>{r.ts_dna_summary}</p>
+            </div>
+
+            {/* Match overall */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="rounded-2xl p-5 border" style={{ backgroundColor: TS_COLORS.white, borderColor: TS_COLORS.lightBorder }}>
+                <div className="text-xs uppercase tracking-widest" style={{ color: TS_COLORS.mediumGray }}>Match TS DNA</div>
+                <div className="text-4xl font-bold mt-1">{r.overall_match ?? 0}%</div>
+                <div className="text-xs mt-1" style={{ color: TS_COLORS.mediumGray }}>vs top performers benchmark</div>
+              </div>
+              <div className="rounded-2xl p-5 border" style={{ backgroundColor: TS_COLORS.white, borderColor: TS_COLORS.lightBorder }}>
+                <div className="text-xs uppercase tracking-widest" style={{ color: TS_COLORS.mediumGray }}>Escenarios respondidos</div>
+                <div className="text-4xl font-bold mt-1">{r.responses_count ?? 0} / {r.scenarios_total ?? 29}</div>
+                <div className="text-xs mt-1" style={{ color: TS_COLORS.mediumGray }}>cobertura del test</div>
+              </div>
+              <div className="rounded-2xl p-5 border" style={{ backgroundColor: TS_COLORS.white, borderColor: TS_COLORS.lightBorder }}>
+                <div className="text-xs uppercase tracking-widest" style={{ color: TS_COLORS.mediumGray }}>Anti-trampa</div>
+                <div className="text-4xl font-bold mt-1">{tabSwitchCount}</div>
+                <div className="text-xs mt-1" style={{ color: TS_COLORS.mediumGray }}>tab switches · cámara {cameraEnabled ? 'activa' : 'no'}</div>
+              </div>
+            </div>
+
+            {/* Dimensiones */}
+            <div className="rounded-2xl p-6 border mb-6" style={{ backgroundColor: TS_COLORS.white, borderColor: TS_COLORS.lightBorder }}>
+              <h2 className="text-lg font-bold mb-4" style={{ color: TS_COLORS.black }}>Dimensiones psicométricas vs benchmark TS</h2>
+              <div className="space-y-2">
+                {dims.map(([dim, d]) => {
+                  const color = d.status === 'in_range' ? '#22C55E' : d.status === 'over' ? '#3B82F6' : d.status === 'under' ? '#EF4444' : '#9CA3AF';
+                  const label = d.status === 'in_range' ? 'En rango' : d.status === 'over' ? 'Sobre benchmark' : d.status === 'under' ? 'Bajo benchmark' : 'Sin ref';
+                  return (
+                    <div key={dim} className="grid items-center gap-3 py-2 border-b" style={{ gridTemplateColumns: '180px 1fr 80px 90px 70px', borderColor: TS_COLORS.lightBorder }}>
+                      <div className="text-sm font-medium" style={{ color: TS_COLORS.darkText }}>{dim}</div>
+                      <div className="h-2 rounded-full overflow-hidden relative" style={{ backgroundColor: TS_COLORS.lightGray }}>
+                        <div className="absolute h-full" style={{ width: `${Math.min(100, (d.score / Math.max(d.benchmark_mean * 1.5, 1)) * 100)}%`, backgroundColor: color }} />
+                        <div className="absolute h-full w-px" style={{ left: `${Math.min(100, (d.benchmark_mean / Math.max(d.benchmark_mean * 1.5, 1)) * 100)}%`, backgroundColor: TS_COLORS.darkText }} title="benchmark" />
+                      </div>
+                      <div className="text-sm font-bold text-right">{d.score}</div>
+                      <div className="text-xs text-right" style={{ color: TS_COLORS.mediumGray }}>μ={d.benchmark_mean}</div>
+                      <div className="text-[10px] uppercase font-semibold text-right" style={{ color }}>{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] mt-3" style={{ color: TS_COLORS.mediumGray }}>
+                Línea vertical = media TS top performers · Barra = score del run · {dims.length} dimensiones medidas con {r.responses_count} respuestas.
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <a href="/hr-admin" className="px-6 py-3 rounded-full text-sm font-semibold border" style={{ borderColor: TS_COLORS.lightBorder, color: TS_COLORS.darkText }}>← Volver al HR Admin</a>
+              <a href="/assessment/ht/preview" className="px-6 py-3 rounded-full text-sm font-semibold text-white" style={{ backgroundColor: TS_COLORS.black }}>Correr de nuevo</a>
+            </div>
+            <div className="text-center text-xs mt-8" style={{ color: TS_COLORS.mediumGray }}>
+              Datos guardados en assessment_preview_responses · session {previewSessionRef.current.slice(0, 16)}…
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ backgroundColor: TS_COLORS.white, fontFamily: TS_TYPOGRAPHY.fontFamily }}>
         <div className="max-w-md w-full text-center">

@@ -1005,7 +1005,7 @@ function Vacantes() {
                               <div className="text-sm font-bold text-right" style={{ minWidth: 50 }}>
                                 {c.matchPct !== null ? `${c.matchPct}%` : '—'}
                               </div>
-                              <a href={`/assessment/preview?candidate=${c.id}`} className="text-xs text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                              <a href="/assessment/ht/preview" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
                                 Ver prueba ↗
                               </a>
                             </div>
@@ -1665,126 +1665,321 @@ function CVBank() {
 /* ======================================================== */
 /* Entrevistas IA                                           */
 /* ======================================================== */
+type InterviewQuestion = {
+  n: number;
+  dimension: string;
+  type: 'validate_flag' | 'confirm_strength' | 'situational';
+  question: string;
+  look_for: string;
+  red_flag: string;
+};
+
+type InterviewGuide = {
+  summary?: string;
+  questions?: InterviewQuestion[];
+  interpretation_guide?: string;
+  raw?: string;
+};
+
+type InterviewPrepResponse = {
+  candidate: { id: number; name: string; email: string; status: string; score_16_mandamientos: number | null };
+  vacancy: { id?: number; title?: string; department?: string };
+  profile_snapshot: Record<string, unknown>;
+  focus_points: string[];
+  low_signals: string[];
+  strengths: string[];
+  guide: InterviewGuide;
+};
+
 function Entrevistas() {
-  // NOTA: hoy esta vista muestra los assessments Factor X completados (con scores),
-  // que son el equivalente de "entrevista IA" en este ciclo. Cuando se active el
-  // Interview Agent (video async) se agregarán aquí las grabaciones + transcripts.
-  const [tokens, setTokens] = useState<LiveToken[]>([]);
+  const [apps, setApps] = useState<Array<{ id: number; full_name: string; email: string; status: string; score: number | null; job_id: number; job_title: string }>>([]);
+  const [vacs, setVacs] = useState<LiveVacancy[]>([]);
   const [loading, setLoading] = useState(true);
+  const [vacancyFilter, setVacancyFilter] = useState<number | 'all'>('all');
+  const [activeApp, setActiveApp] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [guide, setGuide] = useState<InterviewPrepResponse | null>(null);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [synthesizing, setSynthesizing] = useState(false);
+  const [dossier, setDossier] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     (async () => {
-      const r = await fetch("/api/assessments?status=completed&limit=500", { cache: "no-store" });
-      const j = await r.json();
-      setTokens((j.data ?? []) as LiveToken[]);
+      const [appR, vacR] = await Promise.all([
+        fetch('/api/applications?limit=500', { cache: 'no-store' }).then((r) => r.json()),
+        fetch('/api/vacancies', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      const arr = (appR.applications ?? appR.data ?? []) as typeof apps;
+      setApps(arr.filter((a) => ['reviewing', 'interview'].includes(a.status)));
+      setVacs((Array.isArray(vacR) ? vacR : vacR.data ?? []) as LiveVacancy[]);
       setLoading(false);
     })();
   }, []);
 
-  const totalScored = tokens.length;
-  const avgScore =
-    totalScored > 0
-      ? Math.round(
-          tokens.reduce((sum, t) => sum + (t.score ?? 0), 0) / totalScored
-        )
-      : 0;
-  const topScore = tokens.reduce((m, t) => Math.max(m, t.score ?? 0), 0);
-  const elevareCount = tokens.filter((t) => t.source === "elevare").length;
+  const filtered = vacancyFilter === 'all' ? apps : apps.filter((a) => a.job_id === vacancyFilter);
+  const activeAppData = apps.find((a) => a.id === activeApp) ?? null;
+
+  async function generatePrep(applicationId: number) {
+    setGenerating(true);
+    setGuide(null);
+    setAnswers({});
+    setDossier(null);
+    try {
+      const r = await fetch('/api/agents/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_id: applicationId }),
+      });
+      const j = await r.json();
+      setGuide(j as InterviewPrepResponse);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function synthesize() {
+    if (!guide?.guide?.questions || !activeApp) return;
+    const formatted = guide.guide.questions.map((q) => ({
+      n: q.n,
+      dimension: q.dimension,
+      question: q.question,
+      answer: answers[q.n] ?? '(sin respuesta)',
+    }));
+    setSynthesizing(true);
+    setDossier(null);
+    try {
+      const r = await fetch('/api/agents/interview-synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_id: activeApp, answers: formatted }),
+      });
+      const j = await r.json();
+      setDossier(j.dossier);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSynthesizing(false);
+    }
+  }
 
   return (
     <>
       <PageHead
-        title="Assessments completados · Biblioteca de resultados"
-        desc={
-          loading
-            ? "Cargando resultados Factor X…"
-            : `${totalScored} candidatos con prueba completada · Scores reales de DISC, IQ, Big Five, BETESA, McClelland y cognitivo`
-        }
+        title="Entrevistas IA · Complemento al perfil psicométrico"
+        desc="La entrevista IA genera preguntas STAR específicas según los puntos a validar de la prueba Elevare. No es un cuestionario genérico — es targeted al candidato y a la vacante."
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Filtrar por vacante ▾</button>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>Filtrar por score ▾</button>
+            <select
+              value={vacancyFilter === 'all' ? 'all' : String(vacancyFilter)}
+              onChange={(e) => setVacancyFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))}
+              className="text-xs border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={{ minWidth: 220 }}
+            >
+              <option value="all">Todas las vacantes ({apps.length})</option>
+              {vacs.map((v) => (
+                <option key={v.id} value={v.id}>{v.title_es ?? v.title}</option>
+              ))}
+            </select>
           </>
         }
       />
+
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Pruebas completadas" value={loading ? "…" : String(totalScored)} delta="Con score Factor X" />
-        <KPI label="Score promedio" value={loading ? "…" : `${avgScore}/100`} delta="Sobre completadas" tone="neutral" />
-        <KPI label="Score más alto" value={loading ? "…" : `${topScore}/100`} delta="Top candidate" />
-        <KPI label="Desde Elevare" value={String(elevareCount)} delta={`${totalScored > 0 ? Math.round((elevareCount / totalScored) * 100) : 0}%`} tone="neutral" />
+        <KPI label="Listos para entrevista" value={loading ? '…' : String(apps.length)} delta="Status reviewing/interview" />
+        <KPI label="Por vacante seleccionada" value={loading ? '…' : String(filtered.length)} delta={vacancyFilter === 'all' ? 'sin filtro' : 'filtrados'} tone="neutral" />
+        <KPI label="Modelo IA" value="Sonnet 4.5" delta="Anthropic" tone="neutral" />
+        <KPI label="Cobertura test" value="29 escenarios" delta="21 dim psicométricas" tone="neutral" />
       </div>
 
-      <Card title="Últimas pruebas Factor X completadas" eyebrow="LIVE · /api/assessments?status=completed">
-        <div className="space-y-3">
-          {loading && (
-            <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
-          )}
-          {!loading && tokens.length === 0 && (
-            <div className="text-sm text-gray-400 py-8 text-center">
-              Sin pruebas completadas aún.
+      <div className="grid grid-cols-3 gap-4" style={{ gridTemplateColumns: '1fr 2fr' }}>
+        {/* Lista de candidatos */}
+        <Card title="Candidatos listos" eyebrow="reviewing + interview">
+          {loading && <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>}
+          {!loading && filtered.length === 0 && (
+            <div className="text-sm text-gray-400 py-6 text-center">
+              Sin candidatos en estado para entrevista.
             </div>
           )}
-          {tokens
-            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-            .slice(0, 40)
-            .map((t) => {
-              const completedDate = t.completed_at
-                ? new Date(t.completed_at).toLocaleDateString("es-CO", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "—";
-              const score = t.score ?? 0;
+          <div className="space-y-1">
+            {filtered.map((a) => {
+              const isActive = activeApp === a.id;
               return (
-                <div
-                  key={t.id}
-                  className="grid gap-4 items-center border border-gray-200 rounded-xl px-4 py-3"
-                  style={{ gridTemplateColumns: "56px 1fr auto auto" }}
+                <button
+                  key={a.id}
+                  onClick={() => { setActiveApp(a.id); setGuide(null); setAnswers({}); setDossier(null); }}
+                  className={`w-full text-left border rounded-lg px-3 py-2 transition ${isActive ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-400'}`}
                 >
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-800 to-black text-white flex items-center justify-center font-bold text-sm">
-                    {t.candidate_name
-                      .split(" ")
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .map((p) => p[0]?.toUpperCase())
-                      .join("")}
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold m-0 truncate">
-                      {t.candidate_name} · {t.vacancy_title_es ?? t.vacancy_slug ?? "—"}
-                    </h4>
-                    <div className="text-xs text-gray-500 mt-0.5 truncate">
-                      {t.candidate_email} · completada {completedDate}
-                      {t.source && ` · ${t.source}`}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold truncate">{a.full_name}</div>
+                      <div className="text-xs text-gray-500 truncate">{a.job_title}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {a.score !== null && <div className="text-sm font-bold">{a.score}</div>}
+                      <Pill color={a.status === 'interview' ? 'black' : 'green'}>{a.status}</Pill>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] tracking-wider text-gray-500 uppercase font-semibold">Score</div>
-                    <div className="text-lg font-extrabold">{score}/100</div>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <a
-                      href={`/assessment/${t.token}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 border border-gray-200 rounded-lg hover:border-black"
-                      title="Abrir token"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                    <button
-                      className="p-1.5 border border-gray-200 rounded-lg hover:border-black"
-                      title="Reporte (próximamente)"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                </button>
               );
             })}
-        </div>
-      </Card>
+          </div>
+        </Card>
+
+        {/* Panel de entrevista */}
+        <Card title="Guía de entrevista IA" eyebrow={activeAppData ? activeAppData.full_name.toUpperCase() : 'SELECCIONA UN CANDIDATO'}>
+          {!activeAppData && (
+            <div className="text-sm text-gray-400 py-12 text-center">
+              Selecciona un candidato a la izquierda y genera la guía.
+            </div>
+          )}
+
+          {activeAppData && !guide && !generating && (
+            <div className="py-10 text-center">
+              <div className="text-sm text-gray-600 mb-1">Listo para generar guía de entrevista IA para <strong>{activeAppData.full_name}</strong>.</div>
+              <div className="text-xs text-gray-400 mb-4">El agente cruzará el CV + prefilter + prueba Elevare (si la completó) y generará 6-8 preguntas STAR targeted.</div>
+              <button onClick={() => generatePrep(activeAppData.id)} className="pill-btn pill-btn-primary text-sm">
+                <Sparkles className="w-3.5 h-3.5" /> Generar guía IA
+              </button>
+            </div>
+          )}
+
+          {generating && (
+            <div className="text-sm text-gray-500 py-12 text-center">Generando guía con Anthropic Sonnet 4.5…</div>
+          )}
+
+          {guide && (
+            <div className="space-y-4">
+              {/* Profile snapshot */}
+              <div className="bg-gray-50 rounded-lg p-3 text-xs">
+                <div className="font-semibold uppercase tracking-wider text-gray-500 mb-1">Perfil del candidato</div>
+                <div>Score 16M: <strong>{guide.candidate.score_16_mandamientos ?? '—'}</strong> · Categoría: <strong>{(guide.profile_snapshot.categoria as string) ?? '—'}</strong> · Prueba: <strong>{(guide.profile_snapshot.assessment_status as string) ?? 'no enviada'}</strong>{guide.profile_snapshot.assessment_score ? ` · ${guide.profile_snapshot.assessment_score}/100` : ''}</div>
+                {guide.focus_points.length > 0 && (
+                  <div className="mt-2"><span className="font-semibold text-amber-700">⚠ Puntos a validar:</span> <span className="text-gray-700">{guide.focus_points.join(' · ')}</span></div>
+                )}
+                {guide.low_signals.length > 0 && (
+                  <div className="mt-1"><span className="font-semibold text-red-700">▼ Señales bajas:</span> <span className="text-gray-700">{guide.low_signals.slice(0, 3).join(' · ')}</span></div>
+                )}
+              </div>
+
+              {/* Summary */}
+              {guide.guide?.summary && (
+                <div className="text-sm border-l-4 border-blue-400 pl-3 italic text-gray-700">{guide.guide.summary}</div>
+              )}
+
+              {/* Questions */}
+              {guide.guide?.questions && guide.guide.questions.length > 0 && (
+                <div className="space-y-3">
+                  {guide.guide.questions.map((q) => {
+                    const tagColor = q.type === 'validate_flag' ? 'amber' : q.type === 'confirm_strength' ? 'green' : 'gray';
+                    return (
+                      <div key={q.n} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-mono text-gray-400 w-6">#{q.n}</span>
+                          <Pill color={tagColor as 'amber' | 'green' | 'gray'}>{q.dimension}</Pill>
+                          <span className="text-[10px] uppercase tracking-wider text-gray-400">{q.type.replace('_', ' ')}</span>
+                        </div>
+                        <div className="text-sm font-medium mb-2">{q.question}</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                          <div className="bg-emerald-50 rounded px-2 py-1.5 text-emerald-800">
+                            <span className="font-semibold">✓ Buscar:</span> {q.look_for}
+                          </div>
+                          <div className="bg-red-50 rounded px-2 py-1.5 text-red-800">
+                            <span className="font-semibold">✗ Red flag:</span> {q.red_flag}
+                          </div>
+                        </div>
+                        <textarea
+                          value={answers[q.n] ?? ''}
+                          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.n]: e.target.value }))}
+                          rows={2}
+                          placeholder="Respuesta del candidato (notas o transcript)…"
+                          className="w-full border border-gray-200 rounded text-xs px-2 py-1.5"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Interpretation guide */}
+              {guide.guide?.interpretation_guide && (
+                <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-900">
+                  <div className="font-semibold mb-1">Cómo triangular las respuestas:</div>
+                  {guide.guide.interpretation_guide}
+                </div>
+              )}
+
+              {/* Synthesis */}
+              <div className="border-t border-gray-200 pt-3">
+                <button
+                  onClick={synthesize}
+                  disabled={synthesizing || Object.keys(answers).length === 0}
+                  className="pill-btn pill-btn-primary text-sm w-full disabled:opacity-50"
+                >
+                  {synthesizing ? 'Sintetizando dossier…' : '📊 Generar dossier complementario (psicometría + entrevista)'}
+                </button>
+              </div>
+
+              {dossier && (
+                <div className="bg-gradient-to-br from-gray-50 to-white border-2 border-gray-200 rounded-lg p-4 space-y-3 text-sm">
+                  <div className="font-bold uppercase tracking-wider text-gray-500 text-xs">Dossier triangulado</div>
+                  {(dossier.triangulation_summary as string | undefined) && (
+                    <div className="text-sm">{dossier.triangulation_summary as string}</div>
+                  )}
+                  {Array.isArray(dossier.confirmations) && (dossier.confirmations as Array<Record<string, string>>).length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-emerald-700 mb-1">✓ Confirmaciones</div>
+                      <ul className="text-xs space-y-1 ml-4 list-disc">
+                        {(dossier.confirmations as Array<Record<string, string>>).map((c, i) => (
+                          <li key={i}><strong>{c.dimension}:</strong> prueba {c.evidence_test}; entrevista {c.evidence_interview}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {Array.isArray(dossier.contradictions) && (dossier.contradictions as Array<Record<string, string>>).length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-amber-700 mb-1">⚠ Contradicciones</div>
+                      <ul className="text-xs space-y-1 ml-4 list-disc">
+                        {(dossier.contradictions as Array<Record<string, string>>).map((c, i) => (
+                          <li key={i}><strong>{c.dimension}:</strong> prueba dice {c.test_says}; entrevista dice {c.interview_says}. Interpretación: {c.interpretation}. Próximo paso: {c.next_step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {Array.isArray(dossier.new_signals) && (dossier.new_signals as Array<Record<string, string>>).length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-blue-700 mb-1">+ Señales nuevas (solo entrevista)</div>
+                      <ul className="text-xs space-y-1 ml-4 list-disc">
+                        {(dossier.new_signals as Array<Record<string, string>>).map((c, i) => (
+                          <li key={i}><strong>{c.topic}:</strong> {c.what_we_learned}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(dossier.final_recommendation as Record<string, string> | undefined) && (
+                    <div className="bg-black text-white rounded-lg p-3">
+                      <div className="text-xs uppercase tracking-wider opacity-60 mb-1">Recomendación final</div>
+                      <div className="text-base font-bold">
+                        {(dossier.final_recommendation as Record<string, string>).decision === 'advance_to_offer' && 'AVANZAR A OFERTA'}
+                        {(dossier.final_recommendation as Record<string, string>).decision === 'second_round' && 'SEGUNDA RONDA'}
+                        {(dossier.final_recommendation as Record<string, string>).decision === 'discard' && 'DESCARTAR'}
+                        <span className="ml-2 text-xs opacity-70">confianza {(dossier.final_recommendation as Record<string, string>).confidence}</span>
+                      </div>
+                      <div className="text-xs opacity-90 mt-1">{(dossier.final_recommendation as Record<string, string>).rationale}</div>
+                      {(dossier.final_recommendation as Record<string, string>).if_advance_concerns_to_address && (
+                        <div className="text-xs opacity-90 mt-2">
+                          <strong>Si avanza, abordar:</strong> {(dossier.final_recommendation as Record<string, string>).if_advance_concerns_to_address}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
     </>
   );
 }
