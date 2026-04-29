@@ -1,16 +1,17 @@
 /**
  * /api/assessments
  *   GET  → lista todas las pruebas enviadas (con filtros opcionales)
- *   POST → crea un token de prueba para un candidato y devuelve el link
+ *   POST → crea un token de prueba; opcionalmente envía email vía Resend
  *
- * Esto NO envía el email — eso lo hace el cliente (mailto:) o el HR Admin
- * (botón "Enviar prueba" que abre Gmail con el correo prellenado).
- *
- * Cuando se conecte Resend/SendGrid, se añade el envío server-side aquí.
+ * Si en el body se pasa `send_email: true`, el endpoint envía la invitación
+ * directamente desde el servidor usando RESEND_API_KEY. Si se omite o es
+ * false, se devuelve solo el link + un `mailto:` para que el HR Admin
+ * lo dispare manualmente.
  */
 import { neon } from "@neondatabase/serverless";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
+import { getResend, EMAIL_FROM, EMAIL_BCC } from "@/lib/resend";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,11 +86,72 @@ type CreateBody = {
   candidate_email: string;
   vacancy_id?: number | null;
   vacancy_slug?: string | null;
+  vacancy_title?: string | null;
   assessment_ids?: string[];
   language?: "es" | "en";
   source?: string;
   candidate_id?: number | null;
+  send_email?: boolean; // si true, envía invitación vía Resend
 };
+
+function buildEmailHtml(opts: {
+  candidate_name: string;
+  link: string;
+  vacancy_title: string;
+  language: "es" | "en";
+}): { subject: string; html: string } {
+  const firstName = opts.candidate_name.split(" ")[0];
+  if (opts.language === "en") {
+    return {
+      subject: `Trading Solutions · Assessment for ${opts.vacancy_title}`,
+      html: `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#1a1a1a;background:#f5f5f5;margin:0;padding:0">
+<div style="max-width:600px;margin:0 auto;background:#ffffff">
+  <div style="background:#0F172A;padding:28px;text-align:center"><h1 style="color:#fff;font-size:22px;margin:0;font-weight:600">Trading Solutions</h1></div>
+  <div style="padding:32px">
+    <p>Hi ${firstName},</p>
+    <p>Thanks for applying to <strong>${opts.vacancy_title}</strong> at Trading Solutions. The next step is a short assessment.</p>
+    <div style="background:#EBF0FF;border-radius:8px;padding:16px;margin:16px 0">
+      <p style="margin:0"><strong>About the assessment:</strong></p>
+      <ul style="margin:8px 0">
+        <li>Approximate duration: <strong>55 minutes</strong> (you can pause)</li>
+        <li>Format: situational role-play and short analysis</li>
+        <li>You'll need: a computer with stable internet</li>
+        <li>Link valid for <strong>30 days</strong></li>
+      </ul>
+    </div>
+    <p style="text-align:center"><a href="${opts.link}" style="display:inline-block;background:#2C64ED;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600">Start assessment</a></p>
+    <p>There are no right or wrong answers — we want to understand how you think.</p>
+    <p>Best regards,<br><strong>Trading Solutions Recruiting</strong></p>
+  </div>
+  <div style="padding:18px 32px;text-align:center;color:#999;font-size:12px;border-top:1px solid #eee">Confidential — link is personal and non-transferable.</div>
+</div></body></html>`,
+    };
+  }
+  return {
+    subject: `Trading Solutions · Evaluación para ${opts.vacancy_title}`,
+    html: `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#1a1a1a;background:#f5f5f5;margin:0;padding:0">
+<div style="max-width:600px;margin:0 auto;background:#ffffff">
+  <div style="background:#0F172A;padding:28px;text-align:center"><h1 style="color:#fff;font-size:22px;margin:0;font-weight:600">Trading Solutions</h1></div>
+  <div style="padding:32px">
+    <p>Hola ${firstName},</p>
+    <p>Gracias por aplicar a <strong>${opts.vacancy_title}</strong> en Trading Solutions. Como siguiente paso, te invitamos a completar una evaluación corta.</p>
+    <div style="background:#EBF0FF;border-radius:8px;padding:16px;margin:16px 0">
+      <p style="margin:0"><strong>Sobre la evaluación:</strong></p>
+      <ul style="margin:8px 0">
+        <li>Duración aproximada: <strong>55 minutos</strong> (puedes pausar)</li>
+        <li>Formato: escenarios de role-play y análisis cortos</li>
+        <li>Necesitas: computador con internet estable</li>
+        <li>Enlace válido por <strong>30 días</strong></li>
+      </ul>
+    </div>
+    <p style="text-align:center"><a href="${opts.link}" style="display:inline-block;background:#2C64ED;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600">Iniciar evaluación</a></p>
+    <p>No hay respuestas correctas o incorrectas — queremos conocer cómo piensas.</p>
+    <p>Un abrazo,<br><strong>Equipo Trading Solutions</strong></p>
+  </div>
+  <div style="padding:18px 32px;text-align:center;color:#999;font-size:12px;border-top:1px solid #eee">Confidencial — el enlace es personal e intransferible.</div>
+</div></body></html>`,
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -132,25 +194,55 @@ export async function POST(req: NextRequest) {
     const url = new URL(req.url);
     const origin = `${url.protocol}//${url.host}`;
     const link = `${origin}/assessment/${token}`;
+    const vacancyTitle = body.vacancy_title || "la vacante en Trading Solutions";
 
-    // Mailto helper para el HR Admin
+    // Mailto helper (fallback si no se envía por Resend)
     const subject = encodeURIComponent(
       language === "en"
-        ? `Trading Solutions · Assessment for ${body.candidate_name}`
-        : `Trading Solutions · Evaluación para ${body.candidate_name}`
+        ? `Trading Solutions · Assessment for ${vacancyTitle}`
+        : `Trading Solutions · Evaluación para ${vacancyTitle}`
     );
     const message = encodeURIComponent(
       language === "en"
-        ? `Hi ${body.candidate_name.split(" ")[0]},\n\nThanks for applying to Trading Solutions. The next step is a short assessment (about 90 minutes total, you can pause anytime).\n\nStart here: ${link}\n\nThe link is valid for 30 days. Any questions, just reply to this email.\n\nBest,\nTrading Solutions Recruiting`
-        : `Hola ${body.candidate_name.split(" ")[0]},\n\nGracias por aplicar a Trading Solutions. El siguiente paso es completar una evaluación corta (en total ~90 minutos, puedes pausar cuando quieras).\n\nEmpieza aquí: ${link}\n\nEl enlace es válido por 30 días. Cualquier duda, respóndenos directamente.\n\nUn abrazo,\nEquipo Trading Solutions`
+        ? `Hi ${body.candidate_name.split(" ")[0]},\n\nThanks for applying to Trading Solutions. The next step is a short assessment (about 55 minutes, you can pause anytime).\n\nStart here: ${link}\n\nThe link is valid for 30 days.\n\nBest,\nTrading Solutions Recruiting`
+        : `Hola ${body.candidate_name.split(" ")[0]},\n\nGracias por aplicar a Trading Solutions. El siguiente paso es una evaluación corta (~55 minutos, puedes pausar cuando quieras).\n\nEmpieza aquí: ${link}\n\nEl enlace es válido por 30 días.\n\nUn abrazo,\nEquipo Trading Solutions`
     );
     const mailto = `mailto:${body.candidate_email}?subject=${subject}&body=${message}`;
+
+    // Envío automático vía Resend si se solicita
+    let emailStatus: { sent: boolean; id?: string; error?: string } = { sent: false };
+    if (body.send_email) {
+      try {
+        const resend = getResend();
+        const { subject: emailSubject, html } = buildEmailHtml({
+          candidate_name: body.candidate_name,
+          link,
+          vacancy_title: vacancyTitle,
+          language,
+        });
+        const result = await resend.emails.send({
+          from: EMAIL_FROM,
+          to: body.candidate_email,
+          bcc: EMAIL_BCC,
+          subject: emailSubject,
+          html,
+        });
+        if (result.error) {
+          emailStatus = { sent: false, error: result.error.message ?? String(result.error) };
+        } else {
+          emailStatus = { sent: true, id: result.data?.id };
+        }
+      } catch (e) {
+        emailStatus = { sent: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    }
 
     return NextResponse.json(
       {
         data: inserted[0],
         link,
         mailto,
+        email: emailStatus,
       },
       { status: 201, headers: corsHeaders }
     );

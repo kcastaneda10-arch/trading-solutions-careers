@@ -25,6 +25,8 @@ import {
   Play,
   ExternalLink,
   LogOut,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
@@ -211,10 +213,20 @@ function Pill({ children, color = "gray" }: { children: React.ReactNode; color?:
 /* ======================================================== */
 /* Dashboard                                                */
 /* ======================================================== */
+type TopCandidate = {
+  name: string;
+  role: string;
+  score: number | null;
+  matchPct: number | null;
+  light: 'green' | 'amber' | 'red' | 'gray';
+  status: string;
+};
+
 type DashboardStats = {
   vacancies: number;
   vacanciesLinkedIn: number;
   applications: number;
+  applicationsAll: number; // sin filtrar (para KPI total)
   talentPool: number;
   assessmentsSent: number;
   assessmentsInProgress: number;
@@ -223,92 +235,155 @@ type DashboardStats = {
   offers: number;
   hires: number;
   bySource: Record<string, number>;
-  topCandidates: Array<{ name: string; role: string; score: number | null; tags: string }>;
+  topCandidates: TopCandidate[];
 };
+
+type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string };
+
+// Extrae score del why_ts cuando la columna `score` aún no está poblada
+function extractScoreFromText(why?: string | null): number | null {
+  if (!why) return null;
+  const m = why.match(/Score 16 Mandamientos:\s*(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// Convierte score (16 Mandamientos, máximo realista ~75) a % match capado a 100
+function scoreToMatchPct(score: number | null): number | null {
+  if (score === null || score === undefined) return null;
+  return Math.max(0, Math.min(100, Math.round((score / 60) * 100)));
+}
+
+function matchLight(matchPct: number | null): 'green' | 'amber' | 'red' | 'gray' {
+  if (matchPct === null) return 'gray';
+  if (matchPct >= 80) return 'green';
+  if (matchPct >= 50) return 'amber';
+  return 'red';
+}
 
 function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedVacancyId, setSelectedVacancyId] = useState<number | 'all'>('all');
+  const [vacanciesList, setVacanciesList] = useState<VacancyOption[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
       try {
-        const [vacR, appR, tpR, asR] = await Promise.all([
-          fetch("/api/vacancies", { cache: "no-store" }).then((r) => r.json()),
-          fetch("/api/applications", { cache: "no-store" }).then((r) => r.json()),
-          fetch("/api/talent-pool?limit=1000", { cache: "no-store" }).then((r) => r.json()),
-          fetch("/api/assessments?limit=500", { cache: "no-store" }).then((r) => r.json()),
+        const appsUrl = selectedVacancyId === 'all'
+          ? '/api/applications?limit=500'
+          : `/api/applications?job_id=${selectedVacancyId}&limit=500`;
+        const [vacR, appR, appAllR, tpR, asR] = await Promise.all([
+          fetch('/api/vacancies', { cache: 'no-store' }).then((r) => r.json()),
+          fetch(appsUrl, { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/applications?limit=500', { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/talent-pool?limit=1000', { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/assessments?limit=500', { cache: 'no-store' }).then((r) => r.json()),
         ]);
         if (cancelled) return;
 
-        type Vacancy = { linkedin_url?: string };
-        type Application = { status?: string };
+        type Vacancy = { id: number; title: string; status?: string; linkedin_url?: string };
+        type Application = {
+          id: number;
+          job_id: number;
+          full_name?: string;
+          email?: string;
+          why_ts?: string | null;
+          score?: number | null;
+          status?: string;
+        };
         type TalentPoolItem = {
           full_name: string;
+          email?: string;
           source?: string;
           tags?: string;
           summary?: string;
         };
-        type AssessmentToken = { status: string; score?: number | null };
-        const vacs = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as Vacancy[];
+        type AssessmentToken = { status: string; score?: number | null; candidate_email?: string };
+
+        const vacsRaw = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as Vacancy[];
+        setVacanciesList(vacsRaw.map((v) => ({ id: v.id, title: v.title, status: v.status, linkedin_url: v.linkedin_url })));
+
         const apps = (appR.applications ?? appR.data ?? []) as Application[];
+        const appsAll = (appAllR.applications ?? appAllR.data ?? []) as Application[];
         const tp = (tpR.data ?? []) as TalentPoolItem[];
         const assess = (asR.data ?? []) as AssessmentToken[];
 
-        // source distribution (del talent_pool)
-        const bySource: Record<string, number> = {};
+        // Map email → talent_pool source (para resolver source de apps)
+        const tpByEmail: Record<string, TalentPoolItem> = {};
         for (const c of tp) {
-          const s = (c.source ?? "otros").toLowerCase();
-          const label = s.includes("linkedin")
-            ? "LinkedIn TS"
-            : s.includes("email")
-            ? "Email / directo"
-            : s.includes("refer")
-            ? "Referidos"
-            : "Otros";
+          if (c.email) tpByEmail[c.email.toLowerCase()] = c;
+        }
+
+        // Source distribution: cuando hay filtro, derivamos del set de apps
+        // de la vacante (cruzando email contra talent_pool.source). Sin filtro,
+        // contamos todo el talent_pool.
+        const bySource: Record<string, number> = {};
+        const sourceSet = selectedVacancyId === 'all' ? tp : apps.map((a) => tpByEmail[(a.email || '').toLowerCase()]).filter(Boolean) as TalentPoolItem[];
+        for (const c of sourceSet) {
+          const s = (c.source ?? 'otros').toLowerCase();
+          const label = s.includes('linkedin')
+            ? 'LinkedIn TS'
+            : s.includes('email')
+            ? 'Email / directo'
+            : s.includes('refer')
+            ? 'Referidos'
+            : 'Otros';
           bySource[label] = (bySource[label] ?? 0) + 1;
         }
-
-        // top candidatos: preferir assessments completados con score, sino los de talent_pool con "MUCHO" en tags
-        const byEmail: Record<string, { name: string; score: number | null; tags: string; summary?: string }> = {};
-        for (const c of tp) {
-          if (!c.full_name) continue;
-          byEmail[c.full_name] = {
-            name: c.full_name,
-            score: null,
-            tags: c.tags ?? "",
-            summary: c.summary,
-          };
-        }
-        for (const a of assess) {
-          if (a.status === "completed" && a.score) {
-            const key = (a as unknown as { candidate_name: string }).candidate_name;
-            if (byEmail[key]) byEmail[key].score = a.score;
+        // Para apps web sin presencia en talent_pool (formulario público) — contarlas como Email/directo
+        if (selectedVacancyId !== 'all') {
+          const apps_no_tp = apps.filter((a) => !tpByEmail[(a.email || '').toLowerCase()]);
+          if (apps_no_tp.length > 0) {
+            bySource['Email / directo'] = (bySource['Email / directo'] ?? 0) + apps_no_tp.length;
           }
         }
-        const topCandidates = Object.values(byEmail)
-          .filter((c) => c.score !== null || c.tags.toLowerCase().includes("mucho"))
+
+        // Counts de apps por status (para funnel cuando se filtra vacante)
+        const byStatus: Record<string, number> = {};
+        for (const a of apps) {
+          byStatus[a.status ?? 'new'] = (byStatus[a.status ?? 'new'] ?? 0) + 1;
+        }
+
+        // Top candidatos: apps de la vacante seleccionada (o todas), con score,
+        // ordenadas DESC, top 5. Score viene de columna `score` o se extrae de why_ts.
+        const sourceForTop = apps.length > 0 ? apps : appsAll;
+        const enriched = sourceForTop.map((a) => {
+          const score = (a.score as number | null | undefined) ?? extractScoreFromText(a.why_ts);
+          const matchPct = scoreToMatchPct(score);
+          return {
+            name: a.full_name ?? '',
+            role: vacsRaw.find((v) => v.id === a.job_id)?.title ?? '—',
+            score,
+            matchPct,
+            light: matchLight(matchPct),
+            status: a.status ?? 'new',
+          } as TopCandidate;
+        });
+        const topCandidates = enriched
+          .filter((c) => c.score !== null && c.status !== 'rejected')
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, 5)
-          .map((c) => ({
-            name: c.name,
-            role: c.tags.split(",")[0]?.trim() || c.summary?.slice(0, 50) || "—",
-            score: c.score,
-            tags: c.tags,
-          }));
+          .slice(0, 6);
+
+        // Filtrar assessments para la vacante seleccionada (cruzando emails)
+        const emailsInVacancy = new Set(apps.map((a) => (a.email || '').toLowerCase()));
+        const assessFiltered = selectedVacancyId === 'all'
+          ? assess
+          : assess.filter((a) => emailsInVacancy.has((a.candidate_email || '').toLowerCase()));
 
         setStats({
-          vacancies: vacs.length,
-          vacanciesLinkedIn: vacs.filter((v) => v.linkedin_url).length,
+          vacancies: vacsRaw.length,
+          vacanciesLinkedIn: vacsRaw.filter((v) => v.linkedin_url).length,
           applications: apps.length,
+          applicationsAll: appsAll.length,
           talentPool: tp.length,
-          assessmentsSent: assess.length,
-          assessmentsInProgress: assess.filter((a) => a.status === "in_progress").length,
-          assessmentsCompleted: assess.filter((a) => a.status === "completed").length,
-          interviews: 0, // Requiere tabla interviews_ai que aún no existe
-          offers: 0,      // Requiere tabla offers
-          hires: 0,       // Requiere tabla hires
+          assessmentsSent: assessFiltered.length,
+          assessmentsInProgress: assessFiltered.filter((a) => a.status === 'in_progress').length,
+          assessmentsCompleted: assessFiltered.filter((a) => a.status === 'completed').length,
+          interviews: byStatus['interview'] ?? 0,
+          offers: byStatus['offer'] ?? 0,
+          hires: byStatus['hired'] ?? 0,
           bySource,
           topCandidates,
         });
@@ -320,23 +395,37 @@ function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedVacancyId]);
 
   const s = stats;
 
-  // Funnel real: ancho de barra proporcional al MÁXIMO del embudo (no a aplicaciones)
-  // El % muestra conversión vs. la etapa anterior cuando tiene sentido
+  const filterIsAll = selectedVacancyId === 'all';
+  const selectedVacancyTitle = filterIsAll
+    ? 'Todas las vacantes'
+    : vacanciesList.find((v) => v.id === selectedVacancyId)?.title ?? '—';
+
+  // Funnel: si hay filtro de vacante, sale del breakdown por status de esa vacante.
+  // Sin filtro, mantiene la lectura agregada del pipeline completo.
   const rawRows = s
-    ? [
-        { label: "Talent Pool (CV Bank)", value: s.talentPool, kind: "pool" as const },
-        { label: "Aplicaciones a vacante", value: s.applications, kind: "apply" as const },
-        { label: "Parseado CV", value: Math.round(s.applications * 0.98), kind: "parse" as const },
-        { label: "Pruebas psicométricas enviadas", value: s.assessmentsSent, kind: "sent" as const },
-        { label: "Pruebas completadas", value: s.assessmentsCompleted, kind: "done" as const },
-        { label: "Entrevista humana", value: s.interviews, kind: "interview" as const },
-        { label: "Oferta", value: s.offers, kind: "offer" as const },
-        { label: "Contratado", value: s.hires, kind: "hire" as const },
-      ]
+    ? filterIsAll
+      ? [
+          { label: 'Talent Pool (CV Bank)', value: s.talentPool, kind: 'pool' as const },
+          { label: 'Aplicaciones a vacante', value: s.applicationsAll, kind: 'apply' as const },
+          { label: 'Parseado CV', value: Math.round(s.applicationsAll * 0.98), kind: 'parse' as const },
+          { label: 'Pruebas psicométricas enviadas', value: s.assessmentsSent, kind: 'sent' as const },
+          { label: 'Pruebas completadas', value: s.assessmentsCompleted, kind: 'done' as const },
+          { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
+          { label: 'Oferta', value: s.offers, kind: 'offer' as const },
+          { label: 'Contratado', value: s.hires, kind: 'hire' as const },
+        ]
+      : [
+          { label: 'Aplicaciones a esta vacante', value: s.applications, kind: 'apply' as const },
+          { label: 'Pruebas enviadas', value: s.assessmentsSent, kind: 'sent' as const },
+          { label: 'Pruebas completadas', value: s.assessmentsCompleted, kind: 'done' as const },
+          { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
+          { label: 'Oferta', value: s.offers, kind: 'offer' as const },
+          { label: 'Contratado', value: s.hires, kind: 'hire' as const },
+        ]
     : [];
   const maxFunnelValue = Math.max(1, ...rawRows.map((r) => r.value));
   const funnelRows = rawRows.map((r, i) => {
@@ -358,12 +447,27 @@ function Dashboard() {
     <>
       <PageHead
         title="Dashboard · Talent Acquisition"
-        desc="Vista ejecutiva en vivo del pipeline real de Trading Solutions."
+        desc={
+          filterIsAll
+            ? 'Vista ejecutiva en vivo del pipeline real de Trading Solutions.'
+            : `Vista filtrada · ${selectedVacancyTitle}`
+        }
         actions={
           <>
-            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
-              <Calendar className="w-3.5 h-3.5" /> Todo el pipeline
-            </button>
+            <select
+              value={selectedVacancyId === 'all' ? 'all' : String(selectedVacancyId)}
+              onChange={(e) => setSelectedVacancyId(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))}
+              className="text-xs border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={{ minWidth: 220 }}
+              aria-label="Filtrar por vacante"
+            >
+              <option value="all">Todas las vacantes ({vacanciesList.length})</option>
+              {vacanciesList.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.title}
+                </option>
+              ))}
+            </select>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: "9px 14px" }}>
               <Download className="w-3.5 h-3.5" /> Export
             </button>
@@ -376,31 +480,31 @@ function Dashboard() {
 
       <div className="grid grid-cols-5 gap-3 mb-4">
         <KPI
-          label="Aplicaciones"
-          value={loading ? "…" : String(s?.applications ?? 0)}
-          delta={loading ? "Cargando" : "En Neon"}
+          label={filterIsAll ? 'Aplicaciones' : 'Aplicaciones a esta vacante'}
+          value={loading ? '…' : String(s?.applications ?? 0)}
+          delta={loading ? 'Cargando' : (filterIsAll ? 'En Neon' : `de ${s?.applicationsAll ?? 0} totales`)}
           tone="neutral"
         />
         <KPI
-          label="Vacantes activas"
-          value={loading ? "…" : String(s?.vacancies ?? 0)}
-          delta={s ? `${s.vacanciesLinkedIn} en LinkedIn` : ""}
+          label={filterIsAll ? 'Vacantes activas' : 'Vacante seleccionada'}
+          value={loading ? '…' : (filterIsAll ? String(s?.vacancies ?? 0) : '1')}
+          delta={s ? (filterIsAll ? `${s.vacanciesLinkedIn} en LinkedIn` : selectedVacancyTitle.slice(0, 28)) : ''}
           tone="neutral"
         />
         <KPI
           label="Pruebas completadas"
-          value={loading ? "…" : String(s?.assessmentsCompleted ?? 0)}
-          delta={s ? `${s.assessmentsInProgress} en progreso` : ""}
+          value={loading ? '…' : String(s?.assessmentsCompleted ?? 0)}
+          delta={s ? `${s.assessmentsInProgress} en progreso` : ''}
           tone="neutral"
         />
         <KPI
-          label="En pipeline"
-          value={loading ? "…" : String((s?.talentPool ?? 0))}
-          delta="CV Bank activo"
+          label={filterIsAll ? 'En pipeline' : 'En entrevista'}
+          value={loading ? '…' : String(filterIsAll ? (s?.talentPool ?? 0) : (s?.interviews ?? 0))}
+          delta={filterIsAll ? 'CV Bank activo' : `${s?.offers ?? 0} ofertas · ${s?.hires ?? 0} hired`}
         />
         <KPI
           label="CV Bank total"
-          value={loading ? "…" : String(s?.talentPool ?? 0)}
+          value={loading ? '…' : String(s?.talentPool ?? 0)}
           delta="Barranquilla"
           tone="neutral"
         />
@@ -473,29 +577,54 @@ function Dashboard() {
           )}
         </Card>
 
-        <Card title="Top candidatos" eyebrow="SCORE REAL + MATCH CALIFICADO">
+        <Card title="Top candidatos" eyebrow="MATCH % vs PERFIL IDEAL">
           {loading || !s ? (
             <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
           ) : s.topCandidates.length === 0 ? (
             <div className="text-sm text-gray-400 py-6 text-center">
-              Sin candidatos con score aún. Envía pruebas desde la pestaña Pruebas.
+              Sin candidatos con score aún en {filterIsAll ? 'el pipeline' : 'esta vacante'}.
             </div>
           ) : (
             <div className="space-y-2">
-              {s.topCandidates.map((c) => (
-                <div
-                  key={c.name}
-                  className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold truncate">{c.name}</div>
-                    <div className="text-xs text-gray-500 truncate">{c.role}</div>
+              {s.topCandidates.map((c, idx) => {
+                const dotColor = c.light === 'green' ? '#10B981' : c.light === 'amber' ? '#F59E0B' : c.light === 'red' ? '#EF4444' : '#9CA3AF';
+                const labelColor = c.light === 'green' ? 'text-emerald-700' : c.light === 'amber' ? 'text-amber-700' : c.light === 'red' ? 'text-red-700' : 'text-gray-500';
+                return (
+                  <div
+                    key={`${c.name}-${idx}`}
+                    className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span
+                        title={c.light === 'green' ? 'Alto match — invitar' : c.light === 'amber' ? 'Match medio — revisar' : 'Match bajo'}
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: dotColor,
+                          flexShrink: 0,
+                          boxShadow: c.light === 'green' ? '0 0 0 3px rgba(16,185,129,0.18)' : 'none',
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold truncate">{c.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{c.role}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-sm font-bold ${labelColor}`}>
+                        {c.matchPct !== null ? `${c.matchPct}%` : '—'}
+                      </div>
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">
+                        score {c.score ?? '—'}
+                      </div>
+                    </div>
                   </div>
-                  <Pill color={c.score && c.score >= 85 ? "green" : c.score && c.score >= 75 ? "black" : "amber"}>
-                    {c.score ? c.score : "MUCHO"}
-                  </Pill>
-                </div>
-              ))}
+                );
+              })}
+              <div className="text-[11px] text-gray-400 mt-1.5 px-1">
+                <span style={{ color: '#10B981' }}>●</span> verde ≥80% · <span style={{ color: '#F59E0B' }}>●</span> amarillo 50-79% · <span style={{ color: '#EF4444' }}>●</span> rojo &lt;50%
+              </div>
             </div>
           )}
         </Card>
@@ -618,51 +747,142 @@ type LiveVacancy = {
   status?: string;
 };
 
+type VacancyAppStats = {
+  total: number;
+  new: number;
+  reviewing: number;
+  interview: number;
+  offer: number;
+  hired: number;
+  rejected: number;
+  byScore: { green: number; amber: number; red: number };
+  topRanking: Array<{ id: number; name: string; email: string; score: number | null; matchPct: number | null; light: 'green' | 'amber' | 'red' | 'gray'; status: string }>;
+};
+
 function Vacantes() {
   const [vacancies, setVacancies] = useState<LiveVacancy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'active' | 'closed'>('active');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [statsByVacancy, setStatsByVacancy] = useState<Record<number, VacancyAppStats>>({});
+  const [showJobWriter, setShowJobWriter] = useState(false);
 
+  // Cargar vacantes
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/vacancies", { cache: "no-store" });
+        const r = await fetch('/api/vacancies', { cache: 'no-store' });
         const j = await r.json();
         if (!cancelled) {
-          const list = Array.isArray(j) ? j : j.data ?? [];
+          const list = (Array.isArray(j) ? j : j.data ?? []) as LiveVacancy[];
           setVacancies(list);
           setLoading(false);
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "fetch_failed");
+          setError(e instanceof Error ? e.message : 'fetch_failed');
           setLoading(false);
         }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  const active = vacancies.filter((v) => !v.status || v.status === "active");
+  // Cargar stats per vacancy en paralelo (apps + scores + ranking)
+  useEffect(() => {
+    if (vacancies.length === 0) return;
+    (async () => {
+      const out: Record<number, VacancyAppStats> = {};
+      await Promise.all(vacancies.map(async (v) => {
+        try {
+          const r = await fetch(`/api/applications?job_id=${v.id}&limit=300`, { cache: 'no-store' });
+          const j = await r.json();
+          const apps = (j.applications ?? j.data ?? []) as Array<{ id: number; full_name?: string; email?: string; status?: string; score?: number | null; why_ts?: string | null }>;
+          const stats: VacancyAppStats = {
+            total: apps.length,
+            new: 0, reviewing: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
+            byScore: { green: 0, amber: 0, red: 0 },
+            topRanking: [],
+          };
+          const enriched = apps.map((a) => {
+            const score = (a.score ?? null) || extractScoreFromText(a.why_ts);
+            const matchPct = scoreToMatchPct(score);
+            const light = matchLight(matchPct);
+            const st = (a.status ?? 'new') as 'new' | 'reviewing' | 'interview' | 'offer' | 'hired' | 'rejected';
+            if (st in stats && typeof stats[st] === 'number') {
+              (stats[st] as number) = (stats[st] as number) + 1;
+            }
+            if (light === 'green') stats.byScore.green += 1;
+            else if (light === 'amber') stats.byScore.amber += 1;
+            else if (light === 'red') stats.byScore.red += 1;
+            return { id: a.id, name: a.full_name ?? '', email: a.email ?? '', score, matchPct, light, status: a.status ?? 'new' };
+          });
+          stats.topRanking = enriched
+            .filter((c) => c.status !== 'rejected' && c.score !== null)
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, 8);
+          out[v.id] = stats;
+        } catch { /* ignore single-vacancy errors */ }
+      }));
+      setStatsByVacancy(out);
+    })();
+  }, [vacancies]);
+
+  const active = vacancies.filter((v) => !v.status || v.status === 'open' || v.status === 'active');
+  const closed = vacancies.filter((v) => v.status === 'closed' || v.status === 'filled' || v.status === 'paused');
+  const list = tab === 'active' ? active : closed;
+  const totalApplications = Object.values(statsByVacancy).reduce((s, x) => s + x.total, 0);
+
+  function exportToExcel() {
+    // Simple CSV export (Excel-compatible). Una hoja con vacantes + stats.
+    const rows: string[][] = [
+      ['ID', 'Vacante', 'Departamento', 'Status', 'Ubicación', 'Modalidad', 'Nivel', 'Publicada', 'LinkedIn', 'Total Apps', 'New', 'Reviewing', 'Interview', 'Offer', 'Hired', 'Rejected', 'Verde', 'Amber', 'Rojo'],
+    ];
+    for (const v of vacancies) {
+      const st = statsByVacancy[v.id] ?? {
+        total: 0, new: 0, reviewing: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
+        byScore: { green: 0, amber: 0, red: 0 }, topRanking: [],
+      };
+      rows.push([
+        String(v.id),
+        v.title_es ?? v.title ?? v.slug,
+        v.department ?? '',
+        v.status ?? 'open',
+        v.location ?? '',
+        v.work_mode ?? '',
+        v.level ?? '',
+        v.posted_at ? new Date(v.posted_at).toISOString().slice(0, 10) : '',
+        v.linkedin_url ?? '',
+        String(st.total), String(st.new), String(st.reviewing), String(st.interview), String(st.offer), String(st.hired), String(st.rejected),
+        String(st.byScore.green), String(st.byScore.amber), String(st.byScore.red),
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${(c ?? '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vacantes_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <>
       <PageHead
-        title="Vacantes · Requisiciones activas"
-        desc={
-          loading
-            ? "Cargando desde Neon…"
-            : `${active.length} vacante(s) publicadas en Careers TS y LinkedIn Trading Solutions.`
-        }
+        title="Vacantes · Centro de reclutamiento"
+        desc={loading ? 'Cargando desde Neon…' : `${active.length} activa(s) · ${closed.length} cerrada(s) · ${totalApplications} aplicaciones totales`}
         actions={
           <>
-            <button className="pill-btn text-xs bg-[#0A66C2] text-white hover:bg-[#084D94]" style={{ padding: "9px 14px" }}>
-              <Linkedin className="w-3.5 h-3.5" /> Publicar a LinkedIn TS
+            <button className="pill-btn pill-btn-outline text-xs" style={{ padding: '9px 14px' }} onClick={exportToExcel}>
+              <Download className="w-3.5 h-3.5" /> Export Excel
             </button>
-            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: "9px 14px" }}>
+            <button className="pill-btn text-xs bg-[#0F172A] text-white hover:bg-black" style={{ padding: '9px 14px' }} onClick={() => setShowJobWriter(true)}>
+              <Sparkles className="w-3.5 h-3.5" /> Agente Job Writer
+            </button>
+            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: '9px 14px' }}>
               <Plus className="w-3.5 h-3.5" /> Nueva requisición
             </button>
           </>
@@ -670,48 +890,71 @@ function Vacantes() {
       />
 
       <div className="grid grid-cols-4 gap-3 mb-4">
-        <KPI label="Activas" value={loading ? "…" : String(active.length)} delta="En Neon" tone="neutral" />
-        <KPI label="En LinkedIn" value={String(active.filter((v) => v.linkedin_url).length)} delta="100% sync" />
-        <KPI label="Departamentos" value={String(new Set(active.map((v) => v.department)).size)} delta="Áreas" tone="neutral" />
-        <KPI label="Fuente de verdad" value="Neon" delta="DATABASE_URL" />
+        <KPI label="Activas" value={loading ? '…' : String(active.length)} delta="En Neon" tone="neutral" />
+        <KPI label="Cerradas" value={loading ? '…' : String(closed.length)} delta="Histórico" tone="neutral" />
+        <KPI label="Aplicaciones totales" value={String(totalApplications)} delta="Across all vacancies" />
+        <KPI label="Departamentos" value={String(new Set(vacancies.map((v) => v.department)).size)} delta="Áreas activas" tone="neutral" />
+      </div>
+
+      {/* Active / Closed tabs */}
+      <div className="flex gap-2 mb-3 border-b border-gray-200">
+        <button
+          className={`px-3 py-2 text-sm font-medium border-b-2 ${tab === 'active' ? 'border-black text-black' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+          onClick={() => setTab('active')}
+        >
+          Activas ({active.length})
+        </button>
+        <button
+          className={`px-3 py-2 text-sm font-medium border-b-2 ${tab === 'closed' ? 'border-black text-black' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+          onClick={() => setTab('closed')}
+        >
+          Cerradas ({closed.length})
+        </button>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-800">
-          Error cargando vacantes desde el backend: <code>{error}</code>
+          Error cargando vacantes: <code>{error}</code>
         </div>
       )}
 
-      <Card title="Requisiciones activas" eyebrow="LIVE · API /api/vacancies">
-        <div className="space-y-2">
-          {loading && (
-            <div className="text-sm text-gray-500 py-6 text-center">Cargando…</div>
-          )}
-          {!loading && active.length === 0 && !error && (
-            <div className="text-sm text-gray-500 py-6 text-center">
-              Sin vacantes aún. Llama a <code>POST /api/init-db</code> para sembrar.
-            </div>
-          )}
-          {active.map((v) => {
-            const title = v.title_es ?? v.title ?? v.title_en ?? v.slug;
-            const linkedinId = v.linkedin_url?.split("/jobs/view/")[1]?.replace(/\/$/, "");
-            return (
+      {!loading && list.length === 0 && (
+        <div className="text-sm text-gray-500 py-6 text-center bg-white rounded-xl border border-gray-200">
+          {tab === 'active' ? 'Sin vacantes activas.' : 'Sin vacantes cerradas aún.'}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {list.map((v) => {
+          const title = v.title_es ?? v.title ?? v.title_en ?? v.slug;
+          const stats = statsByVacancy[v.id];
+          const expanded = expandedId === v.id;
+          return (
+            <div key={v.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {/* Header — siempre visible */}
               <div
-                key={v.id}
-                className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3"
+                className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-gray-50"
+                onClick={() => setExpandedId(expanded ? null : v.id)}
               >
-                <div>
-                  <div className="text-sm font-bold">
-                    {title} · {v.department}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {v.location} · {v.work_mode} · {v.level ?? "—"}
-                    {v.posted_at ? ` · Publicada ${new Date(v.posted_at).toISOString().slice(0, 10)}` : ""}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-2 h-2 rounded-full ${tab === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold truncate">{title}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {v.department} · {v.location} · {v.work_mode} · {v.level ?? '—'}
+                      {v.posted_at ? ` · ${new Date(v.posted_at).toISOString().slice(0, 10)}` : ''}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2 items-center">
+                  {stats && (
+                    <>
+                      <Pill color="gray">{stats.total} apps</Pill>
+                      {stats.byScore.green > 0 && <Pill color="green">{stats.byScore.green} verde</Pill>}
+                      {stats.hired > 0 && <Pill color="black">{stats.hired} hired</Pill>}
+                    </>
+                  )}
                   <Pill color="black">id={v.id}</Pill>
-                  {linkedinId && <Pill color="blue">LI · {linkedinId}</Pill>}
                   {v.linkedin_url && (
                     <a
                       href={v.linkedin_url}
@@ -719,17 +962,248 @@ function Vacantes() {
                       rel="noopener noreferrer"
                       className="text-[#0A66C2] p-1"
                       title="Ver en LinkedIn"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
+                  <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </Card>
+
+              {/* Detail expandido */}
+              {expanded && (
+                <div className="border-t border-gray-200 bg-gray-50 px-4 py-4 space-y-4">
+                  {/* Pipeline horizontal */}
+                  <PipelineSummary stats={stats} />
+
+                  {/* Agentes activos */}
+                  <div className="grid grid-cols-4 gap-3">
+                    <AgenteBox icon="📥" title="Recepción" desc="Recibe aplicación · valida email" status="active" />
+                    <AgenteBox icon="🔍" title="Pareo HDV" desc="Anthropic CV parser · extrae skills" status="active" />
+                    <AgenteBox icon="✅" title="Screening" desc="Preguntas básicas + match con perfil" status={stats && stats.total > 0 ? 'active' : 'idle'} />
+                    <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba Elevare" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} />
+                  </div>
+
+                  {/* Ranking post-screening */}
+                  <div>
+                    <div className="text-xs uppercase text-gray-500 font-semibold mb-2 tracking-wider">Ranking post-screening · top {stats?.topRanking.length ?? 0}</div>
+                    {!stats || stats.topRanking.length === 0 ? (
+                      <div className="text-sm text-gray-400 py-4 bg-white rounded-lg border border-gray-200 text-center">
+                        Sin candidatos rankeados aún en esta vacante.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {stats.topRanking.map((c, idx) => {
+                          const dot = c.light === 'green' ? '#10B981' : c.light === 'amber' ? '#F59E0B' : c.light === 'red' ? '#EF4444' : '#9CA3AF';
+                          return (
+                            <div key={c.id} className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                              <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}</span>
+                              <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                              <div className="text-sm font-medium flex-1 min-w-0 truncate">{c.name}</div>
+                              <Pill color={c.status === 'hired' ? 'green' : c.status === 'interview' ? 'black' : 'gray'}>{c.status}</Pill>
+                              <div className="text-sm font-bold text-right" style={{ minWidth: 50 }}>
+                                {c.matchPct !== null ? `${c.matchPct}%` : '—'}
+                              </div>
+                              <a href={`/assessment/preview?candidate=${c.id}`} className="text-xs text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                                Ver prueba ↗
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-gray-200">
+                    <button
+                      className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                      onClick={() => window.open(`/api/assessments?vacancy_id=${v.id}&format=pdf`, '_blank')}
+                    >
+                      📄 Bajar pruebas en PDF
+                    </button>
+                    <button
+                      className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100"
+                      onClick={() => window.open(`/vacantes/${v.slug}`, '_blank')}
+                    >
+                      Ver pública ↗
+                    </button>
+                    {tab === 'active' && (
+                      <button
+                        className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100 ml-auto"
+                        onClick={async () => {
+                          if (!confirm(`Cerrar vacante "${title}"?`)) return;
+                          await fetch(`/api/vacancies/${v.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'closed' }),
+                          });
+                          window.location.reload();
+                        }}
+                      >
+                        Cerrar vacante
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {showJobWriter && <JobWriterModal onClose={() => setShowJobWriter(false)} />}
     </>
+  );
+}
+
+function PipelineSummary({ stats }: { stats?: VacancyAppStats }) {
+  if (!stats) return <div className="h-12" />;
+  const stages = [
+    { label: 'Recibidas', value: stats.total },
+    { label: 'En revisión', value: stats.new + stats.reviewing },
+    { label: 'Entrevista', value: stats.interview },
+    { label: 'Oferta', value: stats.offer },
+    { label: 'Hired', value: stats.hired },
+  ];
+  const max = Math.max(1, ...stages.map((s) => s.value));
+  return (
+    <div className="grid grid-cols-5 gap-2">
+      {stages.map((s, i) => (
+        <div key={s.label} className="bg-white rounded-lg border border-gray-200 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-gray-500">{s.label}</div>
+          <div className="text-lg font-bold">{s.value}</div>
+          <div className="h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+            <div className="h-full bg-emerald-500" style={{ width: `${(s.value / max) * 100}%` }} />
+          </div>
+          {i < stages.length - 1 && stages[i].value > 0 && (
+            <div className="text-[10px] text-gray-400 mt-1">
+              → {stages[i + 1].value > 0 ? `${Math.round((stages[i + 1].value / s.value) * 100)}%` : '0%'}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgenteBox({ icon, title, desc, status }: { icon: string; title: string; desc: string; status: 'active' | 'idle' }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-base">{icon}</span>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+          {status === 'active' ? 'ACTIVO' : 'STANDBY'}
+        </span>
+      </div>
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="text-xs text-gray-500 leading-tight mt-0.5">{desc}</div>
+    </div>
+  );
+}
+
+function JobWriterModal({ onClose }: { onClose: () => void }) {
+  const [role, setRole] = useState('');
+  const [department, setDepartment] = useState('');
+  const [level, setLevel] = useState('mid');
+  const [extras, setExtras] = useState('');
+  const [language, setLanguage] = useState<'es' | 'en'>('es');
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState<string>('');
+
+  async function generate() {
+    setGenerating(true);
+    setResult('');
+    try {
+      const r = await fetch('/api/agents/job-writer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, department, level, extras, language }),
+      });
+      const j = await r.json();
+      if (j.error) {
+        setResult(`Error: ${j.error}`);
+      } else {
+        setResult(j.posting ?? '');
+      }
+    } catch (e) {
+      setResult(`Error: ${e instanceof Error ? e.message : 'unknown'}`);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl max-w-3xl w-full max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+          <div>
+            <div className="text-lg font-bold">Agente Job Writer</div>
+            <div className="text-xs text-gray-500">Genera el posting con el formato Trading Solutions</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div className="px-6 py-4 space-y-3">
+          <div>
+            <label className="text-xs text-gray-600 block mb-1">Rol / título</label>
+            <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="ej. Pricing Senior Analyst" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Departamento</label>
+              <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Comercial / Finanzas / Operaciones" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Nivel</label>
+              <select value={level} onChange={(e) => setLevel(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="junior">Junior</option>
+                <option value="mid">Mid</option>
+                <option value="senior">Senior</option>
+                <option value="lead">Lead / Manager</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Idioma</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value as 'es' | 'en')} className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 block mb-1">Contexto adicional (opcional)</label>
+            <textarea value={extras} onChange={(e) => setExtras(e.target.value)} rows={3} placeholder="Necesidades específicas: herramientas, certificaciones, equipo a liderar, etc." className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+          </div>
+          <button
+            onClick={generate}
+            disabled={!role || generating}
+            className="pill-btn pill-btn-primary text-sm w-full disabled:opacity-50"
+          >
+            {generating ? 'Generando…' : '✨ Escribir job posting'}
+          </button>
+          {result && (
+            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-xs uppercase font-semibold text-gray-500">Borrador generado</div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(result)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Copiar
+                </button>
+              </div>
+              <pre className="text-xs whitespace-pre-wrap font-sans">{result}</pre>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

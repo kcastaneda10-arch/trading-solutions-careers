@@ -190,7 +190,10 @@ export function prefilter(input: PrefilterInput): PrefilterResult {
 
   return {
     score,
-    passed: decision !== 'rejected',
+    // 'passed' = recomendado por el prefilter para avanzar (TOP).
+    // BAJO/FILTRO_DURO no son rechazo automático, pero tampoco pasan;
+    // requieren decisión humana.
+    passed: category === 'TOP',
     decision,
     category,
     breakdown,
