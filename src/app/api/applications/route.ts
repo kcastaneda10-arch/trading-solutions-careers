@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, initDB } from "@/lib/db";
+import { prefilter, toPrefilterData } from "@/lib/agent/prefilter";
 
 let dbInitialized = false;
 
@@ -13,7 +14,7 @@ async function ensureDB() {
 export async function POST(request: NextRequest) {
   try {
     await ensureDB();
-    
+
     const body = await request.json();
     const { job_id, job_title, full_name, email, phone, linkedin, cv_filename, cv_data, why_ts } = body;
 
@@ -24,14 +25,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─── PREFILTER 16 Mandamientos (aplica a TODA aplicación) ────────────
+    const pf = prefilter({
+      full_name,
+      email,
+      phone,
+      linkedin,
+      why_ts,
+      cv_data,
+      job_id,
+    });
+    const initialStatus = pf.decision; // 'reviewing' | 'new' | 'rejected'
+    const prefilterPayload = toPrefilterData(pf);
+
     const result = await sql`
-      INSERT INTO applications (job_id, job_title, full_name, email, phone, linkedin, cv_filename, cv_data, why_ts)
-      VALUES (${job_id}, ${job_title || ''}, ${full_name}, ${email}, ${phone || null}, ${linkedin || null}, ${cv_filename || null}, ${cv_data || null}, ${why_ts || null})
-      RETURNING id, created_at
+      INSERT INTO applications (
+        job_id, job_title, full_name, email, phone, linkedin,
+        cv_filename, cv_data, why_ts, status, score, prefilter_data
+      )
+      VALUES (
+        ${job_id}, ${job_title || ''}, ${full_name}, ${email}, ${phone || null}, ${linkedin || null},
+        ${cv_filename || null}, ${cv_data || null}, ${why_ts || null},
+        ${initialStatus}, ${pf.score}, ${JSON.stringify(prefilterPayload)}::jsonb
+      )
+      RETURNING id, created_at, status, score
     `;
 
     return NextResponse.json(
-      { success: true, id: result[0].id, created_at: result[0].created_at },
+      {
+        success: true,
+        id: result[0].id,
+        created_at: result[0].created_at,
+        status: result[0].status,
+        score: result[0].score,
+        prefilter: prefilterPayload,
+      },
       { status: 201 }
     );
   } catch (error: unknown) {
@@ -57,28 +85,28 @@ export async function GET(request: NextRequest) {
 
     if (status && job_id) {
       applications = await sql`
-        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, created_at
+        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, score, prefilter_data, created_at
         FROM applications WHERE status = ${status} AND job_id = ${parseInt(job_id)}
         ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
       `;
       countResult = await sql`SELECT COUNT(*) as total FROM applications WHERE status = ${status} AND job_id = ${parseInt(job_id)}`;
     } else if (status) {
       applications = await sql`
-        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, created_at
+        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, score, prefilter_data, created_at
         FROM applications WHERE status = ${status}
         ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
       `;
       countResult = await sql`SELECT COUNT(*) as total FROM applications WHERE status = ${status}`;
     } else if (job_id) {
       applications = await sql`
-        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, created_at
+        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, score, prefilter_data, created_at
         FROM applications WHERE job_id = ${parseInt(job_id)}
         ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
       `;
       countResult = await sql`SELECT COUNT(*) as total FROM applications WHERE job_id = ${parseInt(job_id)}`;
     } else {
       applications = await sql`
-        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, created_at
+        SELECT id, job_id, job_title, full_name, email, phone, linkedin, cv_filename, why_ts, status, score, prefilter_data, created_at
         FROM applications ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}
       `;
       countResult = await sql`SELECT COUNT(*) as total FROM applications`;

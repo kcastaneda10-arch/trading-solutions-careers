@@ -18,6 +18,7 @@
  */
 import { neon } from "@neondatabase/serverless";
 import { NextRequest, NextResponse } from "next/server";
+import { prefilter, toPrefilterData, VACANCY_CONFIG } from "@/lib/agent/prefilter";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -105,6 +106,42 @@ export async function POST(req: NextRequest) {
           RETURNING id, email`;
         inserted.push({ id: rows[0].id as number, email: rows[0].email as string });
       }
+
+      // ─── Si vino vacancy_id, crear ALSO una application + prefilter ───
+      if (body.vacancy_id) {
+        const vacancyId = body.vacancy_id;
+        const vacancy = VACANCY_CONFIG[vacancyId];
+        const jobTitle = vacancy?.job_title ?? `Vacancy ${vacancyId}`;
+
+        // Evitar duplicados: solo insertar si no existe app con ese email para esa vacante
+        const existingApp = await sql`
+          SELECT id FROM applications
+          WHERE email = ${email} AND job_id = ${vacancyId}
+          LIMIT 1
+        `;
+
+        if (existingApp.length === 0) {
+          const pf = prefilter({
+            full_name: fullName,
+            email,
+            phone: c.phone ?? null,
+            linkedin: c.linkedin_url ?? null,
+            why_ts: c.notes ?? null,
+            cv_data: null,
+            job_id: vacancyId,
+          });
+          await sql`
+            INSERT INTO applications (
+              job_id, job_title, full_name, email, phone, linkedin, why_ts,
+              status, score, prefilter_data
+            ) VALUES (
+              ${vacancyId}, ${jobTitle}, ${fullName}, ${email},
+              ${c.phone ?? null}, ${c.linkedin_url ?? null}, ${c.notes ?? null},
+              ${pf.decision}, ${pf.score}, ${JSON.stringify(toPrefilterData(pf))}::jsonb
+            )
+          `;
+        }
+      }
     }
 
     return NextResponse.json(
@@ -114,6 +151,7 @@ export async function POST(req: NextRequest) {
         skipped: skipped.length,
         candidates: inserted,
         errors: skipped,
+        vacancy_linked: body.vacancy_id ?? null,
       },
       { status: 201, headers: corsHeaders }
     );

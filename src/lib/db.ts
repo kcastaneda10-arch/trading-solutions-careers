@@ -34,4 +34,33 @@ export async function initDB() {
   await sql`
     CREATE INDEX IF NOT EXISTS idx_applications_created_at ON applications(created_at DESC)
   `;
+
+  // ─── Prefilter columns (16 Mandamientos) ─────────────────────────────
+  // Se ejecutan idempotentes; ALTER TABLE IF NOT EXISTS lo logramos
+  // emulando con DO block + checks por information_schema.
+  await sql`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'applications' AND column_name = 'score'
+      ) THEN
+        ALTER TABLE applications ADD COLUMN score INTEGER;
+      END IF;
+    END $$;
+  `;
+
+  await sql`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'applications' AND column_name = 'prefilter_data'
+      ) THEN
+        ALTER TABLE applications ADD COLUMN prefilter_data JSONB;
+      END IF;
+    END $$;
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_applications_score ON applications(score DESC NULLS LAST)
+  `;
 }
