@@ -756,7 +756,36 @@ type VacancyAppStats = {
   hired: number;
   rejected: number;
   byScore: { green: number; amber: number; red: number };
-  topRanking: Array<{ id: number; name: string; email: string; score: number | null; matchPct: number | null; light: 'green' | 'amber' | 'red' | 'gray'; status: string }>;
+  topRanking: Array<{
+    id: number;
+    name: string;
+    email: string;
+    score: number | null;
+    matchPct: number | null;
+    light: 'green' | 'amber' | 'red' | 'gray';
+    status: string;
+    why_ts: string | null;
+    prefilter_data: Record<string, unknown> | null;
+    assessmentStatus: 'none' | 'sent' | 'in_progress' | 'completed' | 'expired';
+    assessmentToken: string | null;
+    assessmentScore: number | null;
+  }>;
+};
+
+type ScreeningModalData = {
+  candidate: { id: number; name: string; email: string; status: string };
+  vacancyId: number;
+  score: number | null;
+  category: string;
+  breakdown: Record<string, number>;
+  reasons: string[];
+  notes: string;
+  assessmentStatus: string;
+  assessmentToken: string | null;
+};
+
+type AgentDetailModalData = {
+  agent: 'recepcion' | 'pareo' | 'screening' | 'assessment';
 };
 
 function Vacantes() {
@@ -767,6 +796,10 @@ function Vacantes() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [statsByVacancy, setStatsByVacancy] = useState<Record<number, VacancyAppStats>>({});
   const [showJobWriter, setShowJobWriter] = useState(false);
+  const [showMarketResearch, setShowMarketResearch] = useState(false);
+  const [screeningModal, setScreeningModal] = useState<ScreeningModalData | null>(null);
+  const [agentModal, setAgentModal] = useState<AgentDetailModalData | null>(null);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
 
   // Cargar vacantes
   useEffect(() => {
@@ -790,16 +823,31 @@ function Vacantes() {
     return () => { cancelled = true; };
   }, []);
 
-  // Cargar stats per vacancy en paralelo (apps + scores + ranking)
+  // Cargar stats per vacancy en paralelo (apps + scores + ranking + assessment status)
   useEffect(() => {
     if (vacancies.length === 0) return;
     (async () => {
       const out: Record<number, VacancyAppStats> = {};
+
+      // Primero traer todos los assessment_tokens (un solo fetch, indexar por email)
+      let allTokens: Array<{ candidate_email: string; status: string; token: string; score: number | null }> = [];
+      try {
+        const tR = await fetch('/api/assessments?limit=500', { cache: 'no-store' });
+        const tJ = await tR.json();
+        allTokens = (tJ.data ?? []) as typeof allTokens;
+      } catch { /* ignore */ }
+      const tokensByEmail: Record<string, typeof allTokens[number]> = {};
+      for (const t of allTokens) {
+        const em = (t.candidate_email || '').toLowerCase();
+        // Mantener el más reciente (la API ya viene ordenada DESC por sent_at)
+        if (em && !tokensByEmail[em]) tokensByEmail[em] = t;
+      }
+
       await Promise.all(vacancies.map(async (v) => {
         try {
           const r = await fetch(`/api/applications?job_id=${v.id}&limit=300`, { cache: 'no-store' });
           const j = await r.json();
-          const apps = (j.applications ?? j.data ?? []) as Array<{ id: number; full_name?: string; email?: string; status?: string; score?: number | null; why_ts?: string | null }>;
+          const apps = (j.applications ?? j.data ?? []) as Array<{ id: number; full_name?: string; email?: string; status?: string; score?: number | null; why_ts?: string | null; prefilter_data?: Record<string, unknown> | null }>;
           const stats: VacancyAppStats = {
             total: apps.length,
             new: 0, reviewing: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
@@ -817,7 +865,21 @@ function Vacantes() {
             if (light === 'green') stats.byScore.green += 1;
             else if (light === 'amber') stats.byScore.amber += 1;
             else if (light === 'red') stats.byScore.red += 1;
-            return { id: a.id, name: a.full_name ?? '', email: a.email ?? '', score, matchPct, light, status: a.status ?? 'new' };
+            const token = tokensByEmail[(a.email || '').toLowerCase()];
+            return {
+              id: a.id,
+              name: a.full_name ?? '',
+              email: a.email ?? '',
+              score,
+              matchPct,
+              light,
+              status: a.status ?? 'new',
+              why_ts: a.why_ts ?? null,
+              prefilter_data: a.prefilter_data ?? null,
+              assessmentStatus: (token?.status as VacancyAppStats['topRanking'][number]['assessmentStatus']) ?? 'none',
+              assessmentToken: token?.token ?? null,
+              assessmentScore: token?.score ?? null,
+            };
           });
           stats.topRanking = enriched
             .filter((c) => c.status !== 'rejected' && c.score !== null)
@@ -881,6 +943,9 @@ function Vacantes() {
             </button>
             <button className="pill-btn text-xs bg-[#0F172A] text-white hover:bg-black" style={{ padding: '9px 14px' }} onClick={() => setShowJobWriter(true)}>
               <Sparkles className="w-3.5 h-3.5" /> Agente Job Writer
+            </button>
+            <button className="pill-btn text-xs bg-[#1F4FBF] text-white hover:bg-[#163E96]" style={{ padding: '9px 14px' }} onClick={() => setShowMarketResearch(true)}>
+              <Sparkles className="w-3.5 h-3.5" /> Agente Market Research
             </button>
             <button className="pill-btn pill-btn-primary text-xs" style={{ padding: '9px 14px' }}>
               <Plus className="w-3.5 h-3.5" /> Nueva requisición
@@ -977,12 +1042,12 @@ function Vacantes() {
                   {/* Pipeline horizontal */}
                   <PipelineSummary stats={stats} />
 
-                  {/* Agentes activos */}
+                  {/* Agentes activos — clickables para ver detalle y modificar */}
                   <div className="grid grid-cols-4 gap-3">
-                    <AgenteBox icon="📥" title="Recepción" desc="Recibe aplicación · valida email" status="active" />
-                    <AgenteBox icon="🔍" title="Pareo HDV" desc="Anthropic CV parser · extrae skills" status="active" />
-                    <AgenteBox icon="✅" title="Screening" desc="Preguntas básicas + match con perfil" status={stats && stats.total > 0 ? 'active' : 'idle'} />
-                    <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba Elevare" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} />
+                    <AgenteBox icon="📥" title="Recepción" desc="Recibe aplicación · valida email" status="active" onClick={() => setAgentModal({ agent: 'recepcion' })} />
+                    <AgenteBox icon="🔍" title="Pareo HDV" desc="Anthropic CV parser · extrae skills" status="active" onClick={() => setAgentModal({ agent: 'pareo' })} />
+                    <AgenteBox icon="✅" title="Screening" desc="16 Mandamientos · score 0-100" status={stats && stats.total > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'screening' })} />
+                    <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba Elevare" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'assessment' })} />
                   </div>
 
                   {/* Ranking post-screening */}
@@ -996,18 +1061,128 @@ function Vacantes() {
                       <div className="space-y-1.5">
                         {stats.topRanking.map((c, idx) => {
                           const dot = c.light === 'green' ? '#10B981' : c.light === 'amber' ? '#F59E0B' : c.light === 'red' ? '#EF4444' : '#9CA3AF';
+                          const hasAssessment = c.assessmentStatus !== 'none';
+                          const assessmentDone = c.assessmentStatus === 'completed';
+
+                          // Botón principal asessment (contextual)
+                          let assessmentButton: React.ReactNode = null;
+                          if (assessmentDone) {
+                            // Bajar PDF de resultados
+                            assessmentButton = (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (c.assessmentToken) {
+                                    window.open(`/api/assessments/${c.assessmentToken}/pdf`, '_blank');
+                                  }
+                                }}
+                                className="text-xs px-2.5 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                title="Bajar PDF con resultados de la prueba"
+                              >
+                                ↓ PDF
+                              </button>
+                            );
+                          } else if (hasAssessment) {
+                            // Ya enviada, en progreso o expirada — mostrar status + reenviar
+                            const label = c.assessmentStatus === 'in_progress' ? 'En curso' : c.assessmentStatus === 'expired' ? 'Expirada' : 'Enviada';
+                            assessmentButton = (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Reenviar invitación a ${c.name}?`)) return;
+                                  setActionBusy(`resend-${c.id}`);
+                                  try {
+                                    await fetch('/api/assessments', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        candidate_name: c.name,
+                                        candidate_email: c.email,
+                                        vacancy_id: v.id,
+                                        vacancy_title: v.title_es ?? v.title,
+                                        send_email: true,
+                                        source: 'resend_from_vacantes_tab',
+                                      }),
+                                    });
+                                    alert('Invitación reenviada');
+                                  } finally { setActionBusy(null); }
+                                }}
+                                className="text-xs px-2.5 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+                                title={`Estado: ${c.assessmentStatus} — click para reenviar`}
+                              >
+                                {label} · ↻
+                              </button>
+                            );
+                          } else {
+                            // Sin token aún — Enviar prueba
+                            assessmentButton = (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Enviar prueba Elevare a ${c.name} (${c.email})?`)) return;
+                                  setActionBusy(`send-${c.id}`);
+                                  try {
+                                    const r = await fetch('/api/assessments', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        candidate_name: c.name,
+                                        candidate_email: c.email,
+                                        vacancy_id: v.id,
+                                        vacancy_title: v.title_es ?? v.title,
+                                        send_email: true,
+                                        source: 'send_from_vacantes_tab',
+                                      }),
+                                    });
+                                    const j = await r.json();
+                                    if (j.email?.sent) {
+                                      alert(`✓ Prueba enviada a ${c.email}`);
+                                    } else if (j.link) {
+                                      navigator.clipboard.writeText(j.link);
+                                      alert(`Token creado. Link copiado:\n${j.link}`);
+                                    }
+                                    window.location.reload();
+                                  } finally { setActionBusy(null); }
+                                }}
+                                disabled={actionBusy === `send-${c.id}`}
+                                className="text-xs px-2.5 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                                title="Generar token y enviar invitación por email"
+                              >
+                                {actionBusy === `send-${c.id}` ? '…' : '✉ Enviar prueba'}
+                              </button>
+                            );
+                          }
+
                           return (
-                            <div key={c.id} className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                            <div key={c.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2">
                               <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}</span>
                               <span style={{ width: 9, height: 9, borderRadius: '50%', background: dot, flexShrink: 0 }} />
                               <div className="text-sm font-medium flex-1 min-w-0 truncate">{c.name}</div>
                               <Pill color={c.status === 'hired' ? 'green' : c.status === 'interview' ? 'black' : 'gray'}>{c.status}</Pill>
-                              <div className="text-sm font-bold text-right" style={{ minWidth: 50 }}>
+                              <div className="text-sm font-bold text-right" style={{ minWidth: 48 }}>
                                 {c.matchPct !== null ? `${c.matchPct}%` : '—'}
                               </div>
-                              <a href="/assessment/ht/preview" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-                                Ver prueba ↗
-                              </a>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setScreeningModal({
+                                    candidate: { id: c.id, name: c.name, email: c.email, status: c.status },
+                                    vacancyId: v.id,
+                                    score: c.score,
+                                    category: ((c.prefilter_data as Record<string, unknown> | null)?.category as string) ?? '—',
+                                    breakdown: ((c.prefilter_data as Record<string, unknown> | null)?.breakdown as Record<string, number>) ?? {},
+                                    reasons: ((c.prefilter_data as Record<string, unknown> | null)?.reasons as string[]) ?? [],
+                                    notes: c.why_ts ?? '',
+                                    assessmentStatus: c.assessmentStatus,
+                                    assessmentToken: c.assessmentToken,
+                                  });
+                                }}
+                                className="text-xs px-2.5 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+                                title="Ver detalle del screening (16 Mandamientos)"
+                              >
+                                🔍 Screening
+                              </button>
+                              {assessmentButton}
                             </div>
                           );
                         })}
@@ -1053,7 +1228,186 @@ function Vacantes() {
       </div>
 
       {showJobWriter && <JobWriterModal onClose={() => setShowJobWriter(false)} />}
+      {showMarketResearch && <MarketResearchModal vacancies={vacancies} onClose={() => setShowMarketResearch(false)} />}
+      {screeningModal && <ScreeningDetailModal data={screeningModal} onClose={() => setScreeningModal(null)} />}
+      {agentModal && <AgentDetailModal agent={agentModal.agent} onClose={() => setAgentModal(null)} />}
     </>
+  );
+}
+
+function ScreeningDetailModal({ data, onClose }: { data: ScreeningModalData; onClose: () => void }) {
+  const breakdownEntries = Object.entries(data.breakdown);
+  const totalPts = breakdownEntries.reduce((s, [, v]) => s + v, 0);
+  const KEYWORD_LABELS: Record<string, string> = {
+    Ing: 'Ingeniería (+15)', Eng: 'Inglés bilingüe (+8)', Mat: 'Analytics/data (+4)',
+    Crea: 'Creatividad (+3)', Beca: 'Beca/honors (+5)', Gest: 'Liderazgo (+3)',
+    Com: 'Comunicación (+3)', Tech: 'Tools (CargoWise, CRM…) (+4)', Multi: 'Internacional (+5)',
+    Comp: 'Aduanas/compras (+3)', Vend: 'Comercial (+4)', Sales: 'Sales role (+10)',
+    Pricing: 'Pricing role (+10)', Documentation: 'Doc/customs role (+10)', Log: 'Logística (+5)',
+  };
+  const catColor = data.category === 'TOP' ? 'text-emerald-700 bg-emerald-50' : data.category === 'MEDIO' ? 'text-amber-700 bg-amber-50' : data.category === 'BAJO' ? 'text-red-700 bg-red-50' : 'text-gray-700 bg-gray-50';
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+          <div>
+            <div className="text-lg font-bold">Screening · {data.candidate.name}</div>
+            <div className="text-xs text-gray-500">{data.candidate.email} · status {data.candidate.status}</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          {/* Veredicto */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Score 16M</div>
+              <div className="text-2xl font-bold">{data.score ?? '—'}</div>
+            </div>
+            <div className={`rounded-lg p-3 ${catColor}`}>
+              <div className="text-[10px] uppercase tracking-wider opacity-70 font-semibold">Categoría</div>
+              <div className="text-2xl font-bold">{data.category}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Prueba Elevare</div>
+              <div className="text-base font-semibold mt-1">
+                {data.assessmentStatus === 'completed' ? '✓ Completada' : data.assessmentStatus === 'in_progress' ? 'En curso' : data.assessmentStatus === 'sent' ? 'Enviada' : 'No enviada'}
+              </div>
+            </div>
+          </div>
+
+          {/* Breakdown 16 Mandamientos */}
+          <div>
+            <div className="text-xs uppercase font-semibold tracking-wider text-gray-500 mb-2">Detalle 16 Mandamientos · {totalPts} pts</div>
+            {breakdownEntries.length === 0 ? (
+              <div className="text-sm text-gray-400 italic">Sin breakdown disponible (prefilter no calculado)</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {breakdownEntries.sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                  <div key={k} className="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5">
+                    <div className="text-xs">{KEYWORD_LABELS[k] ?? k}</div>
+                    <div className="text-sm font-bold text-emerald-700">+{v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Filtros duros */}
+          {data.reasons.length > 0 && (
+            <div>
+              <div className="text-xs uppercase font-semibold tracking-wider text-red-700 mb-2">⚠ Filtros duros activados</div>
+              <ul className="text-xs space-y-1 ml-4 list-disc text-red-700">
+                {data.reasons.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Notas / fuente CV */}
+          {data.notes && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-gray-500 font-semibold uppercase tracking-wider">Notas y CV detectado</summary>
+              <pre className="mt-2 bg-gray-50 rounded p-3 whitespace-pre-wrap text-[11px] max-h-60 overflow-y-auto">{data.notes}</pre>
+            </details>
+          )}
+
+          <div className="border-t pt-3 text-[11px] text-gray-500">
+            El screening lo ejecuta el agente <strong>Prefilter 16 Mandamientos</strong> (src/lib/agent/prefilter.ts). El humano siempre decide rechazos finales.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentDetailModal({ agent, onClose }: { agent: 'recepcion' | 'pareo' | 'screening' | 'assessment'; onClose: () => void }) {
+  const AGENT_INFO: Record<string, { icon: string; title: string; description: string; trigger: string; logic: string; modify_path: string; outputs: string[] }> = {
+    recepcion: {
+      icon: '📥',
+      title: 'Agente de Recepción',
+      description: 'Primer contacto. Toma cualquier aplicación entrante y la normaliza al ATS sin importar la fuente (formulario web, CSV LinkedIn, email, referido).',
+      trigger: 'POST /api/applications · POST /api/candidates/import',
+      logic: 'Valida email (regex), upserta talent_pool por email, guarda why_ts/notes, dispara prefilter inmediato.',
+      modify_path: 'src/app/api/applications/route.ts · src/app/api/candidates/import/route.ts',
+      outputs: ['Candidato en applications + talent_pool', 'Trigger automático del Pareo HDV y Screening'],
+    },
+    pareo: {
+      icon: '🔍',
+      title: 'Agente de Pareo HDV',
+      description: 'Lee el CV y extrae estructura: experiencia, educación, herramientas, idiomas, ubicación, expectativa salarial. Usa Anthropic Sonnet 4.5.',
+      trigger: 'Cuando hay cv_data en la aplicación · POST /api/cv-parse',
+      logic: 'Anthropic SDK + prompt con schema JSON. Extrae years_experience, current_role, skills, education_level, languages, salary_expected.',
+      modify_path: 'src/lib/cv-parser.ts · src/app/api/cv-parse/route.ts',
+      outputs: ['cv_parsed_data (JSONB) en talent_pool', 'Skills inferidas para el Screening'],
+    },
+    screening: {
+      icon: '✅',
+      title: 'Agente de Screening (16 Mandamientos)',
+      description: 'Calcula score 0-100 contra 16 criterios CEO (Ing, Eng, Tech, Multi, Sales, Log…), aplica filtros duros (salario tope, idioma) y categoriza TOP/MEDIO/BAJO/FILTRO_DURO. Política firme: NUNCA auto-rechaza.',
+      trigger: 'Automático en cada INSERT a applications · src/lib/agent/prefilter.ts',
+      logic: '13 keywords pesadas + 3 role bonuses (sales/pricing/documentation) + 2 filtros duros (salary_cap, requires_english). Output: score, breakdown, reasons, decision.',
+      modify_path: 'src/lib/agent/prefilter.ts (KEYWORDS, ROLE_BONUS, VACANCY_CONFIG)',
+      outputs: ['applications.score (INT)', 'applications.prefilter_data (JSONB con breakdown y reasons)', 'status inicial: reviewing/new (nunca rejected)'],
+    },
+    assessment: {
+      icon: '📧',
+      title: 'Agente de Assessment',
+      description: 'Genera token único, envía invitación por email vía Resend, trackea status (sent → in_progress → completed) con anti-trampa (cámara + tab tracking).',
+      trigger: 'POST /api/assessments con send_email:true · disponible desde Vacantes y Pruebas',
+      logic: 'Crea fila en assessment_tokens (Neon) o ht_candidates (Supabase). Email HTML bilingüe. Link válido 30d. Auto-save cada respuesta.',
+      modify_path: 'src/app/api/assessments/route.ts · src/app/api/headhunting/candidates/invite/route.ts · src/app/assessment/ht/[token]/page.tsx',
+      outputs: ['assessment_tokens row + email enviado', 'ht_responses con cada respuesta del candidato', 'Reporte final con benchmark TS DNA'],
+    },
+  };
+  const info = AGENT_INFO[agent];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">{info.icon}</div>
+            <div>
+              <div className="text-lg font-bold">{info.title}</div>
+              <div className="text-xs text-gray-500">Agente activo · módulo del ATS</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div className="px-6 py-5 space-y-4 text-sm">
+          <p className="text-gray-700 leading-relaxed">{info.description}</p>
+
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Trigger</span>
+              <div className="font-mono text-xs">{info.trigger}</div>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Lógica</span>
+              <div className="text-xs">{info.logic}</div>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Outputs</span>
+              <ul className="text-xs ml-4 list-disc">
+                {info.outputs.map((o, i) => <li key={i}>{o}</li>)}
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-l-4 border-blue-400 bg-blue-50 px-3 py-2 rounded-r">
+            <div className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold mb-1">Para modificar este agente</div>
+            <div className="text-xs font-mono text-blue-900">{info.modify_path}</div>
+            <div className="text-[11px] text-gray-600 mt-1">
+              Edita el archivo, redeploy a Vercel y el agente toma los cambios en frío. Para staging seguro, prueba primero en /assessment/ht/preview.
+            </div>
+          </div>
+
+          <div className="border-t pt-3 text-[11px] text-gray-500">
+            La modificación profunda (re-prompts, nuevos campos, cambios en scoring) la haremos juntas en próximas sesiones — esta vista es para auditoría rápida.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1087,9 +1441,13 @@ function PipelineSummary({ stats }: { stats?: VacancyAppStats }) {
   );
 }
 
-function AgenteBox({ icon, title, desc, status }: { icon: string; title: string; desc: string; status: 'active' | 'idle' }) {
+function AgenteBox({ icon, title, desc, status, onClick }: { icon: string; title: string; desc: string; status: 'active' | 'idle'; onClick?: () => void }) {
+  const Wrapper = onClick ? 'button' : 'div';
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3">
+    <Wrapper
+      onClick={onClick}
+      className={`text-left bg-white rounded-lg border border-gray-200 p-3 ${onClick ? 'hover:border-black hover:shadow-sm transition cursor-pointer' : ''}`}
+    >
       <div className="flex items-center justify-between mb-1">
         <span className="text-base">{icon}</span>
         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -1098,6 +1456,239 @@ function AgenteBox({ icon, title, desc, status }: { icon: string; title: string;
       </div>
       <div className="text-sm font-semibold">{title}</div>
       <div className="text-xs text-gray-500 leading-tight mt-0.5">{desc}</div>
+      {onClick && <div className="text-[10px] text-blue-600 mt-1.5">Ver detalle ↗</div>}
+    </Wrapper>
+  );
+}
+
+function MarketResearchModal({ vacancies, onClose }: { vacancies: LiveVacancy[]; onClose: () => void }) {
+  const [vacancyId, setVacancyId] = useState<number | ''>('');
+  const [role, setRole] = useState('');
+  const [locale, setLocale] = useState<'colombia' | 'latam' | 'us_remote' | 'global'>('colombia');
+  const [extras, setExtras] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [report, setReport] = useState<Record<string, unknown> | null>(null);
+
+  // Auto-rellenar role cuando se elige vacancy
+  useEffect(() => {
+    if (vacancyId !== '') {
+      const v = vacancies.find((x) => x.id === vacancyId);
+      if (v) setRole(v.title_es ?? v.title ?? '');
+    }
+  }, [vacancyId, vacancies]);
+
+  async function generate() {
+    setGenerating(true);
+    setReport(null);
+    try {
+      const r = await fetch('/api/agents/market-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacancy_id: vacancyId || null, role, locale, extras }),
+      });
+      const j = await r.json();
+      setReport(j.report);
+    } catch (e) {
+      setReport({ error: e instanceof Error ? e.message : 'unknown' });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const r = report as Record<string, unknown> | null;
+  const sb = r?.salary_benchmark as Record<string, unknown> | undefined;
+  const ts = r?.talent_supply as Record<string, unknown> | undefined;
+  const bi = r?.bilingualism as Record<string, unknown> | undefined;
+  const cm = r?.competitiveness as Record<string, unknown> | undefined;
+  const eb = r?.employer_brand_impact as Record<string, unknown> | undefined;
+  const actions = (r?.recommended_actions as Array<Record<string, unknown>>) ?? [];
+  const sources = (r?.sources as Array<Record<string, unknown>>) ?? [];
+  const alerts = (r?.alerts as string[]) ?? [];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+          <div>
+            <div className="text-lg font-bold">Agente Market Research</div>
+            <div className="text-xs text-gray-500">Estudio de mercado · benchmark salarial · employer brand</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+
+        <div className="px-6 py-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Vacante (opcional, autorellena rol)</label>
+              <select value={vacancyId === '' ? '' : String(vacancyId)} onChange={(e) => setVacancyId(e.target.value === '' ? '' : parseInt(e.target.value, 10))} className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="">— sin vacante específica —</option>
+                {vacancies.map((v) => (<option key={v.id} value={v.id}>{v.title_es ?? v.title}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 block mb-1">Geografía</label>
+              <select value={locale} onChange={(e) => setLocale(e.target.value as typeof locale)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="colombia">Colombia (BAQ + Bogotá + Medellín)</option>
+                <option value="latam">Latinoamérica</option>
+                <option value="us_remote">USA remote (talent latam)</option>
+                <option value="global">Global</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 block mb-1">Rol específico</label>
+            <input value={role} onChange={(e) => setRole(e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" placeholder="ej. Inside Sales Support Specialist" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 block mb-1">Contexto adicional (opcional)</label>
+            <textarea value={extras} onChange={(e) => setExtras(e.target.value)} rows={2} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" placeholder="ej. requirimos inglés C1, viajes, equipo internacional…" />
+          </div>
+          <button onClick={generate} disabled={!role || generating} className="pill-btn pill-btn-primary text-sm w-full disabled:opacity-50" style={{ backgroundColor: '#1F4FBF' }}>
+            {generating ? 'Investigando mercado…' : '🌍 Generar estudio de mercado'}
+          </button>
+
+          {/* RESULTADO */}
+          {r && (
+            <div className="space-y-4 pt-3">
+              {(r.executive_summary as string | undefined) && (
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 mb-1">Resumen ejecutivo</div>
+                  <div className="text-sm text-blue-900">{r.executive_summary as string}</div>
+                </div>
+              )}
+
+              {alerts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 space-y-1.5">
+                  <div className="text-xs uppercase font-semibold text-amber-800 tracking-wider">⚠ Alertas</div>
+                  {alerts.map((a, i) => (
+                    <div key={i} className="text-xs text-amber-900">• {a}</div>
+                  ))}
+                </div>
+              )}
+
+              {sb && (
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">Benchmark salarial · {sb.currency as string}</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="bg-gray-50 rounded px-2 py-1.5">
+                      <div className="text-[10px] text-gray-500">Mín</div>
+                      <div className="text-sm font-bold">{(sb.market_low as number | undefined)?.toLocaleString() ?? '—'}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded px-2 py-1.5">
+                      <div className="text-[10px] text-gray-500">Mediana</div>
+                      <div className="text-sm font-bold">{(sb.market_median as number | undefined)?.toLocaleString() ?? '—'}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded px-2 py-1.5">
+                      <div className="text-[10px] text-gray-500">Máx</div>
+                      <div className="text-sm font-bold">{(sb.market_high as number | undefined)?.toLocaleString() ?? '—'}</div>
+                    </div>
+                    <div className={`rounded px-2 py-1.5 ${sb.ts_position === 'below' ? 'bg-red-50' : sb.ts_position === 'above' ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                      <div className="text-[10px] text-gray-500">TS actual</div>
+                      <div className="text-sm font-bold">{(sb.ts_current as number | undefined)?.toLocaleString() ?? '—'}</div>
+                      <div className="text-[10px]">{sb.ts_position as string} · {sb.delta_vs_median_pct as number}%</div>
+                    </div>
+                  </div>
+                  {sb.notes ? <div className="text-[11px] text-gray-500 mt-2">{sb.notes as string}</div> : null}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {ts && (
+                  <div className="border border-gray-200 rounded-lg p-3">
+                    <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">Oferta de talento</div>
+                    <div className="text-sm">Pool total: <strong>{ts.total_pool_estimated as string}</strong></div>
+                    <div className="text-sm">Calificados: <strong>{ts.qualified_for_role_estimated as string}</strong></div>
+                    <div className="text-sm mt-1">Competencia: <span className={`font-semibold ${ts.competition_for_talent === 'high' ? 'text-red-700' : ts.competition_for_talent === 'medium' ? 'text-amber-700' : 'text-emerald-700'}`}>{ts.competition_for_talent as string}</span></div>
+                    {Array.isArray(ts.biggest_local_employers_competing) && (
+                      <div className="text-[11px] text-gray-500 mt-1">Compiten: {(ts.biggest_local_employers_competing as string[]).join(', ')}</div>
+                    )}
+                  </div>
+                )}
+                {bi && (
+                  <div className="border border-gray-200 rounded-lg p-3">
+                    <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">Bilingüismo</div>
+                    <div className="text-sm">Nivel requerido: <strong>{bi.english_required_level as string}</strong></div>
+                    <div className="text-sm">% bilingüe local: <strong>{bi.pct_bilingual_locally as number}%</strong></div>
+                    <div className="text-sm">% al nivel: <strong>{bi.pct_at_required_level as number}%</strong></div>
+                    <div className="text-sm mt-1">Escasez: <span className={`font-semibold ${bi.scarcity_factor === 'very_scarce' ? 'text-red-700' : bi.scarcity_factor === 'scarce' ? 'text-amber-700' : 'text-emerald-700'}`}>{bi.scarcity_factor as string}</span></div>
+                    {bi.notes ? <div className="text-[11px] text-gray-500 mt-1">{bi.notes as string}</div> : null}
+                  </div>
+                )}
+              </div>
+
+              {cm && (
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider">Competitividad TS</div>
+                    <div className="text-2xl font-bold">{cm.overall_score_0_100 as number}<span className="text-xs text-gray-400">/100</span></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {(['vs_lean_solutions', 'vs_multinacionales', 'vs_freelance_us_market'] as const).map((k) => {
+                      const x = cm[k] as Record<string, unknown> | undefined;
+                      if (!x) return null;
+                      return (
+                        <div key={k} className="bg-gray-50 rounded px-2 py-1.5">
+                          <div className="text-[10px] text-gray-500 uppercase">{k.replace('vs_', '').replace('_', ' ')}</div>
+                          <div>Salario: {x.salary as string}</div>
+                          {x.benefits ? <div>Beneficios: {x.benefits as string}</div> : null}
+                          {x.brand ? <div>Brand: {x.brand as string}</div> : null}
+                          {x.feasibility ? <div>Feasible: {x.feasibility as string}</div> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {eb && (
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">Employer brand · impacto</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-emerald-50 rounded px-2 py-1.5"><div className="text-[10px] uppercase text-emerald-700 font-semibold">Fortaleza</div>{eb.current_strength as string}</div>
+                    <div className="bg-red-50 rounded px-2 py-1.5"><div className="text-[10px] uppercase text-red-700 font-semibold">Debilidad</div>{eb.current_weakness as string}</div>
+                    <div className="bg-blue-50 rounded px-2 py-1.5 col-span-2"><div className="text-[10px] uppercase text-blue-700 font-semibold">Story para top talent</div>{eb.story_to_tell_top_talent as string}</div>
+                    <div className="bg-purple-50 rounded px-2 py-1.5 col-span-2"><div className="text-[10px] uppercase text-purple-700 font-semibold">Moat competitivo</div>{eb.competitive_moat as string}</div>
+                  </div>
+                </div>
+              )}
+
+              {actions.length > 0 && (
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">Acciones recomendadas</div>
+                  <div className="space-y-1.5">
+                    {actions.map((a, i) => {
+                      const p = a.priority as string;
+                      const color = p === 'high' ? 'border-red-300 bg-red-50' : p === 'medium' ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50';
+                      return (
+                        <div key={i} className={`border ${color} rounded px-2 py-1.5 text-xs`}>
+                          <div className="font-semibold uppercase text-[10px]">{p}</div>
+                          <div>{a.action as string}</div>
+                          <div className="text-gray-600 italic">→ {a.expected_impact as string}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {sources.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-gray-500 font-semibold uppercase tracking-wider">Fuentes citadas ({sources.length})</summary>
+                  <ul className="mt-2 space-y-1 ml-4 list-disc">
+                    {sources.map((s, i) => (
+                      <li key={i}>
+                        <strong>{s.name as string}</strong>
+                        {s.url_hint ? <span className="text-gray-500"> · {s.url_hint as string}</span> : null}
+                        {s.needs_verification ? <span className="ml-1 text-amber-700">⚠ verificar</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
