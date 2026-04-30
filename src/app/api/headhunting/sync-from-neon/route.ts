@@ -18,14 +18,16 @@ import { neon } from "@neondatabase/serverless";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireAdmin } from "@/lib/admin-auth";
 
-// IDs de Supabase confirmados en el documento de contexto
+// IDs de Supabase verificados via /api/headhunting/vacancies el 2026-04-30
+// Si Supabase cambia, re-correr ese endpoint para revalidar.
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 const TS_VACANCIES: Record<string, string> = {
   "inside-sales-support": "c25ce70b-9244-4393-aea6-75372a99a6ef",
-  "senior-pricing-analyst": "d354c55a-eb1c-4aee-bd02-b0a20162e1f1",
-  // Pricing Junior y Customer Documentation Specialist no estaban en el
-  // documento de contexto. Si existen en Supabase, agregar sus UUIDs aquí.
-  // Si no existen, el bridge los omite y los devuelve en `unmapped`.
+  "senior-pricing-analyst": "368006e7-98da-46a2-b871-6b741290821b",
+  "pricing-junior": "d354c55a-eb1c-4aee-bd02-b0a20162e1f1",
+  "customer-documentation-specialist": "6e4838dd-8aea-4426-bd26-ea588f0f493a",
+  "lead-accounting-finance": "8c246bb3-8244-4755-bf92-58c0c627821c",
+  "talent-acquisition-lead": "70c39cab-adaf-49a0-b137-29d0ff9b56b0",
 };
 
 type NeonCandidate = {
@@ -56,6 +58,12 @@ function detectVacancySlug(c: NeonCandidate): string | null {
   }
   if (haystack.includes("customer doc") || haystack.includes("documentation") || haystack.includes("customer-documentation")) {
     return "customer-documentation-specialist";
+  }
+  if (haystack.includes("lead accounting") || haystack.includes("finance officer") || haystack.includes("accounting finance")) {
+    return "lead-accounting-finance";
+  }
+  if (haystack.includes("talent acquisition") || haystack.includes("development lead")) {
+    return "talent-acquisition-lead";
   }
   return null;
 }

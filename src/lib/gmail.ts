@@ -15,6 +15,7 @@ import { neon } from "@neondatabase/serverless";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+const GMAIL_DRAFTS_URL = "https://gmail.googleapis.com/gmail/v1/users/me/drafts";
 
 export type GoogleTokens = {
   email: string;
@@ -159,6 +160,51 @@ function buildRfc822(opts: {
   lines.push("");
   lines.push(Buffer.from(opts.html).toString("base64"));
   return lines.join("\r\n");
+}
+
+/**
+ * Crea un draft en Gmail (no envía). Útil para que HR revise y envíe manual.
+ * Devuelve el draft_id; el usuario lo verá en su carpeta Drafts.
+ */
+export async function createDraftViaGmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  bcc?: string;
+  fromName?: string;
+}): Promise<{ ok: true; draft_id: string; gmail_email: string } | { ok: false; error: string }> {
+  const valid = await getValidAccessToken();
+  if (!valid) {
+    return { ok: false, error: "Gmail no conectado. Pide a Kelly que vaya a Settings → Conectar Gmail." };
+  }
+
+  const fromDisplay = opts.fromName ?? "Trading Solutions Recruiting";
+  const fromHeader = `${fromDisplay} <${valid.email}>`;
+  const rfc822 = buildRfc822({
+    from: fromHeader,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    replyTo: opts.replyTo,
+    bcc: opts.bcc,
+  });
+  const raw = Buffer.from(rfc822).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  const r = await fetch(GMAIL_DRAFTS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${valid.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message: { raw } }),
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    return { ok: false, error: `Gmail draft create failed: ${r.status} ${txt}` };
+  }
+  const j = await r.json();
+  return { ok: true, draft_id: j.id as string, gmail_email: valid.email };
 }
 
 export async function sendViaGmail(opts: {
