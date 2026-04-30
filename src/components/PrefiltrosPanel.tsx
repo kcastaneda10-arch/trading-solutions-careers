@@ -20,8 +20,9 @@ type Vacancy = { id: string; title: string };
 
 const FILTERS = [
   { id: "all", label: "Todos" },
-  { id: "no-invitado", label: "Sin invitar" },
-  { id: "invitado-pendiente", label: "Invitado · esperando respuesta" },
+  { id: "no-invitado", label: "Sin contactar" },
+  { id: "ya-contactado", label: "Ya en proceso (Elevare)" },
+  { id: "invitado-pendiente", label: "Prefiltro enviado · esperando" },
   { id: "pass", label: "✅ Pass" },
   { id: "review", label: "⚠️ Review" },
   { id: "reject", label: "❌ Reject" },
@@ -30,6 +31,25 @@ const FILTERS = [
 type FilterId = typeof FILTERS[number]["id"];
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+
+// Email interno (no son candidatos reales)
+function isInternal(email: string): boolean {
+  return /@tradingsolutions\.com$/i.test(email || "");
+}
+
+// Candidato que NO ha tenido contacto: status pending + no prefiltro previo + no interno
+function isUntouched(c: Cand): boolean {
+  if (isInternal(c.email)) return false;
+  if (c.prefilter_invited_at) return false;
+  // status pending = nunca recibió Elevare invite
+  return c.status === "pending";
+}
+
+// Candidato YA en proceso (Elevare invitado, in_progress, completed)
+function isInElevareProcess(c: Cand): boolean {
+  if (isInternal(c.email)) return false;
+  return ["invited", "in_progress", "completed"].includes(c.status);
+}
 
 export default function PrefiltrosPanel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
@@ -63,31 +83,39 @@ export default function PrefiltrosPanel() {
     }
   }
 
+  // Excluir internos siempre (Yohanna y otros @tradingsolutions.com)
+  const realCandidates = useMemo(
+    () => candidates.filter((c) => !isInternal(c.email)),
+    [candidates]
+  );
+
   const filtered = useMemo(() => {
-    return candidates.filter((c) => {
+    return realCandidates.filter((c) => {
       if (vacFilter !== "all" && c.vacancy_id !== vacFilter) return false;
       switch (filter) {
         case "all": return true;
-        case "no-invitado": return !c.prefilter_invited_at;
+        case "no-invitado": return isUntouched(c);
+        case "ya-contactado": return isInElevareProcess(c);
         case "invitado-pendiente": return !!c.prefilter_invited_at && !c.prefilter_completed_at;
         case "pass": return c.prefilter_decision === "pass";
         case "review": return c.prefilter_decision === "review";
         case "reject": return c.prefilter_decision === "reject";
       }
     });
-  }, [candidates, filter, vacFilter]);
+  }, [realCandidates, filter, vacFilter]);
 
   const counts = useMemo(() => {
-    const base = vacFilter === "all" ? candidates : candidates.filter(c => c.vacancy_id === vacFilter);
+    const base = vacFilter === "all" ? realCandidates : realCandidates.filter(c => c.vacancy_id === vacFilter);
     return {
       all: base.length,
-      "no-invitado": base.filter(c => !c.prefilter_invited_at).length,
+      "no-invitado": base.filter(isUntouched).length,
+      "ya-contactado": base.filter(isInElevareProcess).length,
       "invitado-pendiente": base.filter(c => c.prefilter_invited_at && !c.prefilter_completed_at).length,
       pass: base.filter(c => c.prefilter_decision === "pass").length,
       review: base.filter(c => c.prefilter_decision === "review").length,
       reject: base.filter(c => c.prefilter_decision === "reject").length,
     };
-  }, [candidates, vacFilter]);
+  }, [realCandidates, vacFilter]);
 
   async function sendOne(c: Cand) {
     if (busy.has(c.id)) return;
@@ -226,7 +254,12 @@ export default function PrefiltrosPanel() {
               {filtered.map((c) => {
                 const decision = c.prefilter_decision;
                 const decisionLabel = decision === "pass" ? "✅ Pass" : decision === "review" ? "⚠️ Review" : decision === "reject" ? "❌ Reject" : "—";
-                const status = !c.prefilter_invited_at ? "Sin invitar" : !c.prefilter_completed_at ? "Esperando" : decisionLabel;
+                const inElevare = isInElevareProcess(c);
+                const elevareLabel = c.status === "completed" ? "Elevare completado" : c.status === "in_progress" ? "Elevare en progreso" : "Elevare invitado";
+                const statusText = c.prefilter_completed_at ? decisionLabel
+                  : c.prefilter_invited_at ? "Esperando respuesta"
+                  : inElevare ? `🟡 ${elevareLabel}`
+                  : "Sin contactar";
                 return (
                   <tr key={c.id} className="hover:bg-gray-50">
                     {filter === "no-invitado" && (
@@ -249,14 +282,17 @@ export default function PrefiltrosPanel() {
                         decision === "pass" ? "text-green-700 font-semibold" :
                         decision === "review" ? "text-amber-700 font-semibold" :
                         decision === "reject" ? "text-red-700 font-semibold" :
+                        inElevare ? "text-amber-700 font-medium" :
                         c.prefilter_invited_at ? "text-blue-700" : "text-gray-500"
                       }>
-                        {status}
+                        {statusText}
                       </span>
                       {results[c.id] && <div className="text-xs text-gray-600 mt-0.5">{results[c.id]}</div>}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      {!c.prefilter_invited_at ? (
+                      {inElevare ? (
+                        <span className="text-xs text-gray-500 italic">Ya en proceso — no aplica prefiltro</span>
+                      ) : !c.prefilter_invited_at ? (
                         <button
                           onClick={() => sendOne(c)}
                           disabled={busy.has(c.id)}
