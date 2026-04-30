@@ -170,7 +170,7 @@ export default function AssessmentPage() {
           const mapped: AssessmentData = {
             token: 'preview',
             candidate_name: 'Preview · HR Admin',
-            vacancy_title: 'Factor X · Trading Solutions',
+            vacancy_title: 'Evaluación Trading Solutions',
             client_name: 'Trading Solutions',
             scenarios: TS_SCENARIOS.map((s, i) => ({
               id: `preview-${i}`,

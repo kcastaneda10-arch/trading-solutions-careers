@@ -12,6 +12,7 @@ import { neon } from "@neondatabase/serverless";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getResend, EMAIL_FROM, EMAIL_BCC } from "@/lib/resend";
+import { sendViaGmail, isGmailConnected } from "@/lib/gmail";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
     const sql = neon(process.env.DATABASE_URL!);
     const token = generateToken();
     const language = body.language ?? "es";
-    // Default: la prueba única Factor X · Trading Solutions (migrada de Elevare)
+    // Default: la prueba única Evaluación Trading Solutions (migrada de Elevare)
     const assessmentIds =
       body.assessment_ids && body.assessment_ids.length > 0
         ? body.assessment_ids.join(",")
@@ -209,11 +210,11 @@ export async function POST(req: NextRequest) {
     );
     const mailto = `mailto:${body.candidate_email}?subject=${subject}&body=${message}`;
 
-    // Envío automático vía Resend si se solicita
-    let emailStatus: { sent: boolean; id?: string; error?: string } = { sent: false };
+    // Envío automático del email si se solicita
+    let emailStatus: { sent: boolean; id?: string; error?: string; via?: 'gmail' | 'resend' } = { sent: false };
     if (body.send_email) {
       try {
-        // Pull config dinámica (reply_to, bcc, booking_url) de recruiter_config
+        // Pull config dinámica (reply_to, bcc) de recruiter_config
         let dynamicBcc = EMAIL_BCC;
         let dynamicReplyTo: string | null = null;
         try {
@@ -224,25 +225,45 @@ export async function POST(req: NextRequest) {
           }
         } catch { /* tabla no existe aún — usa env vars */ }
 
-        const resend = getResend();
         const { subject: emailSubject, html } = buildEmailHtml({
           candidate_name: body.candidate_name,
           link,
           vacancy_title: vacancyTitle,
           language,
         });
-        const result = await resend.emails.send({
-          from: EMAIL_FROM,
-          to: body.candidate_email,
-          bcc: dynamicBcc,
-          subject: emailSubject,
-          html,
-          ...(dynamicReplyTo ? { replyTo: dynamicReplyTo } : {}),
-        });
-        if (result.error) {
-          emailStatus = { sent: false, error: result.error.message ?? String(result.error) };
+
+        // ─── Preferir Gmail si está conectado ────────────────────────────
+        const gmailStatus = await isGmailConnected();
+        if (gmailStatus.connected) {
+          const result = await sendViaGmail({
+            to: body.candidate_email,
+            subject: emailSubject,
+            html,
+            replyTo: dynamicReplyTo ?? undefined,
+            bcc: dynamicBcc ?? undefined,
+            fromName: "Trading Solutions Recruiting",
+          });
+          if (result.ok) {
+            emailStatus = { sent: true, id: result.gmail_id, via: 'gmail' };
+          } else {
+            emailStatus = { sent: false, error: result.error, via: 'gmail' };
+          }
         } else {
-          emailStatus = { sent: true, id: result.data?.id };
+          // Fallback a Resend
+          const resend = getResend();
+          const result = await resend.emails.send({
+            from: EMAIL_FROM,
+            to: body.candidate_email,
+            bcc: dynamicBcc,
+            subject: emailSubject,
+            html,
+            ...(dynamicReplyTo ? { replyTo: dynamicReplyTo } : {}),
+          });
+          if (result.error) {
+            emailStatus = { sent: false, error: result.error.message ?? String(result.error), via: 'resend' };
+          } else {
+            emailStatus = { sent: true, id: result.data?.id, via: 'resend' };
+          }
         }
       } catch (e) {
         emailStatus = { sent: false, error: e instanceof Error ? e.message : String(e) };

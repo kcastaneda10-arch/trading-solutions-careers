@@ -4,7 +4,7 @@
  * Importa los resultados de las evaluaciones que YA hicieron los candidatos
  * en Elevare (file Resultados_Evaluaciones_TS_22Abr.xlsx).
  *
- * - 22 completed con scores Factor X completos (DISC, IQ, Big Five, BETESA, McClelland, cognitivo)
+ * - 22 completed con scores completos (DISC, IQ, Big Five, BETESA, McClelland, cognitivo)
  * - 3 expired (token expiró sin completar)
  * - 8 in_progress (token enviado, no terminado)
  *

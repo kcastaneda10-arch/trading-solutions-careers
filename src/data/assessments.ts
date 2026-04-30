@@ -3,7 +3,7 @@
  * TRADING SOLUTIONS · ASSESSMENT PSICOMÉTRICO
  * ================================================
  *
- * UNA sola prueba unificada — Factor X — migrada desde Elevare/WellnessOS.
+ * UNA sola prueba unificada — migrada desde Elevare/WellnessOS.
  *
  * 120 preguntas · ~75 min · 9 secciones · 28+ dimensiones
  *
@@ -61,12 +61,12 @@ export interface Question {
 export const factorXTS: AssessmentMeta = {
   id: "factor_x_ts",
   title: {
-    es: "Factor X · Trading Solutions",
-    en: "Factor X · Trading Solutions",
+    es: "Evaluación Trading Solutions",
+    en: "Trading Solutions Assessment",
   },
   summary: {
-    es: "Evaluación integral del candidato: razonamiento, personalidad, estilo conductual, motivación y competencias. Base del Fit Score.",
-    en: "Integral candidate assessment: reasoning, personality, behavioral style, motivation and competencies. Base of the Fit Score.",
+    es: "Una conversación estructurada sobre cómo piensas y decides en situaciones reales del trabajo. No hay respuestas correctas o incorrectas.",
+    en: "A structured conversation about how you think and decide in real work situations. There are no right or wrong answers.",
   },
   duration: 75,
   questions: 120,

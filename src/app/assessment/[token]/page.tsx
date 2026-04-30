@@ -231,15 +231,7 @@ export default function AssessmentLanding() {
                 <div className="flex gap-4 mt-3 text-xs text-gray-500">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {a.duration} min
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <FileText className="w-3 h-3" />
-                    {a.questions} {t("preguntas", "questions")}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Brain className="w-3 h-3" />
-                    {a.dimensions.length} {t("dimensiones", "dimensions")}
+                    {t("Aprox. 55 min · puedes pausar", "About 55 min · pausable")}
                   </span>
                 </div>
               </div>
@@ -330,16 +322,14 @@ function TestRunner({
           {meta.summary[lang]}
         </p>
         <div className="my-8 p-5 bg-gray-50 rounded-2xl text-left max-w-lg mx-auto">
-          <p className="text-xs tracking-[0.15em] text-gray-500 font-semibold uppercase mb-2">
-            {t("Esta prueba mide", "This test measures")}
+          <p className="text-xs tracking-[0.15em] text-gray-500 font-semibold uppercase mb-3">
+            {t("Antes de empezar", "Before you start")}
           </p>
-          <ul className="space-y-1.5">
-            {meta.dimensions.map((d) => (
-              <li key={d} className="flex items-start gap-2 text-sm">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                {d}
-              </li>
-            ))}
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />{t("Tendrás escenarios reales del trabajo con varias formas de actuar.", "You'll see real work scenarios with different possible approaches.")}</li>
+            <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />{t("Responde con honestidad — no hay respuestas correctas o incorrectas.", "Answer honestly — there are no right or wrong answers.")}</li>
+            <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />{t("Busca un espacio tranquilo, sin interrupciones.", "Find a quiet space without interruptions.")}</li>
+            <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />{t("Puedes pausar y retomar cuando quieras.", "You can pause and resume anytime.")}</li>
           </ul>
         </div>
         <button className="pill-btn pill-btn-primary">

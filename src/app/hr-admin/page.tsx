@@ -49,7 +49,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "pipeline", label: "Pipeline", icon: Kanban },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "entrevistas", label: "Entrevistas IA", icon: Video },
-  { id: "pruebas", label: "Pruebas Psicométricas", icon: Brain },
+  { id: "pruebas", label: "Evaluaciones", icon: Brain },
   { id: "agentes", label: "Agentes IA", icon: Bot },
   { id: "analytics", label: "Analytics", icon: LineChart },
   { id: "linkedin", label: "LinkedIn TS", icon: Linkedin },
@@ -412,16 +412,16 @@ function Dashboard() {
           { label: 'Talent Pool (CV Bank)', value: s.talentPool, kind: 'pool' as const },
           { label: 'Aplicaciones a vacante', value: s.applicationsAll, kind: 'apply' as const },
           { label: 'Parseado CV', value: Math.round(s.applicationsAll * 0.98), kind: 'parse' as const },
-          { label: 'Pruebas psicométricas enviadas', value: s.assessmentsSent, kind: 'sent' as const },
-          { label: 'Pruebas completadas', value: s.assessmentsCompleted, kind: 'done' as const },
+          { label: 'Invitaciones enviadas', value: s.assessmentsSent, kind: 'sent' as const },
+          { label: 'Candidatos evaluados', value: s.assessmentsCompleted, kind: 'done' as const },
           { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
           { label: 'Oferta', value: s.offers, kind: 'offer' as const },
           { label: 'Contratado', value: s.hires, kind: 'hire' as const },
         ]
       : [
           { label: 'Aplicaciones a esta vacante', value: s.applications, kind: 'apply' as const },
-          { label: 'Pruebas enviadas', value: s.assessmentsSent, kind: 'sent' as const },
-          { label: 'Pruebas completadas', value: s.assessmentsCompleted, kind: 'done' as const },
+          { label: 'Invitaciones enviadas', value: s.assessmentsSent, kind: 'sent' as const },
+          { label: 'Candidatos evaluados', value: s.assessmentsCompleted, kind: 'done' as const },
           { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
           { label: 'Oferta', value: s.offers, kind: 'offer' as const },
           { label: 'Contratado', value: s.hires, kind: 'hire' as const },
@@ -492,7 +492,7 @@ function Dashboard() {
           tone="neutral"
         />
         <KPI
-          label="Pruebas completadas"
+          label="Candidatos evaluados"
           value={loading ? '…' : String(s?.assessmentsCompleted ?? 0)}
           delta={s ? `${s.assessmentsInProgress} en progreso` : ''}
           tone="neutral"
@@ -561,8 +561,8 @@ function Dashboard() {
                 ["vacancies", "Vacantes publicadas", s.vacancies],
                 ["talent_pool", "CV Bank (candidatos)", s.talentPool],
                 ["applications", "Aplicaciones recibidas", s.applications],
-                ["assessment_tokens", "Pruebas enviadas", s.assessmentsSent],
-                ["assessment_tokens · completed", "Pruebas completadas", s.assessmentsCompleted],
+                ["assessment_tokens", "Invitaciones enviadas", s.assessmentsSent],
+                ["assessment_tokens · completed", "Candidatos evaluados", s.assessmentsCompleted],
                 ["hires", "Firmados (pendiente tabla)", s.hires],
               ] as Array<[string, string, number]>).map(([name, desc, n]) => (
                 <div key={name} className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5">
@@ -842,7 +842,7 @@ function Vacantes() {
       } catch { /* sigue */ }
     }
     setActionBusy(null);
-    alert(`✓ Pruebas enviadas: ${ok}/${candidates.length}`);
+    alert(`✓ Invitaciones enviadas: ${ok}/${candidates.length}`);
     setSelectedCandidates((prev) => ({ ...prev, [vid]: new Set() }));
     window.location.reload();
   }
@@ -1399,6 +1399,7 @@ function Vacantes() {
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const [config, setConfig] = useState<{ email_from: string; email_bcc: string; email_reply_to: string; booking_url: string; resend_domain_status: string } | null>(null);
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email?: string } | null>(null);
   const [bookingDraft, setBookingDraft] = useState('');
   const [bccDraft, setBccDraft] = useState('');
   const [replyToDraft, setReplyToDraft] = useState('');
@@ -1406,14 +1407,23 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     (async () => {
-      const r = await fetch('/api/recruiter-config');
-      const j = await r.json();
-      setConfig(j);
-      setBookingDraft(j.booking_url ?? '');
-      setBccDraft(j.email_bcc ?? '');
-      setReplyToDraft(j.email_reply_to ?? '');
+      const [r, g] = await Promise.all([
+        fetch('/api/recruiter-config').then((x) => x.json()),
+        fetch('/api/google/status').then((x) => x.json()).catch(() => ({ connected: false })),
+      ]);
+      setConfig(r);
+      setBookingDraft(r.booking_url ?? '');
+      setBccDraft(r.email_bcc ?? '');
+      setReplyToDraft(r.email_reply_to ?? '');
+      setGmailStatus(g);
     })();
   }, []);
+
+  async function disconnectGmail() {
+    if (!confirm('¿Desconectar Gmail? Los próximos correos volverán a salir desde Resend (Elevare default).')) return;
+    await fetch('/api/google/disconnect', { method: 'POST' });
+    setGmailStatus({ connected: false });
+  }
 
   async function save() {
     setSaving(true);
@@ -1440,9 +1450,50 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-6 py-5 space-y-5 text-sm">
 
-          {/* FROM */}
+          {/* GMAIL CONNECTION (preferred path) */}
+          <div className={`rounded-lg p-4 border-2 ${gmailStatus?.connected ? 'bg-emerald-50 border-emerald-300' : 'bg-blue-50 border-blue-300'}`}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div>
+                <div className="text-xs uppercase font-semibold tracking-wider text-gray-700">Gmail · Conexión directa (recomendado)</div>
+                <div className="text-sm font-bold mt-1">
+                  {gmailStatus?.connected ? `✓ Conectado como ${gmailStatus.email}` : '⚠ No conectado'}
+                </div>
+              </div>
+              {gmailStatus?.connected ? (
+                <button onClick={disconnectGmail} className="text-xs px-3 py-1.5 rounded border border-red-300 text-red-700 hover:bg-red-50">
+                  Desconectar
+                </button>
+              ) : (
+                <a
+                  href="/api/google/auth"
+                  className="text-xs px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+                >
+                  Conectar Gmail
+                </a>
+              )}
+            </div>
+            <div className="text-xs text-gray-700 leading-relaxed">
+              {gmailStatus?.connected ? (
+                <>
+                  Los correos del ATS salen <strong>desde tu cuenta {gmailStatus.email}</strong> directamente, con tu firma y branding TS.
+                  Cada email queda en tu carpeta <strong>Enviados</strong> de Gmail. Reply-To y BCC funcionan sobre tu cuenta real.
+                </>
+              ) : (
+                <>
+                  Conecta tu Google Workspace una sola vez y los correos del ATS saldrán desde tu cuenta directamente.
+                  Sin verificación de dominio, sin Resend, sin Elevare. Tus candidatos ven al remitente correcto, y cada email
+                  queda en tu Enviados como si lo hubieras mandado a mano.
+                  <br /><br />
+                  <strong>Antes de conectar:</strong> el admin de Vercel debe tener configuradas las env vars{' '}
+                  <code>GOOGLE_CLIENT_ID</code> y <code>GOOGLE_CLIENT_SECRET</code> (Google Cloud Console).
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* FROM (Resend fallback) */}
           <div>
-            <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">From (remitente · EMAIL_FROM env var)</div>
+            <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider mb-2">{gmailStatus?.connected ? 'Resend fallback (no usado mientras Gmail esté conectado)' : 'From (remitente · EMAIL_FROM env var)'}</div>
             <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs break-all">
               {config ? config.email_from : 'cargando…'}
             </div>
@@ -1646,7 +1697,7 @@ function AgentDetailModal({ agent, onClose }: { agent: 'recepcion' | 'pareo' | '
       icon: '📧',
       title: 'Agente de Assessment',
       description: 'Genera token único, envía invitación por email vía Resend, trackea status (sent → in_progress → completed) con anti-trampa (cámara + tab tracking).',
-      trigger: 'POST /api/assessments con send_email:true · disponible desde Vacantes y Pruebas',
+      trigger: 'POST /api/assessments con send_email:true · disponible desde Vacantes y Evaluaciones',
       logic: 'Crea fila en assessment_tokens (Neon) o ht_candidates (Supabase). Email HTML bilingüe. Link válido 30d. Auto-save cada respuesta.',
       modify_path: 'src/app/api/assessments/route.ts · src/app/api/headhunting/candidates/invite/route.ts · src/app/assessment/ht/[token]/page.tsx',
       outputs: ['assessment_tokens row + email enviado', 'ht_responses con cada respuesta del candidato', 'Reporte final con benchmark TS DNA'],
@@ -2201,7 +2252,7 @@ function Pipeline() {
         desc={
           loading
             ? "Cargando…"
-            : `${totalApps} candidato(s) en este pipeline · Etapas según estado de la prueba Factor X`
+            : `${totalApps} candidato(s) en este pipeline · Etapas según estado de la evaluación`
         }
         actions={
           <>
@@ -2349,7 +2400,7 @@ function CVBank() {
   const chips = [
     { id: "todos", label: `Todos · ${counts.total}` },
     { id: "match80", label: `Match ≥ 80 · ${counts.matchedHigh}` },
-    { id: "evaluados", label: `Pruebas completadas · ${counts.completedAssessment}` },
+    { id: "evaluados", label: `Candidatos evaluados · ${counts.completedAssessment}` },
     { id: "linkedin", label: `LinkedIn TS · ${counts.fromLI}` },
     { id: "elevare", label: `Elevare · ${counts.fromElevare}` },
     { id: "email", label: `Email/Manual · ${counts.fromEmail}` },
@@ -2450,7 +2501,7 @@ function CVBank() {
       <div className="grid grid-cols-4 gap-3 mb-5">
         <KPI label="Total perfiles" value={loading ? "…" : String(counts.total)} delta="En Neon" tone="neutral" />
         <KPI label="Desde LinkedIn TS" value={String(counts.fromLI)} delta={`${counts.total > 0 ? Math.round((counts.fromLI / counts.total) * 100) : 0}%`} tone="neutral" />
-        <KPI label="Pruebas completadas" value={String(counts.completedAssessment)} delta="Con score Factor X" />
+        <KPI label="Candidatos evaluados" value={String(counts.completedAssessment)} delta="Con score" />
         <KPI label="Mostrando" value={String(filtered.length)} delta={`de ${counts.total}`} tone="neutral" />
       </div>
 
@@ -2524,13 +2575,13 @@ function CVBank() {
                   </div>
                 ) : score !== null ? (
                   <div className="flex justify-between items-center mt-1">
-                    <span>Score Factor X (otra vacante)</span>
+                    <span className="text-[11px] text-gray-500">Ya completó prueba en otra vacante</span>
                     <Pill color={score >= 85 ? "green" : score >= 75 ? "black" : "amber"}>
                       {score}
                     </Pill>
                   </div>
                 ) : (
-                  <div className="text-[11px] text-gray-400 italic">Sin prueba aplicada aún</div>
+                  <div className="text-[11px] text-gray-400 italic">Aún no ha sido evaluado</div>
                 )}
               </div>
             </div>
@@ -2869,7 +2920,7 @@ function Entrevistas() {
 }
 
 /* ======================================================== */
-/* Pruebas Psicométricas                                    */
+/* Evaluaciones                                    */
 /* ======================================================== */
 type LiveToken = {
   id: number;
@@ -2988,7 +3039,7 @@ function Pruebas() {
         </div>
       </div>
 
-      <Card title="Pruebas enviadas a candidatos" eyebrow="LIVE · API /api/assessments">
+      <Card title="Invitaciones enviadas a candidatos" eyebrow="LIVE · API /api/assessments">
         <div className="space-y-2">
           {loading && (
             <div className="text-sm text-gray-500 py-6 text-center">Cargando…</div>
@@ -3629,7 +3680,7 @@ function Agentes() {
         },
         {
           name: "Assessment Agent",
-          role: "Factor X · DISC+Big5+BETESA+McC+Cog",
+          role: "Genera invitaciones, monitorea progreso y guarda resultados",
           stats: [
             ["Enviadas", String(s.sentAssessments)],
             ["Completadas", String(s.completedAssessments)],
@@ -3721,7 +3772,7 @@ function Agentes() {
       <div className="grid grid-cols-4 gap-3 mb-4">
         <KPI label="Aplicaciones procesadas" value={s ? String(s.applications) : "…"} delta="Intake + Parser" tone="neutral" />
         <KPI label="CV Bank activo" value={s ? String(s.talentPool) : "…"} delta={s ? `${s.linkedinCount} desde LI` : ""} tone="neutral" />
-        <KPI label="Pruebas Factor X" value={s ? `${s.completedAssessments}/${s.sentAssessments}` : "…"} delta={`${completionRate}% completadas`} />
+        <KPI label="Pruebas" value={s ? `${s.completedAssessments}/${s.sentAssessments}` : "…"} delta={`${completionRate}% completadas`} />
         <KPI label="Vacantes cubiertas" value={s ? String(s.vacancies) : "…"} delta="En producción" />
       </div>
       <div className="grid grid-cols-3 gap-3">
@@ -3842,7 +3893,7 @@ function Analytics() {
       />
       <div className="grid grid-cols-4 gap-3 mb-4">
         <KPI
-          label="Score promedio Factor X"
+          label="Score promedio"
           value={loading ? "…" : `${avgScore}/100`}
           delta={`de ${completed.length} completadas`}
           tone="neutral"
@@ -3867,7 +3918,7 @@ function Analytics() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
-        <Card title="Distribución de resultados Factor X" eyebrow="AVANZA / EN ESPERA / NO AVANZA">
+        <Card title="Distribución de resultados" eyebrow="AVANZA / EN ESPERA / NO AVANZA">
           {loading ? (
             <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
           ) : completed.length === 0 ? (
@@ -4168,8 +4219,8 @@ function Datos() {
     { name: "vacancies", desc: "Vacantes activas + cerradas (Neon)", value: fmt(counts.vacancies) },
     { name: "talent_pool", desc: "CV Bank · perfiles (Neon)", value: fmt(counts.talent_pool) },
     { name: "applications", desc: "Aplicaciones desde /vacantes (Neon)", value: fmt(counts.applications) },
-    { name: "assessment_tokens", desc: "Pruebas Factor X enviadas (Neon)", value: fmt(counts.assessment_tokens) },
-    { name: "assessment_tokens · completed", desc: "Pruebas completadas con score", value: fmt(counts.assessment_tokens_completed) },
+    { name: "assessment_tokens", desc: "Invitaciones enviadas (Neon)", value: fmt(counts.assessment_tokens) },
+    { name: "assessment_tokens · completed", desc: "Candidatos con resultados", value: fmt(counts.assessment_tokens_completed) },
   ];
 
   const futureTables: { name: string; desc: string }[] = [
