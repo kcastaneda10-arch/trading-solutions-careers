@@ -40,6 +40,8 @@ export async function POST(
         prefilter_token: token,
         prefilter_token_expires_at: expiresAt.toISOString(),
         prefilter_invited_at: new Date().toISOString(),
+        stage: "prefiltro_enviado",
+        updated_at: new Date().toISOString(),
       })
       .eq("id", candidateId);
 
