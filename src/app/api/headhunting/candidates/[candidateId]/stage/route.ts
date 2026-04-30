@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import crypto from "crypto";
 
 const VALID_STAGES = [
   "aplico",
@@ -96,6 +97,64 @@ export async function POST(
     }
 
     let draftId: string | null = null;
+    let elevareUrl: string | null = null;
+
+    // Si se mueve a assessment_invitado: generar token + draft de Elevare
+    if (targetStage === "assessment_invitado") {
+      const token = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 72);
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+      elevareUrl = `${baseUrl}/assessment/ht/${token}`;
+
+      updates.assessment_token = token;
+      updates.token_expires_at = expiresAt.toISOString();
+      updates.invited_at = new Date().toISOString();
+      updates.status = "invited";
+
+      try {
+        const gmail = await isGmailConnected();
+        if (gmail.connected) {
+          // @ts-expect-error supabase relation
+          const vacancyTitle = candidate.ht_vacancies?.title || "la vacante";
+          const firstName = (candidate.name as string).split(" ")[0] || "candidato";
+          const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Inter, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  .cta { display: inline-block; background: #2C64ED; color: white !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+</style></head><body>
+  <div class="container">
+    <p>Hola <strong>${firstName}</strong>,</p>
+    <p>Espero que estés muy bien. Te escribo para invitarte a la siguiente etapa de nuestro proceso de selección para la posición de <strong>${vacancyTitle}</strong> en Trading Solutions.</p>
+    <p>El siguiente paso es una evaluación que nos ayuda a entender mejor cómo piensas y decides en situaciones reales del trabajo. No hay respuestas correctas o incorrectas — solo queremos conocer tu forma de ser.</p>
+    <p style="text-align:center"><a href="${elevareUrl}" class="cta">Iniciar Evaluación</a></p>
+    <p>Detalles importantes:</p>
+    <ul>
+      <li>Duración aproximada: 55 minutos</li>
+      <li>Necesitas: computador con internet estable y cámara web (la usamos para verificar identidad)</li>
+      <li>Recomendación: busca un espacio tranquilo, sin interrupciones</li>
+      <li>El enlace es válido por 72 horas</li>
+      <li>Tus respuestas se guardan automáticamente</li>
+    </ul>
+    <p>Si tienes alguna pregunta, simplemente responde este correo.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Trading Solutions</p>
+  </div>
+</body></html>`;
+          const draftRes = await createDraftViaGmail({
+            to: candidate.email as string,
+            subject: `Trading Solutions · Evaluación para ${vacancyTitle}`,
+            html,
+            fromName: "Kelly Castañeda",
+          });
+          if (draftRes.ok) {
+            draftId = draftRes.draft_id;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to create Elevare draft:", e);
+      }
+    }
 
     // Crear draft de rechazo si aplica
     if (targetStage === "rechazado" && createRejectionDraft) {
@@ -134,7 +193,8 @@ export async function POST(
       candidate_id: candidateId,
       from_stage: candidate.stage,
       to_stage: targetStage,
-      rejection_draft_id: draftId,
+      draft_id: draftId,
+      elevare_url: elevareUrl,
     });
   } catch (err) {
     console.error("stage update error:", err);
