@@ -48,19 +48,52 @@ function decideFromSalary(salaryRange: string, vacancyId: string): { decision: D
   return { decision: "reject", cap, lowerBound: lower };
 }
 
-function buildRejectionHtml(name: string, clientName: string): string {
+const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
+
+// Auto-detección sencilla ES/EN basada en frecuencia de palabras-función.
+function detectLanguage(...texts: (string | null | undefined)[]): "es" | "en" {
+  const blob = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!blob.trim()) return "es";
+  const ES = [" la ", " el ", " de ", " que ", " y ", " es ", " en ", " un ", " una ", " por ", " para ", " con ", " mi ", " soy ", "á", "é", "í", "ó", "ú", "ñ"];
+  const EN = [" the ", " and ", " is ", " of ", " to ", " for ", " with ", " my ", " i ", " you ", " we ", " in ", " on ", " have ", " am "];
+  let es = 0, en = 0;
+  ES.forEach(w => { if (blob.includes(w)) es++; });
+  EN.forEach(w => { if (blob.includes(w)) en++; });
+  return en > es ? "en" : "es";
+}
+
+function buildRejectionHtmlEs(name: string, clientName: string, vacancyTitle: string): string {
   const firstName = (name || "").split(" ")[0] || "candidato";
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
   .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  a { color: #2C64ED; }
 </style></head><body>
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
-    <p>Gracias por tu interés en formar parte de <strong>${clientName}</strong> y por dedicarle tiempo a nuestro proceso de selección.</p>
-    <p>Después de revisar tu perfil, en este momento no continuaremos avanzando contigo en el proceso. Tu información queda en nuestra base de datos para futuras oportunidades que se ajusten mejor a tu experiencia.</p>
-    <p>Te deseamos mucho éxito en tus próximos pasos profesionales.</p>
+    <p>Gracias por tomarte el tiempo de aplicar a la posición de <strong>${vacancyTitle}</strong> en ${clientName}. Después de revisar tu aplicación, hemos decidido avanzar con otros candidatos cuyo perfil se ajusta más a la posición en este momento. Sin embargo, ${clientName} sigue creciendo y nos encantaría mantenernos en contacto.</p>
+    <p>Tu información queda en nuestra base de datos para futuras oportunidades. También te invitamos a seguirnos en LinkedIn para enterarte de nuevas vacantes: <a href="${TS_LINKEDIN_URL}">${TS_LINKEDIN_URL}</a></p>
+    <p>Apreciamos tu interés en ${clientName} y te deseamos mucho éxito en tus próximos pasos.</p>
     <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>${clientName}</p>
+  </div>
+</body></html>`;
+}
+
+function buildRejectionHtmlEn(name: string, clientName: string, vacancyTitle: string): string {
+  const firstName = (name || "").split(" ")[0] || "candidate";
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  a { color: #2C64ED; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>Thank you for taking the time to apply for the <strong>${vacancyTitle}</strong> position at ${clientName}. After reviewing your application, we have decided to move forward with other candidates whose profile is a closer match for the position at this time. However, ${clientName} is always growing and we'd love to keep in touch.</p>
+    <p>Your information stays in our database for future opportunities. We also invite you to follow us on LinkedIn to stay updated on new openings: <a href="${TS_LINKEDIN_URL}">${TS_LINKEDIN_URL}</a></p>
+    <p>We appreciate your interest in ${clientName} and thank you again. We sincerely wish you all the best in your future endeavors.</p>
+    <p>Regards,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>${clientName}</p>
   </div>
 </body></html>`;
 }
@@ -100,7 +133,7 @@ export async function POST(
 
   const { data: candidate, error } = await supabaseAdmin
     .from("ht_candidates")
-    .select("id, name, email, vacancy_id, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name)")
+    .select("id, name, email, vacancy_id, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title)")
     .eq("prefilter_token", params.token)
     .single();
 
@@ -128,16 +161,26 @@ export async function POST(
   if (decision === "reject") {
     updates.status = "rejected";
 
-    // Solo intentar crear draft si Gmail conectado; no bloquear si falla.
+    // Auto-detectar idioma desde lo que el candidato escribió en el form
+    const lang = detectLanguage(body.why_ts, body.next_role, body.extra, body.english_cert);
+    // @ts-expect-error supabase relation
+    const clientName = candidate.ht_clients?.name || "Trading Solutions";
+    // @ts-expect-error supabase relation
+    const vacancyTitle = candidate.ht_vacancies?.title || "the position";
+
     try {
       const gmail = await isGmailConnected();
       if (gmail.connected) {
-        // @ts-expect-error supabase relation
-        const clientName = candidate.ht_clients?.name || "Trading Solutions";
+        const subject = lang === "en"
+          ? `Trading Solutions · About your application`
+          : `Trading Solutions · Sobre tu aplicación`;
+        const html = lang === "en"
+          ? buildRejectionHtmlEn(candidate.name as string, clientName, vacancyTitle)
+          : buildRejectionHtmlEs(candidate.name as string, clientName, vacancyTitle);
         const draftRes = await createDraftViaGmail({
           to: candidate.email as string,
-          subject: `Trading Solutions · Sobre tu aplicación`,
-          html: buildRejectionHtml(candidate.name as string, clientName),
+          subject,
+          html,
           fromName: "Kelly Castañeda",
         });
         if (draftRes.ok) {
