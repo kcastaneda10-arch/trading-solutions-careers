@@ -207,6 +207,18 @@ export default function PipelineFunnel() {
   );
 }
 
+// Mapa de transiciones naturales (avanzar al siguiente stage)
+const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> = {
+  aplico: { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" },
+  prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a Elevare", emoji: "📨" },
+  prefiltro_revision: { id: "assessment_invitado", label: "Invitar a Elevare (override)", emoji: "📨" },
+  assessment_completado: { id: "entrevista_ia", label: "Pasar a Entrevista IA", emoji: "🎥" },
+  entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
+  recruiter_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
+  cwo_interview: { id: "touring", label: "Pasar a Prueba Touring", emoji: "🏢" },
+  touring: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
+};
+
 // ─── Side panel con detalle + respuestas del prefiltro ──────────────
 function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void }) {
   const pf = cand.prefilter_data;
@@ -215,6 +227,43 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
     : decision === "review" ? { label: "⚠️ REVIEW", color: "#F59E0B" }
     : decision === "reject" ? { label: "❌ REJECT", color: "#EF4444" }
     : null;
+
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string>("");
+  const currentStage = cand.stage || "aplico";
+  const nextStage = NEXT_STAGE[currentStage];
+  const isTerminal = currentStage === "rechazado" || currentStage === "contratado";
+
+  async function moveToStage(targetStage: string, label: string) {
+    if (busy) return;
+    setBusy(true);
+    setFeedback(`${label}…`);
+    try {
+      const res = await fetch(`/api/headhunting/candidates/${cand.id}/stage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: targetStage }),
+      });
+      const j = await res.json();
+      if (j.success) {
+        setFeedback(targetStage === "rechazado"
+          ? "✅ Rechazado · draft de descarte creado en tu Gmail"
+          : `✅ Movido a ${targetStage}`);
+        setTimeout(() => { onClose(); window.location.reload(); }, 1200);
+      } else {
+        setFeedback(`❌ ${j.error || "Error"}`);
+      }
+    } catch (e) {
+      setFeedback(`❌ ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reject() {
+    if (!confirm(`¿Rechazar a ${cand.name}? Se creará un draft de descarte automático en tu Gmail.`)) return;
+    await moveToStage("rechazado", "Rechazando");
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
@@ -227,6 +276,38 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-black text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">×</button>
         </div>
+
+        {/* Action bar */}
+        {!isTerminal && (
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-2 flex-wrap">
+            {nextStage && (
+              <button
+                onClick={() => moveToStage(nextStage.id, nextStage.label)}
+                disabled={busy}
+                className="text-xs font-bold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {nextStage.emoji} {nextStage.label} →
+              </button>
+            )}
+            <button
+              onClick={reject}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              ❌ Rechazar (draft auto)
+            </button>
+            {feedback && (
+              <span className="text-xs ml-auto text-gray-700">{feedback}</span>
+            )}
+          </div>
+        )}
+        {isTerminal && (
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <span className="text-xs text-gray-500 italic">
+              {currentStage === "rechazado" ? "❌ Candidato rechazado · etapa terminal" : "🎉 Candidato contratado · etapa terminal"}
+            </span>
+          </div>
+        )}
 
         <div className="p-6 space-y-5 text-sm">
           {/* Identidad */}

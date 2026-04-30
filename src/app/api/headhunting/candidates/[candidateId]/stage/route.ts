@@ -1,0 +1,143 @@
+/**
+ * POST /api/headhunting/candidates/[candidateId]/stage
+ *
+ * Mueve un candidato a una nueva etapa del funnel.
+ * Body: { stage: 'aplico' | 'prefiltro_pasado' | 'rechazado' | ... , create_rejection_draft?: boolean }
+ *
+ * Si stage === 'rechazado' Y create_rejection_draft (default true):
+ *   - Cambia status a 'rejected'
+ *   - Crea draft de descarte automático en Gmail
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+
+const VALID_STAGES = [
+  "aplico",
+  "prefiltro_enviado",
+  "prefiltro_pasado",
+  "prefiltro_revision",
+  "assessment_invitado",
+  "assessment_en_progreso",
+  "assessment_completado",
+  "entrevista_ia",
+  "recruiter_interview",
+  "cwo_interview",
+  "touring",
+  "contratado",
+  "rechazado",
+];
+
+const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
+
+function buildRejectionHtml(name: string, vacancyTitle: string): string {
+  const firstName = (name || "").split(" ")[0] || "candidato";
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  a { color: #2C64ED; }
+</style></head><body>
+  <div class="container">
+    <p>Hola <strong>${firstName}</strong>,</p>
+    <p>Gracias por tomarte el tiempo de aplicar a la posición de <strong>${vacancyTitle}</strong> en Trading Solutions. Después de revisar tu aplicación, hemos decidido avanzar con otros candidatos cuyo perfil se ajusta más a la posición en este momento. Sin embargo, Trading Solutions sigue creciendo y nos encantaría mantenernos en contacto.</p>
+    <p>Tu información queda en nuestra base de datos para futuras oportunidades. También te invitamos a seguirnos en LinkedIn para enterarte de nuevas vacantes: <a href="${TS_LINKEDIN_URL}">${TS_LINKEDIN_URL}</a></p>
+    <p>Apreciamos tu interés en Trading Solutions y te deseamos mucho éxito en tus próximos pasos.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
+  </div>
+</body></html>`;
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { candidateId: string } }
+) {
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
+  try {
+    const { candidateId } = params;
+    const body = await req.json();
+    const targetStage = String(body.stage || "");
+    const createRejectionDraft = body.create_rejection_draft !== false;
+
+    if (!VALID_STAGES.includes(targetStage)) {
+      return NextResponse.json(
+        { error: `Stage inválida. Válidas: ${VALID_STAGES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    // Cargar candidato
+    const { data: candidate, error: fetchErr } = await supabaseAdmin
+      .from("ht_candidates")
+      .select("id, name, email, vacancy_id, stage, status, ht_vacancies(title)")
+      .eq("id", candidateId)
+      .single();
+
+    if (fetchErr || !candidate) {
+      return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
+    }
+
+    const updates: Record<string, unknown> = {
+      stage: targetStage,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Si se mueve a rechazado, también actualizar status
+    if (targetStage === "rechazado") {
+      updates.status = "rejected";
+    }
+
+    // Si se mueve a contratado, status también
+    if (targetStage === "contratado") {
+      updates.status = "completed";
+    }
+
+    let draftId: string | null = null;
+
+    // Crear draft de rechazo si aplica
+    if (targetStage === "rechazado" && createRejectionDraft) {
+      try {
+        const gmail = await isGmailConnected();
+        if (gmail.connected) {
+          // @ts-expect-error supabase relation
+          const vacancyTitle = candidate.ht_vacancies?.title || "la posición";
+          const draftRes = await createDraftViaGmail({
+            to: candidate.email as string,
+            subject: `Trading Solutions · Sobre tu aplicación`,
+            html: buildRejectionHtml(candidate.name as string, vacancyTitle),
+            fromName: "Kelly Castañeda",
+          });
+          if (draftRes.ok) {
+            draftId = draftRes.draft_id;
+            updates.rejection_draft_id = draftRes.draft_id;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to create rejection draft:", e);
+      }
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("ht_candidates")
+      .update(updates)
+      .eq("id", candidateId);
+
+    if (updateErr) {
+      return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      candidate_id: candidateId,
+      from_stage: candidate.stage,
+      to_stage: targetStage,
+      rejection_draft_id: draftId,
+    });
+  } catch (err) {
+    console.error("stage update error:", err);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}
