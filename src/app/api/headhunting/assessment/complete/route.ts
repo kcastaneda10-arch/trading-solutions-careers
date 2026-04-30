@@ -48,7 +48,9 @@ export async function POST(req: NextRequest) {
       .from('ht_candidates')
       .update({
         status: 'completed',
+        stage: 'assessment_completado',
         completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', candidate.id);
 

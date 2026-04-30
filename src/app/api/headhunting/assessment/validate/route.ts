@@ -71,7 +71,9 @@ export async function GET(req: NextRequest) {
         .from('ht_candidates')
         .update({
           status: 'in_progress',
+          stage: 'assessment_en_progreso',
           started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', candidate.id);
     }

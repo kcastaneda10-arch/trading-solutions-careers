@@ -245,6 +245,16 @@ type DashboardStats = {
   hires: number;
   bySource: Record<string, number>;
   topCandidates: TopCandidate[];
+  // ─── Headhunting / ATS real (Supabase ht_candidates) ───────────
+  htTotal: number;
+  htByStage: Record<string, number>;
+  htPrefilterDecision: Record<string, number>;
+  htPrefilterCompleted: number;
+  htPrefilterInvited: number;
+  htInElevareProcess: number;
+  htCompletedElevare: number;
+  htHires: number;
+  htRejected: number;
 };
 
 type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string };
@@ -283,12 +293,13 @@ function Dashboard() {
         const appsUrl = selectedVacancyId === 'all'
           ? '/api/applications?limit=500'
           : `/api/applications?job_id=${selectedVacancyId}&limit=500`;
-        const [vacR, appR, appAllR, tpR, asR] = await Promise.all([
+        const [vacR, appR, appAllR, tpR, asR, htR] = await Promise.all([
           fetch('/api/vacancies', { cache: 'no-store' }).then((r) => r.json()),
           fetch(appsUrl, { cache: 'no-store' }).then((r) => r.json()),
           fetch('/api/applications?limit=500', { cache: 'no-store' }).then((r) => r.json()),
           fetch('/api/talent-pool?limit=1000', { cache: 'no-store' }).then((r) => r.json()),
           fetch('/api/assessments?limit=500', { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/headhunting/dashboard-stats', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         ]);
         if (cancelled) return;
 
@@ -395,6 +406,16 @@ function Dashboard() {
           hires: byStatus['hired'] ?? 0,
           bySource,
           topCandidates,
+          // Headhunting / ATS real (Supabase)
+          htTotal: htR?.total ?? 0,
+          htByStage: htR?.byStage ?? {},
+          htPrefilterDecision: htR?.prefilterDecision ?? {},
+          htPrefilterCompleted: htR?.prefilterCompleted ?? 0,
+          htPrefilterInvited: htR?.prefilterInvited ?? 0,
+          htInElevareProcess: htR?.inElevareProcess ?? 0,
+          htCompletedElevare: htR?.completedElevare ?? 0,
+          htHires: htR?.hires ?? 0,
+          htRejected: htR?.rejected ?? 0,
         });
         setLoading(false);
       } catch {
@@ -413,28 +434,21 @@ function Dashboard() {
     ? 'Todas las vacantes'
     : vacanciesList.find((v) => v.id === selectedVacancyId)?.title ?? '—';
 
-  // Funnel: si hay filtro de vacante, sale del breakdown por status de esa vacante.
-  // Sin filtro, mantiene la lectura agregada del pipeline completo.
+  // Funnel: usa los datos REALES del ATS (ht_candidates / Supabase) cuando están
+  // disponibles. Esto refleja exactamente lo que muestra el tab Funnel.
+  const htBy = s?.htByStage ?? {};
+  const totalApplied = s?.htTotal ?? 0;
   const rawRows = s
-    ? filterIsAll
-      ? [
-          { label: 'Talent Pool (CV Bank)', value: s.talentPool, kind: 'pool' as const },
-          { label: 'Aplicaciones a vacante', value: s.applicationsAll, kind: 'apply' as const },
-          { label: 'Parseado CV', value: Math.round(s.applicationsAll * 0.98), kind: 'parse' as const },
-          { label: 'Invitaciones enviadas', value: s.assessmentsSent, kind: 'sent' as const },
-          { label: 'Candidatos evaluados', value: s.assessmentsCompleted, kind: 'done' as const },
-          { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
-          { label: 'Oferta', value: s.offers, kind: 'offer' as const },
-          { label: 'Contratado', value: s.hires, kind: 'hire' as const },
-        ]
-      : [
-          { label: 'Aplicaciones a esta vacante', value: s.applications, kind: 'apply' as const },
-          { label: 'Invitaciones enviadas', value: s.assessmentsSent, kind: 'sent' as const },
-          { label: 'Candidatos evaluados', value: s.assessmentsCompleted, kind: 'done' as const },
-          { label: 'Entrevista humana', value: s.interviews, kind: 'interview' as const },
-          { label: 'Oferta', value: s.offers, kind: 'offer' as const },
-          { label: 'Contratado', value: s.hires, kind: 'hire' as const },
-        ]
+    ? [
+        { label: 'Aplicó', value: totalApplied, kind: 'apply' as const },
+        { label: 'Prefiltro enviado', value: (htBy['prefiltro_enviado'] ?? 0) + (htBy['prefiltro_pasado'] ?? 0) + (htBy['prefiltro_revision'] ?? 0) + (htBy['assessment_invitado'] ?? 0) + (htBy['assessment_en_progreso'] ?? 0) + (htBy['assessment_completado'] ?? 0) + (htBy['entrevista_ia'] ?? 0) + (htBy['recruiter_interview'] ?? 0) + (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'sent' as const },
+        { label: 'Prefiltro pasado', value: (htBy['prefiltro_pasado'] ?? 0) + (htBy['assessment_invitado'] ?? 0) + (htBy['assessment_en_progreso'] ?? 0) + (htBy['assessment_completado'] ?? 0) + (htBy['entrevista_ia'] ?? 0) + (htBy['recruiter_interview'] ?? 0) + (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'parse' as const },
+        { label: 'Assessment invitado', value: (htBy['assessment_invitado'] ?? 0) + (htBy['assessment_en_progreso'] ?? 0) + (htBy['assessment_completado'] ?? 0) + (htBy['entrevista_ia'] ?? 0) + (htBy['recruiter_interview'] ?? 0) + (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'sent' as const },
+        { label: 'Assessment completado', value: (htBy['assessment_completado'] ?? 0) + (htBy['entrevista_ia'] ?? 0) + (htBy['recruiter_interview'] ?? 0) + (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'done' as const },
+        { label: 'Entrevista recruiter', value: (htBy['recruiter_interview'] ?? 0) + (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'interview' as const },
+        { label: 'Entrevista CWO', value: (htBy['cwo_interview'] ?? 0) + (htBy['touring'] ?? 0) + (htBy['contratado'] ?? 0), kind: 'offer' as const },
+        { label: 'Contratado', value: htBy['contratado'] ?? 0, kind: 'hire' as const },
+      ]
     : [];
   const maxFunnelValue = Math.max(1, ...rawRows.map((r) => r.value));
   const funnelRows = rawRows.map((r, i) => {
@@ -489,38 +503,39 @@ function Dashboard() {
 
       <div className="grid grid-cols-5 gap-3 mb-4">
         <KPI
-          label={filterIsAll ? 'Aplicaciones' : 'Aplicaciones a esta vacante'}
-          value={loading ? '…' : String(s?.applications ?? 0)}
-          delta={loading ? 'Cargando' : (filterIsAll ? 'En Neon' : `de ${s?.applicationsAll ?? 0} totales`)}
+          label="Total ATS"
+          value={loading ? '…' : String(s?.htTotal ?? 0)}
+          delta={loading ? 'Cargando' : 'Candidatos en pipeline real'}
           tone="neutral"
         />
         <KPI
-          label={filterIsAll ? 'Vacantes activas' : 'Vacante seleccionada'}
-          value={loading ? '…' : (filterIsAll ? String(s?.vacancies ?? 0) : '1')}
-          delta={s ? (filterIsAll ? `${s.vacanciesLinkedIn} en LinkedIn` : selectedVacancyTitle.slice(0, 28)) : ''}
+          label="Prefiltros enviados"
+          value={loading ? '…' : String(s?.htPrefilterInvited ?? 0)}
+          delta={s ? `${s.htPrefilterCompleted} respondieron` : ''}
           tone="neutral"
         />
         <KPI
-          label="Candidatos evaluados"
-          value={loading ? '…' : String(s?.assessmentsCompleted ?? 0)}
-          delta={s ? `${s.assessmentsInProgress} en progreso` : ''}
+          label="Prefiltro · Pass"
+          value={loading ? '…' : String(s?.htPrefilterDecision?.pass ?? 0)}
+          delta={s ? `${s.htPrefilterDecision?.review ?? 0} review · ${s.htPrefilterDecision?.reject ?? 0} reject` : ''}
           tone="neutral"
         />
         <KPI
-          label={filterIsAll ? 'En pipeline' : 'En entrevista'}
-          value={loading ? '…' : String(filterIsAll ? (s?.talentPool ?? 0) : (s?.interviews ?? 0))}
-          delta={filterIsAll ? 'CV Bank activo' : `${s?.offers ?? 0} ofertas · ${s?.hires ?? 0} hired`}
+          label="En Elevare"
+          value={loading ? '…' : String(s?.htInElevareProcess ?? 0)}
+          delta={s ? `${s.htCompletedElevare} completaron` : ''}
+          tone="neutral"
         />
         <KPI
-          label="CV Bank total"
-          value={loading ? '…' : String(s?.talentPool ?? 0)}
-          delta="Barranquilla"
+          label="Hires (ATS)"
+          value={loading ? '…' : String(s?.htHires ?? 0)}
+          delta={s ? `${s.htRejected} rechazados` : ''}
           tone="neutral"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4" style={{ gridTemplateColumns: "1.5fr 1fr" }}>
-        <Card title="Funnel de conversión · pipeline real" eyebrow="LIVE · /api/applications+assessments">
+        <Card title="Funnel de conversión · pipeline real" eyebrow="LIVE · ht_candidates (Supabase)">
           {loading ? (
             <div className="text-sm text-gray-400 py-6 text-center">Cargando funnel…</div>
           ) : (
