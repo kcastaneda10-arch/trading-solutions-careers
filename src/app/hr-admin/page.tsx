@@ -11,6 +11,7 @@ import {
   LineChart,
   Linkedin,
   Brain,
+  ClipboardCheck,
   Bell,
   Plus,
   Download,
@@ -30,11 +31,13 @@ import {
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
+import PrefiltrosPanel from "@/components/PrefiltrosPanel";
 
 type Tab =
   | "dashboard"
   | "vacantes"
   | "pipeline"
+  | "prefiltros"
   | "cvbank"
   | "entrevistas"
   | "pruebas"
@@ -47,6 +50,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
   { id: "pipeline", label: "Pipeline", icon: Kanban },
+  { id: "prefiltros", label: "Prefiltros", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "entrevistas", label: "Entrevistas IA", icon: Video },
   { id: "pruebas", label: "Evaluaciones", icon: Brain },
@@ -130,6 +134,7 @@ export default function HRAdminPage() {
         {tab === "dashboard" && <Dashboard />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "pipeline" && <Pipeline />}
+        {tab === "prefiltros" && <PrefiltrosPanel />}
         {tab === "cvbank" && <CVBank />}
         {tab === "entrevistas" && <Entrevistas />}
         {tab === "pruebas" && <Pruebas />}

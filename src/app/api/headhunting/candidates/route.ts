@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseAdmin
       .from('ht_candidates')
-      .select('*, ht_results(match_percentage, recommendation)')
+      .select('*, ht_results(match_percentage, recommendation), ht_vacancies(title)')
       .order('created_at', { ascending: false });
 
     if (vacancyId) query = query.eq('vacancy_id', vacancyId);
