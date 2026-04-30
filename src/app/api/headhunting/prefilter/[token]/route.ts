@@ -13,7 +13,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { createDraftViaGmail, isGmailConnected, sendViaGmail } from "@/lib/gmail";
 
 // Techos por vacancy_id (en COP mensuales)
 const SALARY_CAPS: Record<string, number> = {
@@ -192,6 +192,11 @@ export async function POST(
     }
   }
 
+  // Actualizar stage según decisión
+  if (decision === "pass") updates.stage = "prefiltro_pasado";
+  else if (decision === "review") updates.stage = "prefiltro_revision";
+  else if (decision === "reject") updates.stage = "rechazado";
+
   const { error: updateErr } = await supabaseAdmin
     .from("ht_candidates")
     .update(updates)
@@ -199,6 +204,38 @@ export async function POST(
 
   if (updateErr) {
     return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
+  }
+
+  // ─── Notificación a Kelly (no bloqueante) ─────────────────────────
+  try {
+    const gmail = await isGmailConnected();
+    if (gmail.connected) {
+      // @ts-expect-error supabase relation
+      const vacancyTitle = candidate.ht_vacancies?.title || "vacante";
+      const decisionEmoji = decision === "pass" ? "✅" : decision === "review" ? "⚠️" : "❌";
+      const decisionLabel = decision === "pass" ? "PASS" : decision === "review" ? "REVIEW" : "REJECT";
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+      await sendViaGmail({
+        to: "kcastaneda@tradingsolutions.com",
+        subject: `[Prefiltro ${decisionLabel}] ${candidate.name} · ${vacancyTitle}`,
+        html: `<!DOCTYPE html><html><body style="font-family: Inter, sans-serif; padding: 16px; color: #1a1a1a;">
+          <p>Kelly, <strong>${candidate.name}</strong> acaba de completar el prefiltro.</p>
+          <table style="border-collapse: collapse; margin: 12px 0;">
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Vacante:</td><td><strong>${vacancyTitle}</strong></td></tr>
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Email:</td><td>${candidate.email}</td></tr>
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Decisión:</td><td><strong>${decisionEmoji} ${decisionLabel}</strong></td></tr>
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Salario que pidió:</td><td>${body.salary || "—"}</td></tr>
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Inglés:</td><td>${body.english_level || "—"}</td></tr>
+            <tr><td style="padding: 4px 12px 4px 0; color: #666;">Ciudad:</td><td>${body.city || "—"}</td></tr>
+          </table>
+          ${decision === "reject" ? `<p style="background: #FEF2F2; padding: 10px 14px; border-radius: 6px; color: #991B1B; font-size: 13px;">⚠️ Draft de descarte ya está en tu Gmail Drafts — revisa antes de enviar.</p>` : ""}
+          <p><a href="${baseUrl}/hr-admin?tab=prefiltros" style="color: #2C64ED;">Ver en HR Admin →</a></p>
+        </body></html>`,
+        fromName: "Trading Solutions ATS",
+      });
+    }
+  } catch (e) {
+    console.error("Failed to send notification:", e);
   }
 
   // El candidato no ve la decisión — siempre recibe success.
