@@ -5,7 +5,8 @@
  * de Google donde Kelly autoriza al ATS a enviar correos en su nombre.
  *
  * Scopes solicitados:
- *   - gmail.send: enviar correos como ella
+ *   - gmail.compose: crear drafts (incluye gmail.send implícito) — para que HR
+ *     pueda revisar el correo antes de enviar
  *   - email: identificar su correo (kcastaneda@tradingsolutions.com)
  *
  * Después del consent, Google redirige a /api/google/callback?code=...
@@ -15,7 +16,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
