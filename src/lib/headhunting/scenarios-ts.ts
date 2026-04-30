@@ -208,10 +208,10 @@ How do you respond?`,
     scoring_rubric: {
       instructions: 'Escenario mide expresión en inglés, adaptabilidad comunicativa, y presencia. Valora diferentes estilos válidos.',
       option_weights: [
-        { maps: { Extraversion: 8, 'Verbal Comprehension': 7 }, profile: 'adaptive_authentic' },
-        { maps: { Extraversion: 7, 'Verbal Comprehension': 8 }, profile: 'data_driven_professional' },
-        { maps: { Extraversion: 7, 'Verbal Comprehension': 7 }, profile: 'listening_collaborative' },
-        { maps: { Extraversion: 6, 'Verbal Comprehension': 8 }, profile: 'prepared_transparent' }
+        { maps: { Extraversion: 9, 'Verbal Comprehension': 8, Agreeableness: 8 }, profile: 'adaptive_authentic' },
+        { maps: { Extraversion: 7, 'Verbal Comprehension': 9, Agreeableness: 5 }, profile: 'data_driven_professional' },
+        { maps: { Extraversion: 6, 'Verbal Comprehension': 7, Agreeableness: 9 }, profile: 'listening_collaborative' },
+        { maps: { Extraversion: 4, 'Verbal Comprehension': 8, Agreeableness: 7 }, profile: 'prepared_transparent' }
       ],
       indicators: [
         { name: 'Fluidez comunicativa', description: 'Se expresa con naturalidad en inglés', maps_to: 'Verbal Comprehension', weight: 0.4, high_signal: 'Claro, maneja puntos técnicos', low_signal: 'Dubitativo o evita hablar' },
@@ -369,10 +369,10 @@ Tu jefe espera que hagas algo. Es tu proyecto.
     scoring_rubric: {
       instructions: 'Escenario mide D (toma control), I (influencia), Conscientiousness (compromiso), y estilos de liderazgo diversos.',
       option_weights: [
-        { maps: { D: 8, I: 7, Conscientiousness: 8 }, profile: 'collaborative_determined' },
-        { maps: { D: 8, I: 6, Conscientiousness: 8 }, profile: 'directive_committed' },
-        { maps: { D: 7, I: 8, Conscientiousness: 7 }, profile: 'personal_connector' },
-        { maps: { D: 7, I: 6, Conscientiousness: 6 }, profile: 'pragmatic_negotiator' }
+        { maps: { D: 8, I: 8, Conscientiousness: 9, Extraversion: 7 }, profile: 'collaborative_determined' },
+        { maps: { D: 9, I: 5, Conscientiousness: 8, Extraversion: 5 }, profile: 'directive_committed' },
+        { maps: { D: 6, I: 9, Conscientiousness: 6, Extraversion: 9 }, profile: 'personal_connector' },
+        { maps: { D: 5, I: 6, Conscientiousness: 5, Extraversion: 4 }, profile: 'pragmatic_negotiator' }
       ],
       indicators: [
         { name: 'Toma de control', description: 'Actúa rápido sin vacilar', maps_to: 'D', weight: 0.3, high_signal: 'Plan inmediato y concreto', low_signal: 'Paraliza o delega la decisión' },
@@ -637,10 +637,10 @@ Internamente, te sientes frustrado. Trabajaste duro pero este nuevo tipo "ganó"
     scoring_rubric: {
       instructions: 'Escenario mide D (competitividad), Neuroticism (manejo de frustración), Logros (motivación). Valora diferentes respuestas válidas.',
       option_weights: [
-        { maps: { D: 8, Logros_media: 8, Neuroticism: 7 }, profile: 'learning_competitive' },
-        { maps: { D: 7, Logros_media: 7, Neuroticism: 7 }, profile: 'analytical_investigator' },
-        { maps: { D: 7, Logros_media: 7, Neuroticism: 7 }, profile: 'systemic_inquirer' },
-        { maps: { D: 8, Logros_media: 8, Neuroticism: 6 }, profile: 'driven_persistent' }
+        { maps: { D: 9, Logros_media: 9, Neuroticism: 4, Extraversion: 8 }, profile: 'learning_competitive' },
+        { maps: { D: 8, Logros_media: 8, Neuroticism: 5, Extraversion: 6 }, profile: 'analytical_investigator' },
+        { maps: { D: 5, Logros_media: 6, Neuroticism: 7, Extraversion: 6 }, profile: 'systemic_inquirer' },
+        { maps: { D: 7, Logros_media: 9, Neuroticism: 6, Extraversion: 4 }, profile: 'driven_persistent' }
       ],
       indicators: [
         { name: 'Competitividad constructiva', description: 'Cómo maneja la motivación', maps_to: 'D', weight: 0.3, high_signal: 'Canaliza frustración en acción', low_signal: 'Se victimiza' },
@@ -824,10 +824,10 @@ Esto está afectando la moral del equipo. Algunos se sienten desmotivados. La pe
     scoring_rubric: {
       instructions: 'Escenario mide Agreeableness (justicia), I (cómo influencia), Conscientiousness (responsabilidad grupal). Valora diferentes formas válidas de actuar.',
       option_weights: [
-        { maps: { Agreeableness: 8, I: 8, Conscientiousness: 8 }, profile: 'diplomatic_advocate' },
-        { maps: { Agreeableness: 8, I: 8, Conscientiousness: 7 }, profile: 'public_balanced_voice' },
-        { maps: { Agreeableness: 8, I: 7, Conscientiousness: 7 }, profile: 'supportive_witness' },
-        { maps: { Agreeableness: 8, I: 7, Conscientiousness: 8 }, profile: 'thoughtful_observer' }
+        { maps: { Agreeableness: 9, I: 9, Conscientiousness: 9 }, profile: 'diplomatic_advocate' },
+        { maps: { Agreeableness: 7, I: 8, Conscientiousness: 7 }, profile: 'public_balanced_voice' },
+        { maps: { Agreeableness: 8, I: 6, Conscientiousness: 6 }, profile: 'supportive_witness' },
+        { maps: { Agreeableness: 5, I: 5, Conscientiousness: 5 }, profile: 'thoughtful_observer' }
       ],
       indicators: [
         { name: 'Sentido de justicia', description: 'Percibe y actúa ante inequidad', maps_to: 'Agreeableness', weight: 0.4, high_signal: 'Defiende lo justo activamente', low_signal: 'Pasa por alto' },

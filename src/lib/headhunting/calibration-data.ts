@@ -142,15 +142,19 @@ function computeBenchmarkStats(profiles: BenchmarkProfile[]) {
 }
 
 // Key organizational DNA patterns from the 15 top performers
+// NOTA AUDIT (Fase 0): Bd Score, Fd Score, y dimensiones McClelland
+// (Logros_media, Afiliación_media, Poder_media) fueron retiradas del reporte
+// porque la prueba actual no las mide con suficiente robustez:
+//   - Bd Score: 1 solo escenario, varianza cero
+//   - McClelland: bug de compresión, rango efectivo 4.1-4.5 en escala 1-5
+// Se reincorporan después de Fase 1 (escenarios nuevos + recalibración).
 export const TS_DNA_PATTERNS = {
-  summary: 'Trading Solutions top performers are characterized by high IQ (avg 117.6), high Conscientiousness (77.9), low Neuroticism (29.9), low Agreeableness (33.8), dominant Fi Score (91.7 - analytical/logical brain), and high Poder motivation (4.5). They are smart, disciplined, emotionally stable, independent-minded, analytical, and power-driven.',
+  summary: 'Los top performers de Trading Solutions se caracterizan por alto IQ (avg 117.6), alta Conscientiousness (77.9), bajo Neuroticism (29.9), baja Agreeableness (33.8), y dominancia analítica (Fi Score 91.7). Inteligentes, disciplinados, emocionalmente estables, con criterio propio y mentalidad analítica.',
   key_traits: [
-    { trait: 'IQ', direction: 'high', benchmark: 117.6, note: 'Nobody below 106. Cognitive ability is non-negotiable.' },
-    { trait: 'Conscientiousness', direction: 'high', benchmark: 77.9, note: 'Disciplined, responsible, follow-through.' },
-    { trait: 'Neuroticism', direction: 'low', benchmark: 29.9, note: 'Emotionally stable under pressure.' },
-    { trait: 'Agreeableness', direction: 'low', benchmark: 33.8, note: 'Not pushovers. Have their own criteria, push back.' },
-    { trait: 'Fi Score', direction: 'high', benchmark: 91.7, note: 'Analytical/logical brain dominates in TS.' },
-    { trait: 'Poder_media', direction: 'high', benchmark: 4.5, note: 'Want to influence, lead, win.' },
-    { trait: 'Logros_media', direction: 'high', benchmark: 4.3, note: 'Achievement-oriented, ambitious.' },
+    { trait: 'IQ', direction: 'high', benchmark: 117.6, note: 'Nadie por debajo de 106. Capacidad cognitiva no negociable.' },
+    { trait: 'Conscientiousness', direction: 'high', benchmark: 77.9, note: 'Disciplinados, responsables, follow-through.' },
+    { trait: 'Neuroticism', direction: 'low', benchmark: 29.9, note: 'Estables emocionalmente bajo presión.' },
+    { trait: 'Agreeableness', direction: 'low', benchmark: 33.8, note: 'No son complacientes. Criterio propio, push back.' },
+    { trait: 'Fi Score', direction: 'high', benchmark: 91.7, note: 'Estilo cognitivo analítico/lógico domina en TS.' },
   ],
 };
