@@ -6,11 +6,40 @@ type Cand = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   status: string;
   stage: string | null;
   vacancy_id: string;
   prefilter_decision: string | null;
+  prefilter_completed_at: string | null;
+  prefilter_data: PrefilterData | null;
+  cv_url: string | null;
   ht_vacancies?: { title: string };
+};
+
+type PrefilterData = {
+  doc_type?: string;
+  doc_number?: string;
+  phone?: string;
+  city?: string;
+  salary?: string;
+  availability?: string;
+  relocate?: string;
+  english_level?: string;
+  english_cert?: string;
+  edu_type?: string;
+  years_logistics?: number;
+  intl_clients?: boolean;
+  excel_level?: number;
+  crms?: string[];
+  years_sales?: number;
+  pricing_exp?: boolean;
+  leadership?: boolean;
+  team_size?: number;
+  why_ts?: string;
+  next_role?: string;
+  extra?: string;
+  submitted_at?: string;
 };
 
 type Vacancy = { id: string; title: string };
@@ -173,29 +202,147 @@ export default function PipelineFunnel() {
       )}
 
       {/* Side panel con detalles del candidato */}
-      {selectedCand && (
-        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setSelectedCand(null)}>
-          <div className="bg-white w-[480px] h-full overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{selectedCand.name}</h2>
-              <button onClick={() => setSelectedCand(null)} className="text-gray-400 hover:text-black text-2xl leading-none">×</button>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div><span className="text-gray-500">Email:</span> <strong>{selectedCand.email}</strong></div>
-              <div><span className="text-gray-500">Vacante:</span> <strong>{selectedCand.ht_vacancies?.title || "—"}</strong></div>
-              <div><span className="text-gray-500">Stage:</span> <strong>{selectedCand.stage || "aplico"}</strong></div>
-              <div><span className="text-gray-500">Status (Elevare):</span> <strong>{selectedCand.status}</strong></div>
-              {selectedCand.prefilter_decision && (
-                <div><span className="text-gray-500">Decisión prefiltro:</span> <strong>{selectedCand.prefilter_decision}</strong></div>
-              )}
-              <div className="pt-4 border-t mt-4">
-                <p className="text-xs text-gray-500 mb-2">Acciones disponibles según etapa actual:</p>
-                <p className="text-xs text-gray-400 italic">Pronto: enviar prefiltro · invitar Elevare · agendar entrevista IA · marcar manual</p>
-              </div>
-            </div>
+      {selectedCand && <CandDetailPanel cand={selectedCand} onClose={() => setSelectedCand(null)} />}
+    </div>
+  );
+}
+
+// ─── Side panel con detalle + respuestas del prefiltro ──────────────
+function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void }) {
+  const pf = cand.prefilter_data;
+  const decision = cand.prefilter_decision;
+  const decisionBadge = decision === "pass" ? { label: "✅ PASS", color: "#10B981" }
+    : decision === "review" ? { label: "⚠️ REVIEW", color: "#F59E0B" }
+    : decision === "reject" ? { label: "❌ REJECT", color: "#EF4444" }
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
+      <div className="bg-white w-[560px] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+          <div>
+            <h2 className="text-xl font-bold">{cand.name}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{cand.ht_vacancies?.title || "—"}</p>
           </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-black text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">×</button>
         </div>
-      )}
+
+        <div className="p-6 space-y-5 text-sm">
+          {/* Identidad */}
+          <Section title="Contacto">
+            <Row k="Email" v={cand.email} />
+            {cand.phone && <Row k="Teléfono" v={cand.phone} />}
+            {cand.cv_url && <Row k="LinkedIn" v={<a href={cand.cv_url} target="_blank" rel="noreferrer" className="text-blue-600 underline truncate inline-block max-w-[280px]">{cand.cv_url}</a>} />}
+          </Section>
+
+          {/* Estado */}
+          <Section title="Estado actual">
+            <Row k="Stage" v={<span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{cand.stage || "aplico"}</span>} />
+            <Row k="Status Elevare" v={cand.status} />
+            {decisionBadge && (
+              <Row k="Decisión prefiltro" v={
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: decisionBadge.color }}>
+                  {decisionBadge.label}
+                </span>
+              } />
+            )}
+            {cand.prefilter_completed_at && (
+              <Row k="Completó prefiltro" v={new Date(cand.prefilter_completed_at).toLocaleString("es-CO")} />
+            )}
+          </Section>
+
+          {/* Respuestas del prefiltro */}
+          {pf && (
+            <>
+              <Section title="📋 Datos personales (prefiltro)">
+                {pf.doc_type && <Row k="Tipo doc" v={pf.doc_type} />}
+                {pf.doc_number && <Row k="Núm doc" v={pf.doc_number} />}
+                {pf.phone && <Row k="Celular" v={pf.phone} />}
+                {pf.city && <Row k="Ciudad" v={pf.city} />}
+              </Section>
+
+              <Section title="💼 Disponibilidad y salario">
+                {pf.salary && <Row k="Expectativa salarial" v={<strong>{pf.salary}</strong>} />}
+                {pf.availability && <Row k="Inicio disponible" v={pf.availability} />}
+                {pf.relocate && <Row k="Mudanza Barranquilla" v={pf.relocate} />}
+              </Section>
+
+              <Section title="🌎 Idioma">
+                {pf.english_level && <Row k="Nivel inglés" v={pf.english_level} />}
+                {pf.english_cert && <Row k="Certifica inglés" v={pf.english_cert} />}
+              </Section>
+
+              <Section title="🎓 Formación + experiencia">
+                {pf.edu_type && <Row k="Formación" v={pf.edu_type} />}
+                {typeof pf.years_logistics === "number" && <Row k="Años logística/comex" v={`${pf.years_logistics} años`} />}
+                {typeof pf.intl_clients === "boolean" && <Row k="Clientes internacionales" v={pf.intl_clients ? "Sí" : "No"} />}
+                {typeof pf.excel_level === "number" && <Row k="Excel (1-5)" v={`${pf.excel_level}/5`} />}
+                {pf.crms && pf.crms.length > 0 && (
+                  <Row k="CRMs usados" v={pf.crms.join(", ")} />
+                )}
+              </Section>
+
+              <Section title="💰 Ventas, pricing, liderazgo">
+                {typeof pf.years_sales === "number" && <Row k="Años en ventas" v={`${pf.years_sales} años`} />}
+                {typeof pf.pricing_exp === "boolean" && <Row k="Experiencia pricing" v={pf.pricing_exp ? "Sí" : "No"} />}
+                {typeof pf.leadership === "boolean" && (
+                  <Row k="Lideró equipos" v={
+                    pf.leadership ? `Sí — ${pf.team_size || 0} personas` : "No"
+                  } />
+                )}
+              </Section>
+
+              {(pf.why_ts || pf.next_role || pf.extra) && (
+                <Section title="✍️ Sobre el candidato">
+                  {pf.why_ts && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-800 mb-1">¿Por qué TS?</p>
+                      <p className="text-sm text-gray-800 leading-relaxed">{pf.why_ts}</p>
+                    </div>
+                  )}
+                  {pf.next_role && (
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-2">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-600 mb-1">Qué busca en próximo rol</p>
+                      <p className="text-sm text-gray-800 leading-relaxed">{pf.next_role}</p>
+                    </div>
+                  )}
+                  {pf.extra && (
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-600 mb-1">Algo más</p>
+                      <p className="text-sm text-gray-800 leading-relaxed">{pf.extra}</p>
+                    </div>
+                  )}
+                </Section>
+              )}
+            </>
+          )}
+
+          {!pf && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-gray-500 italic">Aún no ha completado el prefiltro.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-2">{title}</h3>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-start gap-3 text-sm py-1">
+      <span className="text-gray-500 flex-shrink-0">{k}:</span>
+      <span className="text-right text-gray-900">{v}</span>
     </div>
   );
 }
