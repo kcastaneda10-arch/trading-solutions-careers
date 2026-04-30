@@ -32,11 +32,13 @@ import {
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
+import PipelineFunnel from "@/components/PipelineFunnel";
 
 type Tab =
   | "dashboard"
   | "vacantes"
   | "pipeline"
+  | "funnel"
   | "prefiltros"
   | "cvbank"
   | "entrevistas"
@@ -50,6 +52,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
   { id: "pipeline", label: "Pipeline", icon: Kanban },
+  { id: "funnel", label: "Funnel ✨", icon: Kanban },
   { id: "prefiltros", label: "Prefiltros", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "entrevistas", label: "Entrevistas IA", icon: Video },
@@ -134,6 +137,7 @@ export default function HRAdminPage() {
         {tab === "dashboard" && <Dashboard />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "pipeline" && <Pipeline />}
+        {tab === "funnel" && <PipelineFunnel />}
         {tab === "prefiltros" && <PrefiltrosPanel />}
         {tab === "cvbank" && <CVBank />}
         {tab === "entrevistas" && <Entrevistas />}
