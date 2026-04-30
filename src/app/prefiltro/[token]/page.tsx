@@ -8,7 +8,7 @@ const TS_BLUE = "#2C64ED";
 const TS_GRAY = "#6B7280";
 const TS_BORDER = "#E5E7EB";
 
-type Phase = "loading" | "form" | "submitting" | "done" | "error";
+type Phase = "loading" | "habeas" | "form" | "submitting" | "done" | "error";
 
 type CandidateData = {
   candidate: { id: string; name: string; email: string };
@@ -23,6 +23,12 @@ const RELOCATE = ["Ya vivo en Barranquilla", "Sí, dispuesto a mudarme", "No me 
 const ENGLISH = ["A1 (básico)", "A2 (elemental)", "B1 (intermedio)", "B2 (intermedio alto)", "C1 (avanzado)", "C2 (nativo / fluido)"];
 const ENG_TYPE = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
+const DOC_TYPES = [
+  { label: "Cédula de Ciudadanía", value: "CC" },
+  { label: "Cédula de Extranjería", value: "CE" },
+  { label: "Pasaporte", value: "PP" },
+  { label: "Permiso por Protección Temporal (PPT)", value: "PPT" },
+];
 
 export default function PrefiltroForm() {
   const params = useParams();
@@ -31,7 +37,16 @@ export default function PrefiltroForm() {
   const [data, setData] = useState<CandidateData | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Form state
+  // Habeas data acceptance
+  const [habeasAccepted, setHabeasAccepted] = useState(false);
+
+  // Personal info (sección 1)
+  const [docType, setDocType] = useState("");
+  const [docNumber, setDocNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [city, setCity] = useState("");
+
+  // Form state (existing)
   const [salary, setSalary] = useState("");
   const [availability, setAvailability] = useState("");
   const [modality, setModality] = useState("");
@@ -68,7 +83,7 @@ export default function PrefiltroForm() {
         }
         const j = (await r.json()) as CandidateData;
         setData(j);
-        setPhase("form");
+        setPhase("habeas");
       })
       .catch(() => {
         setErrorMsg("Error de conexión. Intenta de nuevo en un momento.");
@@ -80,8 +95,9 @@ export default function PrefiltroForm() {
     setCrms((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   }
 
-  function isValid() {
+  function isFormValid() {
     return (
+      docType && docNumber.trim().length >= 6 && phone.trim().length >= 7 && city.trim().length >= 3 &&
       salary && availability && modality && relocate && englishLevel && eduType &&
       yearsLogistics !== "" && intlClients && excelLevel && yearsSales !== "" &&
       pricingExp && leadership && whyTs.trim().length >= 20
@@ -89,12 +105,20 @@ export default function PrefiltroForm() {
   }
 
   async function handleSubmit() {
-    if (!isValid()) {
+    if (!isFormValid()) {
       alert("Por favor completa todos los campos antes de enviar.");
       return;
     }
     setPhase("submitting");
     const payload = {
+      // Personal
+      doc_type: docType,
+      doc_number: docNumber.trim(),
+      phone: phone.trim(),
+      city: city.trim(),
+      habeas_accepted: true,
+      habeas_accepted_at: new Date().toISOString(),
+      // Form
       salary, availability, modality, relocate,
       english_level: englishLevel, english_cert: englishCert,
       edu_type: eduType,
@@ -164,21 +188,109 @@ export default function PrefiltroForm() {
     );
   }
 
-  // Form phase
+  // ─── Habeas Data phase ────────────────────────────────────────────
+  if (phase === "habeas") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#fafafa", padding: "32px 16px", fontFamily: "Inter, -apple-system, sans-serif", color: TS_BLACK }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          {/* Hero cálido */}
+          <div style={{ marginBottom: 32 }}>
+            <p style={{ color: TS_GRAY, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 8 }}>
+              🌎 Trading Solutions · Cuestionario inicial
+            </p>
+            <h1 style={{ fontSize: 32, fontWeight: 700, margin: "0 0 12px", lineHeight: 1.2 }}>
+              Hola, {data?.candidate.name.split(" ")[0]} — queremos conocerte mejor 👋
+            </h1>
+            <p style={{ color: TS_GRAY, fontSize: 16, lineHeight: 1.6 }}>
+              Antes de avanzar al proceso de evaluación para <strong>{data?.vacancy.title}</strong>, te pedimos completar este cuestionario corto. Toma 7-10 minutos. No hay respuestas correctas o incorrectas — solo queremos entender tu perfil y lo que buscas.
+            </p>
+          </div>
+
+          {/* Habeas Data card */}
+          <div style={{ background: "white", borderRadius: 16, padding: 32, border: `1px solid ${TS_BORDER}`, marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: "#EBF0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TS_BLUE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l8 4v6c0 5.25-3.5 9.74-8 11-4.5-1.26-8-5.75-8-11V6l8-4z" />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Autorización tratamiento de datos</h2>
+            </div>
+            <p style={{ color: TS_GRAY, fontSize: 14, lineHeight: 1.7, marginBottom: 16 }}>
+              En cumplimiento de la <strong>Ley 1581 de 2012</strong> (Habeas Data) y demás normativa colombiana de protección de datos personales, te informamos que la información que compartas en este formulario será tratada por <strong>Trading Solutions Company S.A.S.</strong> con la finalidad exclusiva de adelantar el proceso de selección al que estás aplicando.
+            </p>
+            <ul style={{ color: TS_GRAY, fontSize: 14, lineHeight: 1.7, paddingLeft: 20, marginBottom: 16 }}>
+              <li>Tus datos serán almacenados de forma segura en nuestra base de candidatos.</li>
+              <li>No serán compartidos con terceros sin tu autorización expresa.</li>
+              <li>Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos en cualquier momento.</li>
+              <li>Para ejercer tus derechos puedes escribirnos a <strong>kcastaneda@tradingsolutions.com</strong>.</li>
+            </ul>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 16, border: `2px solid ${habeasAccepted ? TS_BLACK : TS_BORDER}`, borderRadius: 12, cursor: "pointer", background: habeasAccepted ? "#F9FAFB" : "white" }}>
+              <input
+                type="checkbox"
+                checked={habeasAccepted}
+                onChange={(e) => setHabeasAccepted(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 2, accentColor: TS_BLACK, cursor: "pointer" }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 500 }}>
+                Acepto que Trading Solutions trate mis datos personales con la finalidad de adelantar el proceso de selección, conforme a su política de privacidad y la Ley 1581 de 2012.
+              </span>
+            </label>
+          </div>
+
+          <button
+            onClick={() => habeasAccepted && setPhase("form")}
+            disabled={!habeasAccepted}
+            style={{
+              width: "100%", padding: "16px 32px",
+              background: habeasAccepted ? TS_BLACK : "#999",
+              color: "white", border: "none", borderRadius: 999,
+              fontSize: 16, fontWeight: 700,
+              cursor: habeasAccepted ? "pointer" : "not-allowed",
+            }}
+          >
+            Continuar al cuestionario →
+          </button>
+          {!habeasAccepted && (
+            <p style={{ color: TS_GRAY, fontSize: 13, textAlign: "center", marginTop: 12 }}>
+              Marca la casilla de autorización para continuar.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Form phase ───────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: "#fafafa", padding: "32px 16px", fontFamily: "Inter, -apple-system, sans-serif", color: TS_BLACK }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ marginBottom: 32 }}>
           <p style={{ color: TS_GRAY, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 8 }}>
-            Trading Solutions · Cuestionario inicial
+            🌎 Trading Solutions · {data?.vacancy.title}
           </p>
-          <h1 style={{ fontSize: 32, fontWeight: 700, margin: "0 0 12px" }}>Hola, {data?.candidate.name.split(" ")[0]}</h1>
-          <p style={{ color: TS_GRAY, fontSize: 16, lineHeight: 1.6 }}>
-            Antes de avanzar al proceso de evaluación para <strong>{data?.vacancy.title}</strong>, queremos conocerte un poco más. Este cuestionario toma 7-10 minutos. No hay respuestas correctas o incorrectas — solo queremos entender tu perfil.
+          <h1 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>Cuéntanos sobre ti, {data?.candidate.name.split(" ")[0]}</h1>
+          <p style={{ color: TS_GRAY, fontSize: 15, lineHeight: 1.6 }}>
+            Responde con tranquilidad y honestidad. No hay respuestas correctas o incorrectas.
           </p>
         </div>
 
-        <Section title="1 · Disponibilidad y modalidad">
+        <Section title="1 · Información personal">
+          <Q label="Tipo de documento">
+            <SelectChips value={docType} onChange={setDocType} options={DOC_TYPES} />
+          </Q>
+          <Q label="Número de documento">
+            <input value={docNumber} onChange={(e) => setDocNumber(e.target.value.replace(/\D/g, ""))} style={inputStyle} placeholder="Solo números" inputMode="numeric" />
+          </Q>
+          <Q label="Celular">
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} placeholder="+57 300 123 4567" inputMode="tel" />
+          </Q>
+          <Q label="Ciudad de residencia">
+            <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} placeholder="Ej. Barranquilla, Bogotá, Medellín…" />
+          </Q>
+        </Section>
+
+        <Section title="2 · Disponibilidad y modalidad">
           <Q label="Expectativa salarial mensual (COP)">
             <SelectChips value={salary} onChange={setSalary} options={SALARY_RANGES} />
           </Q>
@@ -193,7 +305,7 @@ export default function PrefiltroForm() {
           </Q>
         </Section>
 
-        <Section title="2 · Idioma">
+        <Section title="3 · Idioma">
           <Q label="Nivel de inglés autoreportado">
             <SelectChips value={englishLevel} onChange={setEnglishLevel} options={ENGLISH} />
           </Q>
@@ -202,7 +314,7 @@ export default function PrefiltroForm() {
           </Q>
         </Section>
 
-        <Section title="3 · Formación y experiencia">
+        <Section title="4 · Formación y experiencia">
           <Q label="Tu formación principal">
             <SelectChips value={eduType} onChange={setEduType} options={ENG_TYPE} />
           </Q>
@@ -224,7 +336,7 @@ export default function PrefiltroForm() {
           </Q>
         </Section>
 
-        <Section title="4 · Ventas, pricing, liderazgo">
+        <Section title="5 · Ventas, pricing, liderazgo">
           <Q label="Años de experiencia en ventas / B2B / atención comercial">
             <input type="number" min={0} max={50} value={yearsSales} onChange={(e) => setYearsSales(e.target.value)} style={inputStyle} placeholder="0" />
           </Q>
@@ -241,7 +353,7 @@ export default function PrefiltroForm() {
           )}
         </Section>
 
-        <Section title="5 · Sobre ti">
+        <Section title="6 · Sobre ti">
           <Q label={`¿Por qué Trading Solutions específicamente? (mín. 20 caracteres) — ${whyTs.length}/500`}>
             <textarea value={whyTs} onChange={(e) => setWhyTs(e.target.value.slice(0, 500))} rows={4} style={inputStyle} placeholder="Cuéntanos qué te llamó la atención de la empresa, no de la vacante…" />
           </Q>
@@ -256,19 +368,19 @@ export default function PrefiltroForm() {
         <div style={{ marginTop: 32, paddingTop: 24, borderTop: `1px solid ${TS_BORDER}` }}>
           <button
             onClick={handleSubmit}
-            disabled={phase === "submitting" || !isValid()}
+            disabled={(phase as Phase) === "submitting" || !isFormValid()}
             style={{
               width: "100%", padding: "16px 32px",
-              background: isValid() ? TS_BLACK : "#999",
+              background: isFormValid() ? TS_BLACK : "#999",
               color: "white", border: "none", borderRadius: 999,
               fontSize: 16, fontWeight: 700,
-              cursor: isValid() ? "pointer" : "not-allowed",
+              cursor: isFormValid() ? "pointer" : "not-allowed",
               transition: "background 0.2s",
             }}
           >
-            {phase === "submitting" ? "Enviando…" : "Enviar respuestas"}
+            {(phase as Phase) === "submitting" ? "Enviando…" : "Enviar respuestas"}
           </button>
-          {!isValid() && (
+          {!isFormValid() && (
             <p style={{ color: TS_GRAY, fontSize: 13, textAlign: "center", marginTop: 12 }}>
               Por favor completa todas las preguntas obligatorias antes de enviar.
             </p>
