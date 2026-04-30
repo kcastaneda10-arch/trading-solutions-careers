@@ -18,8 +18,7 @@ type CandidateData = {
 
 const SALARY_RANGES = ["< 3 M", "3 – 4 M", "4 – 5 M", "5 – 6 M", "6 – 7 M", "7 – 8 M", "8 M+"];
 const AVAILABILITY = ["Inmediato", "15 días", "30 días", "60+ días"];
-const MODALITY = ["Presencial Barranquilla", "Híbrido", "Remoto"];
-const RELOCATE = ["Ya vivo en Barranquilla", "Sí, dispuesto a mudarme", "No me puedo mudar", "Solo si fuera remoto"];
+const RELOCATE = ["Ya vivo en Barranquilla", "Sí, dispuesto a mudarme", "No me puedo mudar"];
 const ENGLISH = ["A1 (básico)", "A2 (elemental)", "B1 (intermedio)", "B2 (intermedio alto)", "C1 (avanzado)", "C2 (nativo / fluido)"];
 const ENG_TYPE = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
@@ -49,7 +48,6 @@ export default function PrefiltroForm() {
   // Form state (existing)
   const [salary, setSalary] = useState("");
   const [availability, setAvailability] = useState("");
-  const [modality, setModality] = useState("");
   const [relocate, setRelocate] = useState("");
   const [englishLevel, setEnglishLevel] = useState("");
   const [englishCert, setEnglishCert] = useState("");
@@ -98,7 +96,7 @@ export default function PrefiltroForm() {
   function isFormValid() {
     return (
       docType && docNumber.trim().length >= 6 && phone.trim().length >= 7 && city.trim().length >= 3 &&
-      salary && availability && modality && relocate && englishLevel && eduType &&
+      salary && availability && relocate && englishLevel && eduType &&
       yearsLogistics !== "" && intlClients && excelLevel && yearsSales !== "" &&
       pricingExp && leadership && whyTs.trim().length >= 20
     );
@@ -119,7 +117,7 @@ export default function PrefiltroForm() {
       habeas_accepted: true,
       habeas_accepted_at: new Date().toISOString(),
       // Form
-      salary, availability, modality, relocate,
+      salary, availability, relocate,
       english_level: englishLevel, english_cert: englishCert,
       edu_type: eduType,
       years_logistics: parseInt(yearsLogistics) || 0,
@@ -297,10 +295,7 @@ export default function PrefiltroForm() {
           <Q label="Disponibilidad para iniciar">
             <SelectChips value={availability} onChange={setAvailability} options={AVAILABILITY} />
           </Q>
-          <Q label="Modalidad preferida">
-            <SelectChips value={modality} onChange={setModality} options={MODALITY} />
-          </Q>
-          <Q label="¿Vives en Barranquilla o estás dispuesto(a) a mudarte?">
+          <Q label="¿Vives en Barranquilla o estás dispuesto(a) a mudarte? (la posición es presencial)">
             <SelectChips value={relocate} onChange={setRelocate} options={RELOCATE} />
           </Q>
         </Section>
