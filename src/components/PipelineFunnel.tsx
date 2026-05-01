@@ -339,6 +339,12 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
             <ElevareResultsBlock candidateId={cand.id} candidateStatus={cand.status} />
           )}
 
+          {/* Entrevista IA — disponible desde assessment_completado en adelante */}
+          {(cand.status === "completed" ||
+            ["assessment_completado","entrevista_ia","recruiter_interview"].includes(String(cand.stage || ""))) && (
+            <AIInterviewBlock candidateId={cand.id} />
+          )}
+
           {/* Respuestas del prefiltro */}
           {pf && (
             <>
@@ -431,6 +437,132 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
       <span className="text-gray-500 flex-shrink-0">{k}:</span>
       <span className="text-right text-gray-900">{v}</span>
     </div>
+  );
+}
+
+// ─── Bloque Entrevista IA · ElevenLabs Conversational AI ──────────
+function AIInterviewBlock({ candidateId }: { candidateId: string }) {
+  const [interview, setInterview] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [sending, setSending] = React.useState(false);
+  const [feedback, setFeedback] = React.useState("");
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      // We don't have a direct endpoint for "list ai_interviews by candidate"
+      // — let's use a simpler check via candidates endpoint or skip and just
+      // show button always.
+      const r = await fetch(`/api/headhunting/candidates/${candidateId}/ai-interview-status`, { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        setInterview(j.interview || null);
+      }
+    } catch {} finally {
+      setLoading(false);
+    }
+  }, [candidateId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  async function sendInterview() {
+    if (sending) return;
+    if (!confirm("¿Enviar entrevista IA por voz a este candidato? Se creará un draft en Gmail.")) return;
+    setSending(true);
+    setFeedback("Generando entrevista IA…");
+    try {
+      const r = await fetch(`/api/headhunting/candidates/${candidateId}/send-ai-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const j = await r.json();
+      if (j.success) {
+        setFeedback(`✅ Entrevista lista · revisa tu Gmail Drafts y envía a candidato`);
+        load();
+      } else {
+        setFeedback(`❌ ${j.error || "Error"}`);
+      }
+    } catch (e) {
+      setFeedback(`❌ ${(e as Error).message}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (loading) return null;
+
+  const recoColor =
+    interview?.ai_recommendation === "AVANZA" ? "#10B981" :
+    interview?.ai_recommendation === "EN ESPERA" ? "#F59E0B" :
+    interview?.ai_recommendation === "NO AVANZA" ? "#EF4444" : "#6B7280";
+
+  return (
+    <Section title="🎙️ Entrevista IA por voz">
+      {interview && interview.status === "completed" && interview.ai_score != null ? (
+        <div className="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-100 rounded-lg p-3 mb-3">
+          <div className="flex items-center gap-3 mb-2">
+            <span
+              className="px-2.5 py-1 rounded-full text-xs font-bold text-white"
+              style={{ background: recoColor }}
+            >
+              {interview.ai_recommendation}
+            </span>
+            <span className="text-xl font-extrabold">{Math.round(interview.ai_score)}</span>
+            <span className="text-xs text-gray-500">/ 100</span>
+            {interview.english_level && interview.english_level !== "no_evaluated" && (
+              <span className="text-xs text-gray-500 ml-auto">Inglés: <strong>{interview.english_level}</strong></span>
+            )}
+          </div>
+          {interview.ai_summary && (
+            <p className="text-xs text-gray-700 leading-relaxed">{interview.ai_summary}</p>
+          )}
+          {interview.ai_red_flags && interview.ai_red_flags.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-pink-200">
+              <p className="text-[10px] uppercase font-bold text-red-700 mb-1">Red flags ({interview.ai_red_flags.length})</p>
+              <ul className="text-xs text-red-800 list-disc pl-4 space-y-0.5">
+                {interview.ai_red_flags.slice(0, 3).map((f: string, i: number) => (<li key={i}>{f}</li>))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : interview && interview.status === "in_progress" ? (
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 text-xs text-blue-900">
+          ⏳ Candidato en entrevista — esperando que termine. Iniciada: {new Date(interview.started_at).toLocaleString("es-CO")}
+        </div>
+      ) : interview && interview.status === "invited" ? (
+        <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-3 mb-3 text-xs text-yellow-900">
+          📩 Entrevista enviada. Esperando que el candidato la inicie. Token expira: {new Date(interview.token_expires_at).toLocaleDateString("es-CO")}
+        </div>
+      ) : (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-xs text-gray-600">
+          Aún no se ha enviado entrevista IA a este candidato.
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={sendInterview}
+          disabled={sending || (interview && interview.status === "in_progress")}
+          className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sending ? "…" :
+            interview && interview.status === "completed" ? "🔄 Reenviar entrevista" :
+            interview && interview.status === "invited" ? "🔄 Reenviar enlace" :
+            "🎙️ Enviar entrevista IA"}
+        </button>
+        {interview?.token && (
+          <a
+            href={`/entrevista-ia/${interview.token}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold px-3 py-1.5 rounded-full border-2 border-pink-400 text-pink-800 hover:bg-pink-50"
+          >
+            👀 Ver enlace candidato
+          </a>
+        )}
+      </div>
+      {feedback && (<div className="mt-2 text-xs text-gray-600 italic">{feedback}</div>)}
+    </Section>
   );
 }
 
