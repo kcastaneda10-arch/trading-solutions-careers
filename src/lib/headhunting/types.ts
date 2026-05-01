@@ -81,6 +81,11 @@ export interface IdealProfile {
     min: number;
     max: number;
     weight: number;
+    // Optional cohort statistics (TP-derived) — used for similarity-based scoring.
+    // When present, scoring uses Gaussian curve over z-score instead of hard
+    // threshold (smooth gradient, tolerant of TP cohort diversity).
+    mean?: number;
+    std?: number;
   };
 }
 
