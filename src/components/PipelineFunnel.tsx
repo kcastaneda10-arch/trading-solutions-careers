@@ -499,32 +499,120 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
   return (
     <Section title="🎙️ Entrevista IA por voz">
       {interview && interview.status === "completed" && interview.ai_score != null ? (
-        <div className="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-100 rounded-lg p-3 mb-3">
-          <div className="flex items-center gap-3 mb-2">
-            <span
-              className="px-2.5 py-1 rounded-full text-xs font-bold text-white"
-              style={{ background: recoColor }}
-            >
-              {interview.ai_recommendation}
-            </span>
-            <span className="text-xl font-extrabold">{Math.round(interview.ai_score)}</span>
-            <span className="text-xs text-gray-500">/ 100</span>
-            {interview.english_level && interview.english_level !== "no_evaluated" && (
-              <span className="text-xs text-gray-500 ml-auto">Inglés: <strong>{interview.english_level}</strong></span>
+        <>
+          <div className="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-100 rounded-lg p-3 mb-3">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background: recoColor }}>
+                {interview.ai_recommendation}
+              </span>
+              <div className="flex items-baseline gap-1"><span className="text-xl font-extrabold">{Math.round(interview.ai_score)}</span><span className="text-[10px] text-gray-500">global</span></div>
+              {interview.competency_score != null && (
+                <div className="flex items-baseline gap-1"><span className="text-xl font-extrabold text-purple-700">{Math.round(interview.competency_score)}</span><span className="text-[10px] text-gray-500">competencias</span></div>
+              )}
+              {interview.english_level && interview.english_level !== "no_evaluated" && (
+                <div className="flex items-baseline gap-1"><span className="text-xl font-extrabold text-blue-700">{interview.english_level}</span><span className="text-[10px] text-gray-500">inglés</span></div>
+              )}
+            </div>
+            {interview.ai_summary && (
+              <p className="text-xs text-gray-700 leading-relaxed">{interview.ai_summary}</p>
             )}
           </div>
-          {interview.ai_summary && (
-            <p className="text-xs text-gray-700 leading-relaxed">{interview.ai_summary}</p>
+
+          {/* Audio player */}
+          {interview.audio_url && (
+            <div className="mb-3">
+              <p className="text-[10px] uppercase font-bold text-gray-500 mb-1">🎧 Audio de la entrevista</p>
+              <audio src={interview.audio_url} controls className="w-full" preload="none" />
+            </div>
           )}
+
+          {/* Competencias detalladas */}
+          {Array.isArray(interview.competencies_scores) && interview.competencies_scores.length > 0 && (
+            <details className="mb-3">
+              <summary className="text-xs font-bold cursor-pointer text-purple-800 mb-2">📊 Detalle de competencias ({interview.competencies_scores.length})</summary>
+              <div className="space-y-1.5 mt-2 pl-2">
+                {interview.competencies_scores.map((c: any, i: number) => {
+                  const color = c.score >= 8 ? "bg-emerald-500" : c.score >= 6 ? "bg-amber-500" : "bg-red-500";
+                  return (
+                    <div key={i} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 truncate font-semibold">{c.name}</div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-12 h-1.5 bg-gray-200 rounded">
+                            <div className={`h-full rounded ${color}`} style={{ width: `${(c.score || 0) * 10}%` }} />
+                          </div>
+                          <span className="font-bold w-6 text-right">{c.score}</span>
+                        </div>
+                      </div>
+                      {c.evidence && (<p className="text-[10px] text-gray-600 italic mt-0.5 pl-1">&quot;{c.evidence}&quot;</p>)}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+
+          {/* Inglés detallado */}
+          {interview.english_detail && interview.english_level !== "no_evaluated" && (
+            <details className="mb-3">
+              <summary className="text-xs font-bold cursor-pointer text-blue-800 mb-2">🌎 Detalle de inglés ({interview.english_level})</summary>
+              <div className="mt-2 pl-2 text-xs space-y-1">
+                <div className="grid grid-cols-2 gap-1">
+                  {[["Fluidez", interview.english_detail.fluency], ["Pronunciación", interview.english_detail.pronunciation], ["Gramática", interview.english_detail.grammar], ["Vocabulario", interview.english_detail.vocabulary], ["Comprensión", interview.english_detail.comprehension]].map(([label, score]: any, i) => (
+                    <div key={i} className="flex justify-between"><span className="text-gray-600">{label}:</span><span className="font-bold">{score}/10</span></div>
+                  ))}
+                </div>
+                {interview.english_detail.professional_readiness && (
+                  <div className="mt-2 pt-2 border-t border-blue-100">
+                    <strong>Listo para clientes:</strong>{" "}
+                    {interview.english_detail.professional_readiness === "ready_for_clients" ? "✅ Sí" :
+                     interview.english_detail.professional_readiness === "needs_practice" ? "⚠️ Necesita práctica" : "❌ No listo"}
+                  </div>
+                )}
+                {interview.english_detail.summary && (<p className="text-[11px] text-gray-700 italic mt-1">{interview.english_detail.summary}</p>)}
+              </div>
+            </details>
+          )}
+
+          {/* Strengths & gaps */}
+          {(interview.ai_strengths?.length > 0 || interview.ai_gaps?.length > 0) && (
+            <details className="mb-3">
+              <summary className="text-xs font-bold cursor-pointer text-gray-700 mb-2">💪 Fortalezas y gaps</summary>
+              <div className="mt-2 pl-2 space-y-2 text-xs">
+                {interview.ai_strengths?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-emerald-700 mb-1">Fortalezas</p>
+                    <ul className="space-y-1">
+                      {interview.ai_strengths.map((s: any, i: number) => (
+                        <li key={i}><strong>{s.area}:</strong> <span className="text-gray-600 italic">&quot;{s.evidence}&quot;</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {interview.ai_gaps?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-red-700 mb-1">Gaps</p>
+                    <ul className="space-y-1">
+                      {interview.ai_gaps.map((g: any, i: number) => (
+                        <li key={i}><strong>{g.area}</strong> <span className={g.severity === "high" ? "text-red-700" : g.severity === "medium" ? "text-amber-700" : "text-gray-500"}>({g.severity})</span>: <span className="text-gray-600 italic">&quot;{g.evidence}&quot;</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
+
+          {/* Red flags */}
           {interview.ai_red_flags && interview.ai_red_flags.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-pink-200">
-              <p className="text-[10px] uppercase font-bold text-red-700 mb-1">Red flags ({interview.ai_red_flags.length})</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mb-3">
+              <p className="text-[10px] uppercase font-bold text-red-700 mb-1">🚩 Red flags ({interview.ai_red_flags.length})</p>
               <ul className="text-xs text-red-800 list-disc pl-4 space-y-0.5">
-                {interview.ai_red_flags.slice(0, 3).map((f: string, i: number) => (<li key={i}>{f}</li>))}
+                {interview.ai_red_flags.map((f: string, i: number) => (<li key={i}>{f}</li>))}
               </ul>
             </div>
           )}
-        </div>
+        </>
       ) : interview && interview.status === "in_progress" ? (
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 text-xs text-blue-900">
           ⏳ Candidato en entrevista — esperando que termine. Iniciada: {new Date(interview.started_at).toLocaleString("es-CO")}

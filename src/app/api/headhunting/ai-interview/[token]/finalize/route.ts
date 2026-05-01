@@ -1,9 +1,11 @@
 /**
  * POST /api/headhunting/ai-interview/[token]/finalize
  *
- * Llamado por el frontend cuando la entrevista termina (o por webhook de
- * ElevenLabs cuando el conversation_id queda fijo). Recibe transcript,
- * lo analiza con Claude, y guarda el score + recomendación en la DB.
+ * Llamado por el frontend cuando la entrevista termina (o invocado manualmente
+ * con un conversation_id). Corre 3 agentes Claude en paralelo:
+ *   1. SCORING agent → score general + recomendación + summary
+ *   2. COMPETENCIES agent → 8-10 competencias del rol con score 1-10 + evidencia
+ *   3. ENGLISH agent → CEFR level + breakdown (fluidez, pronunciación, gramática, vocab, comprensión)
  *
  * Body: { conversation_id?: string, transcript?: any, audio_url?: string }
  */
@@ -22,52 +24,193 @@ function getAnthropic(): Anthropic {
 
 const MODEL = "claude-sonnet-4-20250514";
 
-const SCORING_PROMPT = `Eres un analista experto en entrevistas de selección. Acabas de revisar una entrevista por voz que un candidato tuvo con una recruiter virtual de Trading Solutions.
+// ─── PROMPT 1: Scoring general ────────────────────────────────
+const SCORING_PROMPT = `Eres un analista experto en entrevistas de selección. Acabas de revisar una entrevista por voz que un candidato tuvo con una recruiter virtual de Trading Solutions (logística internacional, Barranquilla Colombia).
 
 CANDIDATO: {candidate_name}
-POSICIÓN: {vacancy_title}
-ÁREA: {vacancy_area}
+POSICIÓN: {vacancy_title} · ÁREA: {vacancy_area}
 
-TRANSCRIPCIÓN COMPLETA:
+TRANSCRIPCIÓN:
 {transcript}
 
-Tu tarea: analizar la entrevista y devolver un JSON estricto con:
+Genera un análisis ejecutivo de la entrevista. Devuelve SOLO un JSON válido (sin texto extra):
 
 {
   "score": <number 0-100>,
   "recommendation": "AVANZA" | "EN ESPERA" | "NO AVANZA",
-  "summary": "<resumen ejecutivo en 2-3 oraciones de quién es el candidato y cómo se desempeñó>",
+  "summary": "<3-4 oraciones — quién es el candidato y cómo se desempeñó en general>",
   "strengths": [
-    { "area": "<área evaluada>", "evidence": "<cita o paráfrasis del candidato>" }
+    { "area": "<área>", "evidence": "<cita textual o paráfrasis exacta del candidato>" }
   ],
   "gaps": [
-    { "area": "<área con debilidad>", "evidence": "<cita o paráfrasis>", "severity": "low|medium|high" }
+    { "area": "<área débil>", "evidence": "<cita o paráfrasis>", "severity": "low|medium|high" }
   ],
-  "red_flags": [
-    "<señal de alerta concreta — solo si aplica>"
-  ],
-  "english_level": "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "no_evaluated",
-  "english_evidence": "<cita en inglés del candidato + análisis breve>",
-  "specific_examples_score": <0-10 — qué tan concreto y específico fue (STAR completo vs vaguedades)>,
-  "communication_score": <0-10 — claridad, estructura, fluidez>,
-  "role_fit_score": <0-10 — qué tan bien encaja con el rol específico>,
+  "red_flags": [ "<señal concreta — solo si aplica>" ],
   "interview_questions_for_human_recruiter": [
     "<pregunta sugerida para que Kelly profundice en entrevista CWO>"
   ]
 }
 
-CRITERIOS DE EVALUACIÓN:
-- Score 80+: AVANZA. Respuestas con ejemplos específicos, situaciones reales, resultados medibles. Inglés B1+ si aplica.
-- Score 60-79: EN ESPERA. Algunas respuestas sólidas pero gaps notables. Necesita revisión humana.
-- Score <60: NO AVANZA. Respuestas vagas, sin ejemplos, evita preguntas, o evidencia clara de no-match con el rol.
+CRITERIOS:
+- Score 80+: AVANZA (ejemplos específicos, situaciones reales, resultados medibles)
+- Score 60-79: EN ESPERA (algunos sólidos pero con gaps notables)
+- Score <60: NO AVANZA (vagos, sin evidencia, no-match con rol)
+
+Sé EVIDENCIAL — cada strength/gap con cita textual. Si la entrevista quedó incompleta (cortada), evalúa solo lo que escuchaste y nota la limitación en summary.`;
+
+// ─── PROMPT 2: Competencias específicas del rol ──────────────
+const COMPETENCY_PROMPT = `Eres un experto en evaluación por competencias. Tienes que calificar al candidato según las competencias críticas del rol.
+
+CANDIDATO: {candidate_name}
+POSICIÓN: {vacancy_title} · ÁREA: {vacancy_area}
+
+TRANSCRIPCIÓN:
+{transcript}
+
+Califica las siguientes competencias (1-10) con evidencia de la entrevista. Devuelve SOLO un JSON estricto:
+
+{
+  "competencies": [
+    {
+      "name": "Comunicación verbal",
+      "score": <1-10>,
+      "evidence": "<cita o paráfrasis>",
+      "reasoning": "<por qué ese score>"
+    },
+    {
+      "name": "Pensamiento estructurado (STAR)",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "Orientación a resultados",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "Resolución de problemas",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "Manejo de presión",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "Trabajo en equipo / Colaboración",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "Aprendizaje y autocrítica",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "{role_specific_competency_1}",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    },
+    {
+      "name": "{role_specific_competency_2}",
+      "score": <1-10>,
+      "evidence": "<...>",
+      "reasoning": "<...>"
+    }
+  ],
+  "average_score": <number, promedio de las anteriores en escala 0-100>,
+  "top_3_strengths": ["<competencia>", "<competencia>", "<competencia>"],
+  "top_3_gaps": ["<competencia>", "<competencia>", "<competencia>"]
+}
 
 REGLAS:
-- Sé EVIDENCIAL. Cada strength/gap debe tener cita textual o paráfrasis exacta del candidato.
-- NO inventes evidencia. Si la entrevista fue corta o incompleta, di "INSUFICIENTE DATA" y baja el score.
-- Para Inside Sales/Sales: prioriza fluidez verbal, energía, capacidad de improvisar, ejemplos de ventas reales.
-- Para Pricing/Doc: prioriza precisión, capacidad analítica, atención al detalle.
-- Para inglés: si NO se evaluó (no se llegó a la sección), pon "no_evaluated".
-- Output: SOLO el JSON, sin texto adicional.`;
+- {role_specific_competency_1} y {role_specific_competency_2}: reemplaza por competencias específicas al rol (ej. para Sales: "Cierre comercial" y "Manejo de objeciones"; para Pricing: "Precisión analítica" y "Atención al detalle"; para Customer Doc: "Documentación rigurosa" y "Comunicación con cliente externo").
+- Si no hay evidencia para una competencia, score = 5 y evidence = "Sin evidencia clara en la entrevista".
+- Sé estricto: 8-10 = excelente con prueba clara; 5-7 = aceptable; 1-4 = débil con evidencia.`;
+
+// ─── PROMPT 3: Inglés ──────────────────────────────────────
+const ENGLISH_PROMPT = `Eres un evaluador certificado de inglés profesional. El candidato tuvo una sección en inglés al final de la entrevista (role-play de cliente extranjero llamando por servicios de logística).
+
+CANDIDATO: {candidate_name}
+
+TRANSCRIPCIÓN COMPLETA:
+{transcript}
+
+Evalúa el nivel de inglés del candidato según el Marco Común Europeo (CEFR) y devuelve SOLO un JSON estricto:
+
+{
+  "cefr_level": "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "no_evaluated",
+  "overall_score": <number 0-100>,
+  "fluency": <1-10>,
+  "pronunciation": <1-10>,
+  "grammar": <1-10>,
+  "vocabulary": <1-10>,
+  "comprehension": <1-10>,
+  "english_section_quotes": [
+    "<cita textual del candidato hablando en inglés>"
+  ],
+  "professional_readiness": "ready_for_clients" | "needs_practice" | "not_ready" | "no_evaluated",
+  "summary": "<2-3 oraciones evaluando el nivel y si puede manejar conversaciones con clientes en inglés>"
+}
+
+GUÍA CEFR:
+- A1/A2: básico, no puede sostener conversación profesional
+- B1: intermedio, conversaciones simples, errores frecuentes pero comprensible
+- B2: intermedio-alto, conversaciones profesionales con esfuerzo, errores ocasionales
+- C1: avanzado, fluido para negocios, errores raros
+- C2: nativo o casi nativo
+
+REGLAS:
+- Si NO hay sección en inglés en el transcript, pon "no_evaluated" en cefr_level y professional_readiness, y todos los scores numéricos en 0.
+- Para "ready_for_clients" se requiere mínimo B2.
+- Cita textual exacta del candidato en inglés (no de la recruiter).`;
+
+const COMP_BY_AREA: Record<string, [string, string]> = {
+  Sales: ["Cierre comercial", "Manejo de objeciones"],
+  "Inside Sales": ["Cierre comercial", "Manejo de objeciones"],
+  Pricing: ["Precisión analítica", "Atención al detalle"],
+  Operations: ["Eficiencia operacional", "Atención al detalle"],
+  Finance: ["Rigor numérico", "Control y compliance"],
+  "Customer Documentation": ["Documentación rigurosa", "Comunicación con cliente externo"],
+};
+
+function buildTranscriptText(transcript: any): string {
+  if (!transcript) return "";
+  if (Array.isArray(transcript)) {
+    return transcript
+      .map((t: any) => `${t.role || t.speaker || "?"}: ${t.content || t.text || t.message || ""}`)
+      .join("\n");
+  }
+  if (transcript?.transcript) {
+    const segs = Array.isArray(transcript.transcript) ? transcript.transcript : [];
+    return segs
+      .map((s: any) => `${s.role || "?"}: ${s.message || s.text || ""}`)
+      .join("\n");
+  }
+  if (typeof transcript === "string") return transcript;
+  return JSON.stringify(transcript).slice(0, 14000);
+}
+
+async function runPrompt(promptText: string): Promise<any> {
+  const res = await getAnthropic().messages.create({
+    model: MODEL,
+    max_tokens: 3500,
+    temperature: 0.2,
+    messages: [{ role: "user", content: promptText }],
+  });
+  const text = res.content[0].type === "text" ? res.content[0].text : "";
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("AI did not return JSON");
+  return JSON.parse(m[0]);
+}
 
 export async function POST(
   req: NextRequest,
@@ -91,16 +234,16 @@ export async function POST(
       return NextResponse.json({ error: "invalid_token" }, { status: 401 });
     }
 
-    // If we got a conversation_id but no transcript, fetch from ElevenLabs
-    if (!transcript && conversationId && process.env.ELEVENLABS_API_KEY) {
+    // If we have conversation_id but no transcript, fetch from ElevenLabs
+    const convoId = conversationId || interview.conversation_id;
+    if (!transcript && convoId && process.env.ELEVENLABS_API_KEY) {
       try {
         const r = await fetch(
-          `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}`,
+          `https://api.elevenlabs.io/v1/convai/conversations/${convoId}`,
           { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
         );
         if (r.ok) {
-          const j = await r.json();
-          transcript = j;
+          transcript = await r.json();
         } else {
           console.error("ElevenLabs fetch transcript failed:", r.status);
         }
@@ -110,13 +253,12 @@ export async function POST(
     }
 
     if (!transcript) {
-      // Save what we have, mark for manual review
       await supabaseAdmin
         .from("ht_ai_interviews")
         .update({
           status: "completed",
           completed_at: new Date().toISOString(),
-          conversation_id: conversationId,
+          conversation_id: convoId,
           audio_url: audioUrl,
           ai_recommendation: "PENDIENTE",
           ai_summary: "Transcripción no disponible. Revisar manualmente.",
@@ -125,78 +267,72 @@ export async function POST(
       return NextResponse.json({ success: true, scored: false, note: "No transcript available" });
     }
 
-    // Build readable transcript text for Claude
-    let transcriptText = "";
-    if (Array.isArray(transcript)) {
-      transcriptText = transcript
-        .map((t: { role?: string; speaker?: string; content?: string; text?: string; message?: string }) =>
-          `${t.role || t.speaker || "?"}: ${t.content || t.text || t.message || ""}`
-        )
-        .join("\n");
-    } else if (transcript?.transcript) {
-      // ElevenLabs format
-      const segs = Array.isArray(transcript.transcript) ? transcript.transcript : [];
-      transcriptText = segs
-        .map((s: { role?: string; message?: string }) => `${s.role || "?"}: ${s.message || ""}`)
-        .join("\n");
-    } else if (typeof transcript === "string") {
-      transcriptText = transcript;
-    } else {
-      transcriptText = JSON.stringify(transcript).slice(0, 8000);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transcriptText = buildTranscriptText(transcript);
     const candidate = (interview as any).ht_candidates;
     const vacancy = candidate?.ht_vacancies;
+    const area = vacancy?.area || "—";
+    const roleComps = COMP_BY_AREA[area] ||
+      COMP_BY_AREA[vacancy?.title || ""] ||
+      ["Conocimiento del rol", "Adaptabilidad"];
 
-    const prompt = SCORING_PROMPT
-      .replace("{candidate_name}", candidate?.name || "—")
-      .replace("{vacancy_title}", vacancy?.title || "—")
-      .replace("{vacancy_area}", vacancy?.area || "—")
-      .replace("{transcript}", transcriptText.slice(0, 12000));
+    const fillCommon = (p: string) =>
+      p
+        .replace("{candidate_name}", candidate?.name || "—")
+        .replace("{vacancy_title}", vacancy?.title || "—")
+        .replace("{vacancy_area}", area)
+        .replace("{transcript}", transcriptText.slice(0, 14000));
 
-    const aiResult = await getAnthropic().messages.create({
-      model: MODEL,
-      max_tokens: 3000,
-      temperature: 0.2,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const competencyPrompt = fillCommon(COMPETENCY_PROMPT)
+      .replace(/\{role_specific_competency_1\}/g, roleComps[0])
+      .replace(/\{role_specific_competency_2\}/g, roleComps[1]);
 
-    const text = aiResult.content[0].type === "text" ? aiResult.content[0].text : "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json(
-        { error: "AI no devolvió JSON válido", raw: text.slice(0, 500) },
-        { status: 502 }
-      );
-    }
+    // Run 3 agents in parallel
+    const [generalAnalysis, competencyAnalysis, englishAnalysis] = await Promise.all([
+      runPrompt(fillCommon(SCORING_PROMPT)).catch((e) => ({ error: String(e) })),
+      runPrompt(competencyPrompt).catch((e) => ({ error: String(e) })),
+      runPrompt(fillCommon(ENGLISH_PROMPT)).catch((e) => ({ error: String(e) })),
+    ]);
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Build audio_url proxy if conversation_id available
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+    const finalAudioUrl = audioUrl ||
+      (convoId ? `${baseUrl}/api/headhunting/ai-interview/${token}/audio` : null);
 
     await supabaseAdmin
       .from("ht_ai_interviews")
       .update({
         status: "completed",
         completed_at: new Date().toISOString(),
-        conversation_id: conversationId,
+        conversation_id: convoId,
         transcript: transcript,
-        audio_url: audioUrl,
-        ai_score: parsed.score,
-        ai_recommendation: parsed.recommendation,
-        ai_summary: parsed.summary,
-        ai_strengths: parsed.strengths,
-        ai_gaps: parsed.gaps,
-        ai_red_flags: parsed.red_flags || [],
-        english_level: parsed.english_level,
+        audio_url: finalAudioUrl,
+        // General analysis
+        ai_score: generalAnalysis.score ?? null,
+        overall_score: generalAnalysis.score ?? null,
+        ai_recommendation: generalAnalysis.recommendation ?? "PENDIENTE",
+        ai_summary: generalAnalysis.summary ?? null,
+        ai_strengths: generalAnalysis.strengths ?? [],
+        ai_gaps: generalAnalysis.gaps ?? [],
+        ai_red_flags: generalAnalysis.red_flags ?? [],
+        // Competencies
+        competencies_scores: competencyAnalysis.competencies ?? null,
+        competency_score: competencyAnalysis.average_score ?? null,
+        // English
+        english_level: englishAnalysis.cefr_level ?? "no_evaluated",
+        english_score: englishAnalysis.overall_score ?? null,
+        english_detail: englishAnalysis,
       })
       .eq("id", interview.id);
 
     return NextResponse.json({
       success: true,
       scored: true,
-      score: parsed.score,
-      recommendation: parsed.recommendation,
-      summary: parsed.summary,
+      score: generalAnalysis.score,
+      competency_score: competencyAnalysis.average_score,
+      english_score: englishAnalysis.overall_score,
+      english_level: englishAnalysis.cefr_level,
+      recommendation: generalAnalysis.recommendation,
+      summary: generalAnalysis.summary,
     });
   } catch (err) {
     console.error("ai-interview finalize error:", err);

@@ -18,7 +18,7 @@ export async function GET(
   const { candidateId } = params;
   const { data, error } = await supabaseAdmin
     .from("ht_ai_interviews")
-    .select("id, token, token_expires_at, status, started_at, completed_at, ai_score, ai_recommendation, ai_summary, ai_red_flags, english_level, recruiter_draft_id")
+    .select("id, token, token_expires_at, status, started_at, completed_at, conversation_id, audio_url, ai_score, overall_score, competency_score, english_score, ai_recommendation, ai_summary, ai_strengths, ai_gaps, ai_red_flags, english_level, english_detail, competencies_scores, recruiter_draft_id")
     .eq("candidate_id", candidateId)
     .order("created_at", { ascending: false })
     .limit(1)
