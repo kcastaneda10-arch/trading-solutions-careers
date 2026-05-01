@@ -16,20 +16,27 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const vacancyFilter = url.searchParams.get("vacancy_id");
 
-    let query = supabaseAdmin
-      .from("ht_candidates")
-      .select("id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, source, created_at, ht_vacancies(title)");
+    // Lista mínima de columnas que sabemos existen. Si alguna columna opcional
+    // (e.g. `source`) no existe en este schema, hacemos un retry sin ella.
+    const baseCols = "id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, created_at, ht_vacancies(title)";
+    const withSource = `id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, source, created_at, ht_vacancies(title)`;
 
-    if (vacancyFilter) {
-      query = query.eq("vacancy_id", vacancyFilter);
+    async function runQuery(cols: string) {
+      let q = supabaseAdmin.from("ht_candidates").select(cols);
+      if (vacancyFilter) q = q.eq("vacancy_id", vacancyFilter);
+      return q;
     }
 
-    const { data: candidates, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    let resp: any = await runQuery(withSource);
+    if (resp.error && /column .*source.* does not exist/i.test(resp.error.message)) {
+      // Retry sin source
+      resp = await runQuery(baseCols);
+    }
+    if (resp.error) {
+      return NextResponse.json({ error: resp.error.message }, { status: 500 });
     }
 
-    const all = candidates || [];
+    const all: any[] = resp.data || [];
 
     // Conteo por stage del Funnel (12 stages oficiales)
     const STAGES = [
@@ -67,7 +74,6 @@ export async function GET(req: NextRequest) {
     const byVacancy: Record<string, { count: number; title: string }> = {};
     for (const c of all) {
       const vid = (c.vacancy_id as string) || "unknown";
-      // @ts-expect-error supabase relation
       const title = c.ht_vacancies?.title || "—";
       if (!byVacancy[vid]) byVacancy[vid] = { count: 0, title };
       byVacancy[vid].count++;
