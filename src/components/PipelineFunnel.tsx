@@ -59,6 +59,8 @@ const STAGES: Array<{ id: string; label: string; emoji: string; color: string }>
   { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
   { id: "cwo_interview",          label: "CWO + Hiring",          emoji: "👔", color: "#DB2777" },
   { id: "touring",                label: "Prueba Touring",        emoji: "🏢", color: "#BE185D" },
+  { id: "terna",                  label: "Terna · Mejores",       emoji: "🏆", color: "#9333EA" },
+  { id: "oferta",                 label: "Oferta",                emoji: "📨", color: "#0EA5E9" },
   { id: "contratado",             label: "Contratado",            emoji: "🎉", color: "#16A34A" },
 ];
 
@@ -216,7 +218,9 @@ const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> =
   entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
   recruiter_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
   cwo_interview: { id: "touring", label: "Pasar a Prueba Touring", emoji: "🏢" },
-  touring: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
+  touring: { id: "terna", label: "Pasar a Terna", emoji: "🏆" },
+  terna: { id: "oferta", label: "Pasar a Oferta", emoji: "📨" },
+  oferta: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
 };
 
 // ─── Side panel con detalle + respuestas del prefiltro ──────────────
