@@ -85,6 +85,21 @@ export async function POST(req: NextRequest) {
     if (finalMatchPercentage >= 70) recommendation = 'AVANZA';
     else if (finalMatchPercentage >= 50) recommendation = 'EN ESPERA';
 
+    // Check if result already exists — IMPORTANTE: preservar proctoring data
+    // que /assessment/complete guardó dentro de benchmark_comparison.proctoring,
+    // si lo borráramos aquí el auditor anti-cheat creería que la cámara estaba
+    // apagada y los snapshots eran 0, marcando a todos como NO CONFIABLE.
+    const { data: existingResult } = await supabaseAdmin
+      .from('ht_results')
+      .select('id, benchmark_comparison')
+      .eq('candidate_id', candidate_id)
+      .single();
+
+    const existingProctoring = (existingResult?.benchmark_comparison as { proctoring?: unknown })?.proctoring;
+    const mergedBenchmark = existingProctoring
+      ? { ...benchmarkComparison, proctoring: existingProctoring }
+      : benchmarkComparison;
+
     // Save/update result
     const resultData = {
       candidate_id,
@@ -93,19 +108,12 @@ export async function POST(req: NextRequest) {
       dimension_scores: dimensionScores,
       match_percentage: finalMatchPercentage,
       match_breakdown: matchResult.match_breakdown || deterministicMatch.breakdown,
-      benchmark_comparison: benchmarkComparison,
+      benchmark_comparison: mergedBenchmark,
       red_flags: finalRedFlags,
       recommendation: matchResult.recommendation || recommendation,
       recommendation_reason: matchResult.recommendation_reason || `Match: ${finalMatchPercentage}%`,
       total_time_seconds: 0, // Will be filled from candidate data
     };
-
-    // Check if result already exists
-    const { data: existingResult } = await supabaseAdmin
-      .from('ht_results')
-      .select('id')
-      .eq('candidate_id', candidate_id)
-      .single();
 
     if (existingResult) {
       await supabaseAdmin

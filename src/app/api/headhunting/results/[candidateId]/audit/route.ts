@@ -44,17 +44,19 @@ ESCENARIOS DE CONTROL DE CONSISTENCIA (deben tener respuestas coherentes entre s
 INSTRUCCIONES:
 Analiza los datos buscando estos indicadores de trampa o baja confiabilidad:
 
-1. **Cámara desactivada**: pérdida de evidencia visual (-20 puntos)
-2. **Cambios de pestaña excesivos** (>5 = sospechoso, >10 = muy probable trampa)
-3. **Tiempo de respuesta anómalo**:
+1. **Cámara desactivada**: SOLO si proctoring_data.camera_enabled es explícitamente false. Si proctoring_data.status === 'no_proctoring_data_available', NO penalices la cámara.
+2. **Cambios de pestaña excesivos** (>5 = sospechoso, >10 = muy probable trampa). SOLO si hay datos.
+3. **Tiempo de respuesta anómalo** (esto SIEMPRE se puede evaluar):
    - <10s en escenarios complejos = respuestas al azar
    - tiempo idéntico en todos los escenarios = bot/script
    - timeout en >50% = posible distracción/abandono
-4. **Patrón de selección sospechoso**:
+4. **Patrón de selección sospechoso** (esto SIEMPRE se puede evaluar):
    - mismo índice de opción siempre = sin leer
    - alternancia mecánica = sin pensar
-5. **Inconsistencia entre escenarios de control**: respuestas contradictorias en preguntas de "Control de consistencia"
+5. **Inconsistencia entre escenarios de control**: respuestas contradictorias en "Control de consistencia"
 6. **Asistencia externa**: respuestas inusualmente elaboradas vs perfil del candidato
+
+REGLA CRÍTICA: Si proctoring_data dice 'no_proctoring_data_available', tu integrity_score base debe ser 80 (no 100), y solo penalizar por evidencia REAL en los patrones de respuesta. NO inventes red flags de proctoring que no puedes verificar.
 
 OUTPUT (JSON estricto, sin texto extra):
 {
@@ -148,13 +150,27 @@ export async function POST(
       .eq("is_final", true);
 
     const proctoring = (result.benchmark_comparison as any)?.proctoring || {};
-    const proctoringSummary = {
-      camera_enabled: proctoring.camera_enabled ?? false,
-      total_tab_switches: proctoring.total_tab_switches ?? 0,
-      total_camera_snapshots: proctoring.total_camera_snapshots ?? 0,
-      tab_switch_events_count: (proctoring.tab_switch_events || []).length,
-      heuristic_integrity_score: proctoring.integrity_score ?? null,
-    };
+    // Si no hay datos de proctoring originales (e.g. se perdieron en una corrida
+    // anterior), explícitamente marcamos "no_data" para que el AI no asuma que
+    // la cámara estaba apagada o que hubo 0 snapshots — porque eso sería un
+    // falso positivo.
+    const hasProctoringData =
+      proctoring.camera_enabled !== undefined ||
+      proctoring.total_tab_switches !== undefined ||
+      proctoring.total_camera_snapshots !== undefined;
+
+    const proctoringSummary = hasProctoringData
+      ? {
+          camera_enabled: proctoring.camera_enabled ?? false,
+          total_tab_switches: proctoring.total_tab_switches ?? 0,
+          total_camera_snapshots: proctoring.total_camera_snapshots ?? 0,
+          tab_switch_events_count: (proctoring.tab_switch_events || []).length,
+          heuristic_integrity_score: proctoring.integrity_score ?? null,
+        }
+      : {
+          status: "no_proctoring_data_available",
+          note: "Los datos de proctoring no están disponibles para este candidato. Evalúa la integridad ÚNICAMENTE con base en los patrones de respuesta, tiempos y consistencia. NO asumas que la cámara estaba apagada o que hubo 0 snapshots — esa información simplemente no se conservó.",
+        };
 
     const candidateSummary = {
       name: candidate.name,

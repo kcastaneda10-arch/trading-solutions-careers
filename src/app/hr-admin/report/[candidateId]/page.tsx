@@ -96,6 +96,211 @@ function formatDate(iso?: string): string {
   return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
 }
 
+// ─── Benchmarks (TS top performers) usados para overlay en gráficas ───
+const BENCHMARKS: Record<string, number> = {
+  D: 47.9, I: 50.3, S: 47.1, C: 56.7,
+  IQ: 117.6, "Verbal Comprehension": 72.9, "Attention and Memory": 87.9,
+  "Perceptual Speed": 85.9, "Nonverbal Reasoning": 49.6,
+  Agreeableness: 33.8, Openness: 63.8, Extraversion: 66.5,
+  Conscientiousness: 77.9, Neuroticism: 29.9,
+  "Fi Score": 91.7, "Bi Score": 77.0, "Bd Score": 70.6, "Fd Score": 75.7,
+  Logros_media: 4.3, "Afiliación_media": 4.3, Poder_media: 4.5,
+};
+
+// ─── Radar/Spider chart con 8 dimensiones psicométricas principales ──
+function RadarChart({ ps }: { ps: Record<string, number> }) {
+  const dims = [
+    { key: "Cognitivo", value: Math.min(100, ((ps.IQ ?? 100) - 70) / 0.75) },
+    { key: "Extroversión", value: ps.Extraversion ?? 50 },
+    { key: "Decisión", value: ps.D ?? 50 },
+    { key: "Influencia", value: ps.I ?? 50 },
+    { key: "Disciplina", value: ps.Conscientiousness ?? 50 },
+    { key: "Logro", value: ((ps.Logros_media ?? 3) / 5) * 100 },
+    { key: "Estab. Emocional", value: 100 - (ps.Neuroticism ?? 50) },
+    { key: "Analítico", value: ps.C ?? 50 },
+  ];
+  const benchVals = [
+    ((BENCHMARKS.IQ - 70) / 0.75),
+    BENCHMARKS.Extraversion,
+    BENCHMARKS.D,
+    BENCHMARKS.I,
+    BENCHMARKS.Conscientiousness,
+    (BENCHMARKS.Logros_media / 5) * 100,
+    100 - BENCHMARKS.Neuroticism,
+    BENCHMARKS.C,
+  ];
+  const cx = 180, cy = 180, r = 120;
+  const n = dims.length;
+  function point(value: number, idx: number) {
+    const angle = (idx / n) * Math.PI * 2 - Math.PI / 2;
+    const radius = (Math.min(100, Math.max(0, value)) / 100) * r;
+    return [cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius];
+  }
+  const candidatePoints = dims.map((d, i) => point(d.value, i));
+  const benchPoints = benchVals.map((v, i) => point(v, i));
+  return (
+    <svg viewBox="0 0 360 360" width="100%" style={{ maxWidth: 360 }}>
+      {/* Concentric circles */}
+      {[0.25, 0.5, 0.75, 1].map((f) => (
+        <circle key={f} cx={cx} cy={cy} r={r * f} fill="none" stroke="#e5e7eb" strokeWidth={0.6} />
+      ))}
+      {/* Axes */}
+      {dims.map((d, i) => {
+        const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+        const ex = cx + Math.cos(angle) * r;
+        const ey = cy + Math.sin(angle) * r;
+        return <line key={i} x1={cx} y1={cy} x2={ex} y2={ey} stroke="#e5e7eb" strokeWidth={0.6} />;
+      })}
+      {/* Benchmark polygon (red dashed) */}
+      <polygon
+        points={benchPoints.map((p) => p.join(",")).join(" ")}
+        fill="rgba(239,68,68,0.06)"
+        stroke="#ef4444"
+        strokeWidth={1}
+        strokeDasharray="4 3"
+      />
+      {/* Candidate polygon (filled) */}
+      <polygon
+        points={candidatePoints.map((p) => p.join(",")).join(" ")}
+        fill="rgba(44,100,237,0.18)"
+        stroke="#2C64ED"
+        strokeWidth={2}
+      />
+      {/* Vertices */}
+      {candidatePoints.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3} fill="#2C64ED" />
+      ))}
+      {/* Labels */}
+      {dims.map((d, i) => {
+        const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+        const lx = cx + Math.cos(angle) * (r + 22);
+        const ly = cy + Math.sin(angle) * (r + 22);
+        return (
+          <g key={d.key}>
+            <text
+              x={lx}
+              y={ly}
+              fontSize={10}
+              fontWeight={600}
+              fill="#1a1a1a"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {d.key}
+            </text>
+            <text
+              x={lx}
+              y={ly + 12}
+              fontSize={9}
+              fill="#2C64ED"
+              fontWeight={700}
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {Math.round(d.value)}
+            </text>
+          </g>
+        );
+      })}
+      {/* Legend */}
+      <g transform="translate(8,8)">
+        <rect width={10} height={2} y={4} fill="#2C64ED" />
+        <text x={14} y={7} fontSize={9} fill="#1a1a1a" fontWeight={600}>Candidato</text>
+        <line x1={0} y1={20} x2={10} y2={20} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="2 2" />
+        <text x={14} y={23} fontSize={9} fill="#1a1a1a" fontWeight={600}>Benchmark</text>
+      </g>
+    </svg>
+  );
+}
+
+// ─── DISC quadrant visualization (D arriba, S abajo, C izq, I der) ─
+function DiscQuadrant({ ps }: { ps: Record<string, number> }) {
+  const D = ps.D ?? 0, I = ps.I ?? 0, S = ps.S ?? 0, C = ps.C ?? 0;
+  const cx = 150, cy = 150, r = 110;
+  return (
+    <svg viewBox="0 0 300 300" width="100%" style={{ maxWidth: 280 }}>
+      <circle cx={cx} cy={cy} r={r} fill="#f9fafb" stroke="#e5e7eb" strokeWidth={1.5} />
+      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="#e5e7eb" strokeWidth={1} strokeDasharray="3 3" />
+      <line x1={cx} y1={cy - r} x2={cx} y2={cy + r} stroke="#e5e7eb" strokeWidth={1} strokeDasharray="3 3" />
+      {/* Quadrant labels (background) */}
+      <text x={cx} y={cy - r + 18} fontSize={28} fontWeight={800} fill="#dc2626" textAnchor="middle">D</text>
+      <text x={cx} y={cy - r + 38} fontSize={14} fontWeight={700} fill="#1a1a1a" textAnchor="middle">{Math.round(D)}</text>
+      <text x={cx + r - 22} y={cy + 6} fontSize={28} fontWeight={800} fill="#f59e0b" textAnchor="end">I</text>
+      <text x={cx + r - 22} y={cy + 22} fontSize={14} fontWeight={700} fill="#1a1a1a" textAnchor="end">{Math.round(I)}</text>
+      <text x={cx} y={cy + r - 6} fontSize={28} fontWeight={800} fill="#10b981" textAnchor="middle">S</text>
+      <text x={cx} y={cy + r - 26} fontSize={14} fontWeight={700} fill="#1a1a1a" textAnchor="middle">{Math.round(S)}</text>
+      <text x={cx - r + 22} y={cy + 6} fontSize={28} fontWeight={800} fill="#2563eb" textAnchor="start">C</text>
+      <text x={cx - r + 22} y={cy + 22} fontSize={14} fontWeight={700} fill="#1a1a1a" textAnchor="start">{Math.round(C)}</text>
+    </svg>
+  );
+}
+
+// ─── BETESA brain grid 2×2 ─────────────────────────────────────
+function BetesaGrid({ ps }: { ps: Record<string, number> }) {
+  const fi = ps["Fi Score"] ?? 0;
+  const bi = ps["Bi Score"] ?? 0;
+  const bd = ps["Bd Score"] ?? 0;
+  const fd = ps["Fd Score"] ?? 0;
+  const labels = [
+    { v: fi, name: "Frontal Izquierdo", bench: BENCHMARKS["Fi Score"] },
+    { v: fd, name: "Frontal Derecho", bench: BENCHMARKS["Fd Score"] },
+    { v: bi, name: "Basal Izquierdo", bench: BENCHMARKS["Bi Score"] },
+    { v: bd, name: "Basal Derecho", bench: BENCHMARKS["Bd Score"] },
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {labels.map((l) => {
+        const delta = l.v - l.bench;
+        const pct = Math.min(100, Math.max(0, ((l.v - 40) / 80) * 100));
+        return (
+          <div key={l.name} style={{ background: "#f9fafb", padding: 10, borderRadius: 8, border: "1px solid #e5e7eb" }}>
+            <div style={{ fontSize: 9, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>{l.name}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{Math.round(l.v * 10) / 10}</div>
+            <div style={{ height: 4, background: "#e5e7eb", borderRadius: 2, marginTop: 6, position: "relative" }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: "#2C64ED", borderRadius: 2 }} />
+              <div style={{
+                position: "absolute",
+                left: `${Math.min(100, Math.max(0, ((l.bench - 40) / 80) * 100))}%`,
+                top: -2, bottom: -2, width: 2, background: "#ef4444",
+              }} />
+            </div>
+            <div style={{ fontSize: 9, color: delta >= 0 ? "#10b981" : "#ef4444", fontWeight: 700, marginTop: 4 }}>
+              {delta >= 0 ? "+" : ""}{Math.round(delta * 10) / 10} vs bm {l.bench}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Bar with benchmark marker ───────────────────────────────
+function BarWithBenchmark({
+  label, value, benchmark, max = 100, decimals = 1,
+}: { label: string; value: number; benchmark: number; max?: number; decimals?: number }) {
+  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+  const benchPct = Math.min(100, Math.max(0, (benchmark / max) * 100));
+  const delta = value - benchmark;
+  return (
+    <div className="bar-row">
+      <span>{label}</span>
+      <div className="bar-track" style={{ position: "relative" }}>
+        <div className="bar-fill" style={{ width: `${pct}%` }} />
+        <div style={{
+          position: "absolute", left: `${benchPct}%`, top: 0, bottom: 0,
+          width: 2, background: "#ef4444",
+        }} title={`bm ${benchmark.toFixed(decimals)}`} />
+      </div>
+      <span style={{ textAlign: "right", fontWeight: 600, fontSize: 10 }}>
+        {value.toFixed(decimals)}
+        <span style={{ display: "block", color: delta >= 0 ? "#10b981" : "#ef4444", fontSize: 9 }}>
+          {delta >= 0 ? "+" : ""}{delta.toFixed(decimals)}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 const VERDICT_COLOR: Record<string, string> = {
   CONFIABLE: "#10B981",
   SOSPECHOSO: "#F59E0B",
@@ -361,46 +566,44 @@ export default function ReportPage() {
         <div><strong>Tiempo total:</strong> {Math.round((result?.total_time_seconds || 0) / 60)} min</div>
       </div>
 
-      {/* Perfil DISC */}
+      {/* Spider chart resumen */}
+      <h2>Resumen Visual del Perfil</h2>
+      <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+        <RadarChart ps={ps} />
+      </div>
+
+      {/* Perfil DISC con quadrant + bars */}
       <h2>Perfil DISC</h2>
-      {(["D", "I", "S", "C"] as const).map((k) => (
-        <div key={k} className="bar-row">
-          <span>
-            {k === "D" ? "Dominancia" : k === "I" ? "Influencia" : k === "S" ? "Estabilidad" : "Cumplimiento"}
-          </span>
-          <div className="bar-track">
-            <div className="bar-fill" style={{ width: `${Math.min(100, ps[k] || 0)}%` }} />
-          </div>
-          <span style={{ textAlign: "right", fontWeight: 600 }}>{safeNum(ps[k])}</span>
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 24, alignItems: "center" }}>
+        <DiscQuadrant ps={ps} />
+        <div>
+          {(["D", "I", "S", "C"] as const).map((k) => (
+            <BarWithBenchmark
+              key={k}
+              label={k === "D" ? "Dominancia" : k === "I" ? "Influencia" : k === "S" ? "Estabilidad" : "Cumplimiento"}
+              value={ps[k] || 0}
+              benchmark={BENCHMARKS[k]}
+            />
+          ))}
         </div>
-      ))}
+      </div>
 
       {/* Cognitivo */}
       <h2>Análisis Cognitivo</h2>
       {[
-        ["IQ", "Coeficiente Intelectual"],
-        ["Verbal Comprehension", "Comprensión Verbal"],
-        ["Attention and Memory", "Atención y Memoria"],
-        ["Perceptual Speed", "Velocidad Perceptual"],
-        ["Nonverbal Reasoning", "Razonamiento No Verbal"],
-      ].map(([k, label]) => (
-        <div key={k} className="bar-row">
-          <span>{label}</span>
-          <div className="bar-track">
-            <div
-              className="bar-fill"
-              style={{
-                width: `${Math.min(
-                  100,
-                  k === "IQ"
-                    ? ((ps[k] || 70) - 70) / 0.75
-                    : ps[k] || 0
-                )}%`,
-              }}
-            />
-          </div>
-          <span style={{ textAlign: "right", fontWeight: 600 }}>{safeNum(ps[k])}</span>
-        </div>
+        ["IQ", "Coeficiente Intelectual", 145],
+        ["Verbal Comprehension", "Comprensión Verbal", 100],
+        ["Attention and Memory", "Atención y Memoria", 100],
+        ["Perceptual Speed", "Velocidad Perceptual", 100],
+        ["Nonverbal Reasoning", "Razonamiento No Verbal", 100],
+      ].map(([k, label, max]) => (
+        <BarWithBenchmark
+          key={String(k)}
+          label={String(label)}
+          value={ps[String(k)] || 0}
+          benchmark={BENCHMARKS[String(k)] || 50}
+          max={Number(max)}
+        />
       ))}
 
       {/* Cinco Grandes */}
@@ -412,13 +615,12 @@ export default function ReportPage() {
         ["Conscientiousness", "Responsabilidad"],
         ["Neuroticism", "Neuroticismo"],
       ].map(([k, label]) => (
-        <div key={k} className="bar-row">
-          <span>{label}</span>
-          <div className="bar-track">
-            <div className="bar-fill" style={{ width: `${Math.min(100, ps[k] || 0)}%` }} />
-          </div>
-          <span style={{ textAlign: "right", fontWeight: 600 }}>{safeNum(ps[k])}</span>
-        </div>
+        <BarWithBenchmark
+          key={k}
+          label={label}
+          value={ps[k] || 0}
+          benchmark={BENCHMARKS[k] || 50}
+        />
       ))}
 
       {/* Motivación */}
@@ -440,19 +642,7 @@ export default function ReportPage() {
 
       {/* Dominancia Cerebral */}
       <h2>Dominancia Cerebral (BETESA)</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, fontSize: 12 }}>
-        {[
-          ["Fi Score", "Frontal Izquierdo"],
-          ["Bi Score", "Basal Izquierdo"],
-          ["Bd Score", "Basal Derecho"],
-          ["Fd Score", "Frontal Derecho"],
-        ].map(([k, label]) => (
-          <div key={k} style={{ background: "#f9fafb", padding: 12, borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{safeNum(ps[k])}</div>
-          </div>
-        ))}
-      </div>
+      <BetesaGrid ps={ps} />
 
       {/* Match breakdown table */}
       {result?.match_breakdown && Object.keys(result.match_breakdown).length > 0 && (
