@@ -84,25 +84,25 @@ export async function POST(
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
     <p>Has avanzado a la siguiente etapa del proceso para la posición de <strong>${vacancyTitle}</strong> en Trading Solutions. ¡Felicitaciones!</p>
-    <p>El siguiente paso es una <strong>entrevista por voz con nuestra recruiter virtual</strong>. Es una conversación natural, en tiempo real — la IA te hará preguntas sobre tu experiencia y al final habrá una sección corta en inglés.</p>
+    <p>El siguiente paso es una <strong>entrevista por voz con nuestra recruiter virtual</strong>. Es una conversación natural, en tiempo real — nuestra reclutadora te hará preguntas sobre tu experiencia y al final habrá una sección corta en inglés.</p>
     <p style="text-align:center"><a href="${interviewUrl}" class="cta">Iniciar entrevista</a></p>
     <p><strong>Detalles importantes:</strong></p>
     <ul>
       <li><strong>Duración:</strong> 15-20 minutos</li>
       <li><strong>Necesitas:</strong> computador con micrófono, internet estable, espacio tranquilo</li>
-      <li><strong>Recomendación:</strong> habla con naturalidad, como en una llamada normal — la IA escucha y responde</li>
+      <li><strong>Recomendación:</strong> habla con naturalidad, como en una llamada normal — ella escucha y responde</li>
       <li><strong>Validez:</strong> el enlace expira en 72 horas</li>
-      <li><strong>Una sola oportunidad:</strong> termina la entrevista de un tirón, sin pausas largas</li>
+      <li><strong>Una sola oportunidad:</strong> termina la entrevista, sin pausas largas</li>
     </ul>
-    <p>Después de la entrevista, revisamos los resultados y te contactaré en 2-3 días hábiles con la siguiente etapa.</p>
-    <p>Si tienes alguna duda técnica, simplemente responde este correo.</p>
-    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
+    <p>Después de la entrevista, te contactaremos para los siguientes pasos.</p>
+    <p>Si tienes alguna duda por favor escribeme a este correo.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong></p>
   </div>
 </body></html>`;
 
         const draftRes = await createDraftViaGmail({
           to: candidate.email as string,
-          subject: `Trading Solutions · Entrevista IA para ${vacancyTitle}`,
+          subject: `Trading Solutions · Entrevista para ${vacancyTitle}`,
           html,
           fromName: "Kelly Castañeda",
         });
