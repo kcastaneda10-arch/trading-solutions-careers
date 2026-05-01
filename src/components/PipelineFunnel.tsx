@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 
 type Cand = {
   id: string;
@@ -333,6 +333,12 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
             )}
           </Section>
 
+          {/* Elevare results — solo si ya hizo el assessment */}
+          {(cand.status === "completed" || cand.status === "in_progress" ||
+            String(cand.stage || "").startsWith("assessment_")) && (
+            <ElevareResultsBlock candidateId={cand.id} candidateStatus={cand.status} />
+          )}
+
           {/* Respuestas del prefiltro */}
           {pf && (
             <>
@@ -425,5 +431,251 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
       <span className="text-gray-500 flex-shrink-0">{k}:</span>
       <span className="text-right text-gray-900">{v}</span>
     </div>
+  );
+}
+
+// ─── Bloque de resultados de Elevare con AI scoring + auditor anti-cheat ─
+function ElevareResultsBlock({
+  candidateId,
+  candidateStatus,
+}: {
+  candidateId: string;
+  candidateStatus?: string;
+}) {
+  const [data, setData] = React.useState<{
+    result: any;
+    audit: any;
+  }>({ result: null, audit: null });
+  const [loading, setLoading] = React.useState(true);
+  const [scoring, setScoring] = React.useState(false);
+  const [auditing, setAuditing] = React.useState(false);
+  const [feedback, setFeedback] = React.useState("");
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/headhunting/results/${candidateId}`, { cache: "no-store" });
+      const j = await r.json();
+      setData({
+        result: j.result,
+        audit: j.result?.benchmark_comparison?.proctoring?.ai_audit || null,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [candidateId]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  async function runScoring() {
+    if (scoring) return;
+    setScoring(true);
+    setFeedback("Calculando con Claude…");
+    try {
+      const r = await fetch(`/api/headhunting/candidates/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: candidateId }),
+      });
+      const j = await r.json();
+      if (j.success) {
+        setFeedback(`✅ Match ${Math.round(j.match_percentage)}% · ${j.recommendation}`);
+        load();
+      } else {
+        setFeedback(`❌ ${j.error || "Error"}${j.details ? `: ${j.details.slice(0, 80)}` : ""}`);
+      }
+    } catch (e) {
+      setFeedback(`❌ ${(e as Error).message}`);
+    } finally {
+      setScoring(false);
+    }
+  }
+
+  async function runAudit() {
+    if (auditing) return;
+    setAuditing(true);
+    setFeedback("Auditando anti-cheat con Claude…");
+    try {
+      const r = await fetch(`/api/headhunting/results/${candidateId}/audit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const j = await r.json();
+      if (j.success) {
+        setFeedback(`✅ ${j.audit.verdict} · integridad ${j.audit.integrity_score}/100`);
+        load();
+      } else {
+        setFeedback(`❌ ${j.error || "Error"}${j.detail ? `: ${j.detail.slice(0, 80)}` : ""}`);
+      }
+    } catch (e) {
+      setFeedback(`❌ ${(e as Error).message}`);
+    } finally {
+      setAuditing(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Section title="🧠 Resultados Elevare">
+        <div className="text-xs text-gray-400">Cargando…</div>
+      </Section>
+    );
+  }
+
+  const result = data.result;
+  const audit = data.audit;
+  const proctoring = result?.benchmark_comparison?.proctoring;
+  const matchPct = result?.match_percentage ?? 0;
+  const recoColor =
+    result?.recommendation === "AVANZA"
+      ? "#10B981"
+      : result?.recommendation === "EN ESPERA"
+      ? "#F59E0B"
+      : result?.recommendation === "NO AVANZA"
+      ? "#EF4444"
+      : "#6B7280";
+  const verdictColor =
+    audit?.verdict === "CONFIABLE"
+      ? "#10B981"
+      : audit?.verdict === "SOSPECHOSO"
+      ? "#F59E0B"
+      : audit?.verdict === "NO CONFIABLE"
+      ? "#EF4444"
+      : "#6B7280";
+
+  const hasResult = !!result && (result.match_percentage > 0 || result.recommendation !== "PENDIENTE");
+
+  return (
+    <Section title="🧠 Resultados Elevare">
+      {/* Resumen */}
+      {hasResult ? (
+        <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-100 rounded-lg p-3 mb-3">
+          <div className="flex items-center gap-3 mb-2">
+            <span
+              className="px-2.5 py-1 rounded-full text-xs font-bold text-white"
+              style={{ background: recoColor }}
+            >
+              {result.recommendation}
+            </span>
+            <span className="text-xl font-extrabold">{Math.round(matchPct)}%</span>
+            <span className="text-xs text-gray-500">match</span>
+            {result.benchmark_comparison?.percentile_rank && (
+              <span className="text-xs text-gray-500 ml-auto">
+                P{result.benchmark_comparison.percentile_rank}
+              </span>
+            )}
+          </div>
+          {result.recommendation_reason && (
+            <p className="text-xs text-gray-700 leading-relaxed">
+              {result.recommendation_reason}
+            </p>
+          )}
+          {result.red_flags?.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-purple-200">
+              <p className="text-[10px] uppercase font-bold text-red-700 mb-1">
+                Red flags ({result.red_flags.length})
+              </p>
+              <ul className="text-xs text-red-800 list-disc pl-4 space-y-0.5">
+                {result.red_flags.slice(0, 3).map((f: string, i: number) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 text-xs text-gray-600">
+          {candidateStatus === "completed"
+            ? "Candidato completó la evaluación. Calcula el score con IA para ver match y recomendación."
+            : "Aún no hay resultados (status: " + (candidateStatus || "—") + ")"}
+        </div>
+      )}
+
+      {/* Anti-cheat audit */}
+      {audit ? (
+        <div
+          className="border-l-4 rounded-r-lg p-3 mb-3 bg-gray-50"
+          style={{ borderColor: verdictColor }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold" style={{ color: verdictColor }}>
+              ● {audit.verdict}
+            </span>
+            <span className="text-xs text-gray-500">
+              · integridad {audit.integrity_score}/100
+            </span>
+          </div>
+          <p className="text-xs text-gray-700 leading-relaxed">{audit.verdict_reason}</p>
+          {audit.red_flags?.length > 0 && (
+            <details className="mt-1.5">
+              <summary className="text-xs font-semibold cursor-pointer text-gray-600">
+                {audit.red_flags.length} red flags · ver detalle
+              </summary>
+              <ul className="mt-1 text-[11px] text-gray-700 space-y-1 pl-3">
+                {audit.red_flags.map((f: any, i: number) => (
+                  <li key={i}>
+                    <span
+                      className={
+                        "px-1 py-0.5 rounded text-[9px] font-bold mr-1 " +
+                        (f.severity === "high"
+                          ? "bg-red-200 text-red-800"
+                          : f.severity === "medium"
+                          ? "bg-amber-200 text-amber-800"
+                          : "bg-gray-200 text-gray-700")
+                      }
+                    >
+                      {f.severity}
+                    </span>
+                    <strong>{f.category}:</strong> {f.evidence}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      ) : proctoring ? (
+        <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-2.5 mb-3 text-xs text-yellow-900">
+          📹 Proctoring: cámara {proctoring.camera_enabled ? "✓" : "✗"} ·{" "}
+          {proctoring.total_tab_switches ?? 0} cambios pestaña ·{" "}
+          {proctoring.total_camera_snapshots ?? 0} snapshots
+          <div className="text-[10px] text-yellow-700 mt-1">
+            Sin auditoría IA aún · ejecuta el auditor para evaluar trampa
+          </div>
+        </div>
+      ) : null}
+
+      {/* Acciones */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={runScoring}
+          disabled={scoring || candidateStatus !== "completed"}
+          className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {scoring ? "…" : hasResult ? "🔄 Recalcular" : "🧠 Calcular score"}
+        </button>
+        <button
+          onClick={runAudit}
+          disabled={auditing || !hasResult}
+          className="text-xs font-semibold px-3 py-1.5 rounded-full border-2 border-amber-400 text-amber-800 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={!hasResult ? "Calcula el score primero" : "Auditar anti-cheat con IA"}
+        >
+          {auditing ? "…" : audit ? "🔄 Re-auditar" : "🔍 Auditar trampa"}
+        </button>
+        <a
+          href={`/hr-admin/report/${candidateId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-semibold px-3 py-1.5 rounded-full bg-black text-white hover:bg-gray-800"
+        >
+          📄 Ver informe completo →
+        </a>
+      </div>
+
+      {feedback && (
+        <div className="mt-2 text-xs text-gray-600 italic">{feedback}</div>
+      )}
+    </Section>
   );
 }

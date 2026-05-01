@@ -51,12 +51,24 @@ export async function GET(
       .eq('id', candidate.client_id)
       .single();
 
+    // Get all scenarios for this model (para el informe completo)
+    let scenarios: any[] = [];
+    if (vacancy?.model_id) {
+      const { data: sc } = await supabaseAdmin
+        .from('ht_scenarios')
+        .select('id, block, competency_key, competency_label, target_columns, order_index')
+        .eq('model_id', vacancy.model_id)
+        .order('order_index');
+      scenarios = sc || [];
+    }
+
     return NextResponse.json({
       candidate,
       result: result || null,
       responses: responses || [],
       vacancy: vacancy || null,
       client: client || null,
+      scenarios,
     });
   } catch (err) {
     console.error('Get result error:', err);
