@@ -296,7 +296,7 @@ export async function POST(
     // Build audio_url proxy if conversation_id available
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
     const finalAudioUrl = audioUrl ||
-      (convoId ? `${baseUrl}/api/headhunting/ai-interview/${token}/audio` : null);
+      (convoId ? `${baseUrl}/api/headhunting/ai-interview/${token}/audio?cid=${convoId}` : null);
 
     await supabaseAdmin
       .from("ht_ai_interviews")
