@@ -4,21 +4,22 @@
  * /entrevista-ia/[token]
  *
  * Página candidate-facing de la entrevista por voz con IA.
- * Embebe el widget de ElevenLabs Conversational AI.
+ * Embebe el widget oficial de ElevenLabs Conversational AI.
  *
  * Flujo:
  *   1. Valida el token con GET /api/headhunting/ai-interview/[token]
- *   2. Muestra pantalla de bienvenida + reglas
- *   3. Candidato presiona "Iniciar entrevista" — pide permiso de micrófono
- *   4. Se conecta al agente de ElevenLabs vía SDK
- *   5. Conversación en tiempo real (15-20 min)
- *   6. Al terminar, llama a /finalize con conversation_id → Claude scoring
- *   7. Pantalla de "Gracias, te contactaremos en 2-3 días"
+ *   2. Pantalla de bienvenida + reglas
+ *   3. Pantalla de Habeas Data + consentimiento de grabación
+ *   4. Candidato acepta → carga widget de ElevenLabs
+ *   5. Widget hace la conversación (15-20 min)
+ *   6. Al terminar, llama a /finalize → Claude scoring
+ *   7. Pantalla de "Gracias"
  */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Script from "next/script";
 
-type Phase = "loading" | "ready" | "in_progress" | "ended" | "error";
+type Phase = "loading" | "welcome" | "consent" | "live" | "ended" | "error";
 
 type Config = {
   interview_id: string;
@@ -31,22 +32,19 @@ type Config = {
 };
 
 declare global {
-  interface Window {
-    Conversation?: {
-      startSession: (opts: {
-        signedUrl?: string;
-        agentId?: string;
-        dynamicVariables?: Record<string, string>;
-        onConnect?: () => void;
-        onDisconnect?: () => void;
-        onError?: (e: unknown) => void;
-        onMessage?: (m: { source: string; message: string }) => void;
-        onModeChange?: (m: { mode: string }) => void;
-      }) => Promise<{
-        endSession: () => Promise<void>;
-        getId: () => string;
-      }>;
-    };
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      "elevenlabs-convai": React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          "agent-id"?: string;
+          "signed-url"?: string;
+          "dynamic-variables"?: string;
+          variant?: string;
+        },
+        HTMLElement
+      >;
+    }
   }
 }
 
@@ -56,39 +54,9 @@ export default function AiInterviewPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [config, setConfig] = useState<Config | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<{ source: string; message: string }[]>([]);
-  const [agentMode, setAgentMode] = useState<string>("idle");
-  const conversationRef = useRef<{ endSession: () => Promise<void>; getId: () => string } | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [habeasChecked, setHabeasChecked] = useState(false);
 
-  // Load ElevenLabs SDK
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.Conversation) {
-      setScriptLoaded(true);
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = "https://unpkg.com/@11labs/client@0.1.4/dist/lib.umd.js";
-    s.async = true;
-    s.onload = () => {
-      // The SDK exposes itself as `ElevenLabsConvai` or similar global
-      // Try a few common globals
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = window as any;
-      if (w.ElevenLabsConvai?.Conversation) window.Conversation = w.ElevenLabsConvai.Conversation;
-      else if (w.Conversation) window.Conversation = w.Conversation;
-      else if (w["@11labs/client"]?.Conversation) window.Conversation = w["@11labs/client"].Conversation;
-      setScriptLoaded(true);
-    };
-    s.onerror = () => setError("No se pudo cargar el SDK de voz. Recarga la página.");
-    document.body.appendChild(s);
-    return () => {
-      try { document.body.removeChild(s); } catch {}
-    };
-  }, []);
-
-  // Validate token
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -110,11 +78,11 @@ export default function AiInterviewPage() {
         const j = await r.json();
         if (!cancelled) {
           setConfig(j);
-          if (!j.agent_id || !j.signed_url) {
+          if (!j.agent_id) {
             setError("Configuración del agente incompleta. Contacta a kcastaneda@tradingsolutions.com");
             setPhase("error");
           } else {
-            setPhase("ready");
+            setPhase("welcome");
           }
         }
       } catch (e) {
@@ -127,33 +95,19 @@ export default function AiInterviewPage() {
     return () => { cancelled = true; };
   }, [token]);
 
-  async function startInterview() {
-    if (!config || !window.Conversation) return;
-    try {
-      // Request mic permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      const conv = await window.Conversation.startSession({
-        signedUrl: config.signed_url || undefined,
-        agentId: config.signed_url ? undefined : (config.agent_id || undefined),
-        dynamicVariables: config.dynamic_variables,
-        onConnect: () => setPhase("in_progress"),
-        onDisconnect: () => finalizeInterview(conv?.getId() || null),
-        onError: (e) => {
-          console.error("Conversation error:", e);
-          setError("Error en la conversación: " + String(e));
-        },
-        onMessage: (m) => {
-          setTranscript((prev) => [...prev, m]);
-        },
-        onModeChange: (m) => setAgentMode(m.mode),
-      });
-      conversationRef.current = conv;
-    } catch (e) {
-      console.error("startSession error:", e);
-      setError("No se pudo iniciar la entrevista: " + (e as Error).message + ". Verifica que diste permiso al micrófono.");
+  // Listen for the widget's "Call ended" event so we can finalize
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      // ElevenLabs widget posts events to window
+      const data = e.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "convai-call-ended" || data.event === "call_ended" || data.type === "call.ended") {
+        finalizeInterview(data.conversation_id || data.conversationId || null);
+      }
     }
-  }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   async function finalizeInterview(conversationId: string | null) {
     setPhase("ended");
@@ -161,23 +115,10 @@ export default function AiInterviewPage() {
       await fetch(`/api/headhunting/ai-interview/${token}/finalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversation_id: conversationId,
-          transcript: transcript.length > 0 ? transcript : null,
-        }),
+        body: JSON.stringify({ conversation_id: conversationId }),
       });
     } catch (e) {
       console.error("finalize failed:", e);
-    }
-  }
-
-  async function endManually() {
-    if (conversationRef.current) {
-      try {
-        await conversationRef.current.endSession();
-      } catch (e) {
-        console.error("endSession error:", e);
-      }
     }
   }
 
@@ -222,7 +163,7 @@ export default function AiInterviewPage() {
     );
   }
 
-  if (phase === "ready") {
+  if (phase === "welcome") {
     return (
       <div style={shell}>
         <div style={card}>
@@ -256,68 +197,145 @@ export default function AiInterviewPage() {
           </ul>
 
           <button
-            onClick={startInterview}
-            disabled={!scriptLoaded}
-            style={primaryBtn(!scriptLoaded)}
+            onClick={() => setPhase("consent")}
+            style={primaryBtn(false)}
           >
-            {scriptLoaded ? "🎤 Iniciar entrevista" : "Cargando…"}
+            Continuar →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "consent") {
+    const allChecked = consentChecked && habeasChecked;
+    return (
+      <div style={shell}>
+        <div style={card}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+            Antes de iniciar — autorización
+          </h1>
+          <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 20 }}>
+            Por favor lee y acepta para continuar.
+          </p>
+
+          {/* Habeas Data */}
+          <div style={consentBox}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "#1a1a1a" }}>
+              📋 Tratamiento de datos personales (Habeas Data)
+            </h3>
+            <p style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+              Conforme a la <strong>Ley 1581 de 2012</strong> de Colombia y demás normas concordantes, autorizo a{" "}
+              <strong>Trading Solutions S.A.S.</strong> al tratamiento de mis datos personales (incluida mi voz, transcripción y respuestas)
+              con la finalidad de evaluar mi candidatura para la posición de{" "}
+              <strong>{config?.vacancy?.title}</strong>. Los datos serán almacenados de forma segura, no se compartirán con terceros sin mi consentimiento expreso, y podré ejercer mis derechos de
+              acceso, rectificación, actualización y supresión escribiendo a{" "}
+              <a href="mailto:kcastaneda@tradingsolutions.com" style={{ color: "#2C64ED" }}>
+                kcastaneda@tradingsolutions.com
+              </a>.
+            </p>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={habeasChecked}
+                onChange={(e) => setHabeasChecked(e.target.checked)}
+                style={{ marginRight: 8, width: 18, height: 18, cursor: "pointer" }}
+              />
+              <span>Acepto el tratamiento de mis datos personales según los términos arriba descritos.</span>
+            </label>
+          </div>
+
+          {/* Grabación */}
+          <div style={consentBox}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "#1a1a1a" }}>
+              🎤 Consentimiento de grabación y procesamiento por IA
+            </h3>
+            <p style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+              Esta entrevista será <strong>grabada en audio</strong> y la conversación será procesada por sistemas de inteligencia artificial
+              (ElevenLabs Conversational AI para la voz, y Anthropic Claude para el análisis posterior). La transcripción y el audio se usarán
+              <strong> únicamente para el proceso de selección de Trading Solutions</strong> y serán evaluados por personal humano antes de cualquier decisión.
+              No se utilizará la grabación para ningún otro propósito sin mi autorización adicional.
+            </p>
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                style={{ marginRight: 8, width: 18, height: 18, cursor: "pointer" }}
+              />
+              <span>Autorizo la grabación y el procesamiento por IA de esta entrevista.</span>
+            </label>
+          </div>
+
+          <button
+            onClick={() => allChecked && setPhase("live")}
+            disabled={!allChecked}
+            style={primaryBtn(!allChecked)}
+          >
+            🎤 Iniciar entrevista
           </button>
           <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 12 }}>
-            Al hacer click, autorizas el uso de tu micrófono para esta sesión únicamente.
+            Al iniciar, tu navegador te pedirá permiso para usar el micrófono.
           </p>
         </div>
       </div>
     );
   }
 
-  // in_progress
+  // phase === "live" — render the ElevenLabs widget
   return (
     <div style={shell}>
-      <div style={card}>
+      <Script
+        src="https://unpkg.com/@elevenlabs/convai-widget-embed"
+        strategy="afterInteractive"
+        type="text/javascript"
+      />
+      <div style={{ ...card, maxWidth: 600 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <div style={{ ...logoBox, animation: agentMode === "speaking" ? "pulse 1.4s infinite" : undefined }}>TS</div>
+          <div style={logoBox}>TS</div>
           <div>
             <div style={{ fontWeight: 700 }}>Entrevista en curso</div>
-            <div style={{ fontSize: 11, color: "#10b981" }}>
-              {agentMode === "speaking" ? "● IA hablando…" : agentMode === "listening" ? "● Escuchando…" : "● Conectado"}
-            </div>
+            <div style={{ fontSize: 11, color: "#10b981" }}>● Conectado con Valeria</div>
           </div>
         </div>
 
-        {/* Live transcript preview */}
-        <div style={{
-          maxHeight: 320, overflowY: "auto", background: "#f9fafb",
-          borderRadius: 8, padding: 16, fontSize: 13, lineHeight: 1.6,
-          border: "1px solid #e5e7eb",
-        }}>
-          {transcript.length === 0 ? (
-            <p style={{ color: "#9ca3af", fontStyle: "italic" }}>La transcripción aparecerá aquí mientras hablan…</p>
+        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
+          Habla con naturalidad. La IA está escuchando. Para terminar, presiona el botón rojo dentro del widget.
+        </p>
+
+        {/* ElevenLabs widget */}
+        <div style={{ minHeight: 400 }}>
+          {config?.signed_url ? (
+            <elevenlabs-convai
+              signed-url={config.signed_url}
+              dynamic-variables={JSON.stringify(config.dynamic_variables)}
+            />
           ) : (
-            transcript.map((m, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <strong style={{ color: m.source === "user" ? "#2C64ED" : "#1a1a1a" }}>
-                  {m.source === "user" ? "Tú" : "Recruiter"}:
-                </strong>{" "}
-                <span>{m.message}</span>
-              </div>
-            ))
+            <elevenlabs-convai
+              agent-id={config?.agent_id || ""}
+              dynamic-variables={JSON.stringify(config?.dynamic_variables || {})}
+            />
           )}
         </div>
 
-        <button onClick={endManually} style={{
-          marginTop: 20, width: "100%", padding: "12px", borderRadius: 8,
-          border: "1.5px solid #dc2626", color: "#dc2626", background: "transparent",
-          fontWeight: 600, cursor: "pointer", fontSize: 13,
-        }}>
-          Terminar entrevista
+        <button
+          onClick={() => finalizeInterview(null)}
+          style={{
+            marginTop: 20,
+            width: "100%",
+            padding: "12px",
+            borderRadius: 8,
+            border: "1.5px solid #dc2626",
+            color: "#dc2626",
+            background: "transparent",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: 13,
+          }}
+        >
+          He terminado la entrevista
         </button>
       </div>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(44,100,237,0.5); }
-          50% { box-shadow: 0 0 0 12px rgba(44,100,237,0); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -352,6 +370,25 @@ const logoBox: React.CSSProperties = {
   justifyContent: "center",
   fontWeight: 800,
   fontSize: 13,
+};
+
+const consentBox: React.CSSProperties = {
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 16,
+  marginBottom: 14,
+};
+
+const checkboxLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  marginTop: 10,
+  cursor: "pointer",
+  fontSize: 12,
+  color: "#1a1a1a",
+  fontWeight: 600,
+  lineHeight: 1.4,
 };
 
 function primaryBtn(disabled: boolean): React.CSSProperties {
