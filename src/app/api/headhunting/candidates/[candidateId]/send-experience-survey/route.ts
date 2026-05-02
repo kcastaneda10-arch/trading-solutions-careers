@@ -74,7 +74,12 @@ export async function POST(
       surveyId = created.id;
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://trading-solutions-careers.vercel.app";
+    // Auto-detecta URL: en prod usa Vercel host, fallback a la URL canónica TS
+    const host = req.headers.get('host');
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = host && !host.includes('localhost')
+      ? `${proto}://${host}`
+      : "https://trading-solutions-careers.vercel.app";
     const surveyLink = `${baseUrl}/encuesta/${token}`;
 
     // Optionally send email

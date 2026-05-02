@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { defaultOnboardingTasks } from "@/lib/onboarding-tasks";
 import crypto from "crypto";
 
 const VALID_STAGES = [
@@ -191,6 +192,77 @@ export async function POST(
       return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
     }
 
+    // ─── Auto-create People + Onboarding when hired ───
+    let onboardingId: string | null = null;
+    let personId: string | null = null;
+    if (targetStage === "contratado") {
+      try {
+        // Get vacancy info
+        const { data: vac } = await supabaseAdmin
+          .from("ht_vacancies")
+          .select("id, title, area, role_level")
+          .eq("id", candidate.vacancy_id)
+          .maybeSingle();
+
+        // Find or create person
+        const { data: existingPerson } = await supabaseAdmin
+          .from("ts_people")
+          .select("id")
+          .eq("linked_candidate_id", candidateId)
+          .maybeSingle();
+
+        if (existingPerson) {
+          personId = existingPerson.id;
+        } else {
+          const { data: newPerson } = await supabaseAdmin
+            .from("ts_people")
+            .insert({
+              name: candidate.name,
+              email: candidate.email,
+              role: vac?.title || 'Pendiente',
+              area: vac?.area || null,
+              role_level: vac?.role_level || 'entry',
+              start_date: new Date().toISOString().slice(0, 10),
+              status: 'onboarding',
+              linked_candidate_id: candidateId,
+              linked_vacancy_id: vac?.id || null,
+              location: 'Barranquilla',
+              is_top_performer: false,
+            })
+            .select("id")
+            .single();
+          if (newPerson) personId = newPerson.id;
+        }
+
+        // Find or create onboarding
+        if (personId) {
+          const { data: existingOnb } = await supabaseAdmin
+            .from("ts_onboarding")
+            .select("id")
+            .eq("person_id", personId)
+            .maybeSingle();
+          if (existingOnb) {
+            onboardingId = existingOnb.id;
+          } else {
+            const tasks = defaultOnboardingTasks(vac?.role_level || 'entry');
+            const { data: newOnb } = await supabaseAdmin
+              .from("ts_onboarding")
+              .insert({
+                person_id: personId,
+                start_date: new Date().toISOString().slice(0, 10),
+                status: 'in_progress',
+                tasks,
+              })
+              .select("id")
+              .single();
+            if (newOnb) onboardingId = newOnb.id;
+          }
+        }
+      } catch (e) {
+        console.error("Auto-onboarding creation failed:", e);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       candidate_id: candidateId,
@@ -198,6 +270,8 @@ export async function POST(
       to_stage: targetStage,
       draft_id: draftId,
       elevare_url: elevareUrl,
+      person_id: personId,
+      onboarding_id: onboardingId,
     });
   } catch (err) {
     console.error("stage update error:", err);

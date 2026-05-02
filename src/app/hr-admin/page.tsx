@@ -38,6 +38,7 @@ type Tab =
   | "dashboard"
   | "vacantes"
   | "funnel"
+  | "onboarding"
   | "cvbank"
   | "agentes";
 
@@ -45,6 +46,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
   { id: "funnel", label: "Funnel", icon: Kanban },
+  { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "agentes", label: "Agentes IA", icon: Bot },
 ];
@@ -123,6 +125,7 @@ export default function HRAdminPage() {
         {tab === "dashboard" && <Dashboard setTab={setTab} />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "funnel" && <PipelineFunnel />}
+        {tab === "onboarding" && <OnboardingTab />}
         {tab === "cvbank" && <CVBank />}
         {tab === "agentes" && <Agentes />}
       </main>
@@ -4824,6 +4827,420 @@ function ImportCSVModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Onboarding · People file + 30/60/90                      */
+/* ======================================================== */
+type OnboardingItem = {
+  id: string;
+  person: { id: string; name: string; email: string; role: string; area: string; role_level: string; start_date: string; status: string; manager_email?: string; buddy_email?: string; location?: string };
+  start_date: string;
+  status: 'not_started'|'in_progress'|'completed'|'at_risk';
+  days_since_start: number;
+  current_milestone: 'day1'|'week1'|'day30'|'day60'|'day90';
+  progress: { total: number; done: number; pct: number; byMilestone: Record<string, { total: number; done: number; pct: number }> };
+  health: 'on_track'|'behind'|'at_risk';
+  next_task: { id: string; label: string; owner: string; milestone: string } | null;
+  ramp_up_score: number | null;
+};
+
+type OnboardingTaskUI = {
+  id: string;
+  milestone: 'day1'|'week1'|'day30'|'day60'|'day90';
+  label: string;
+  owner: 'hr'|'manager'|'buddy'|'it'|'employee';
+  done: boolean;
+  done_at: string | null;
+};
+
+const MS_LABEL: Record<string, string> = { day1: 'Día 1', week1: 'Semana 1', day30: 'Día 30', day60: 'Día 60', day90: 'Día 90' };
+const MS_COLOR: Record<string, string> = { day1: '#8B5CF6', week1: '#3B82F6', day30: '#10B981', day60: '#F59E0B', day90: '#EF4444' };
+const OWNER_LABEL: Record<string, string> = { hr: 'HR', manager: 'Manager', buddy: 'Buddy', it: 'IT', employee: 'Empleado' };
+
+function OnboardingTab() {
+  const [items, setItems] = useState<OnboardingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'active'|'completed'|'all'>('active');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    const qs = filter === 'active' ? '?status=active' : '';
+    fetch(`/api/onboarding${qs}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setItems(j.onboardings || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [filter]);
+
+  useEffect(() => { setLoading(true); load(); }, [load]);
+
+  const counts = useMemo(() => {
+    const all = items;
+    return {
+      total: all.length,
+      day1: all.filter(i => i.current_milestone === 'day1').length,
+      week1: all.filter(i => i.current_milestone === 'week1').length,
+      day30: all.filter(i => i.current_milestone === 'day30').length,
+      day60: all.filter(i => i.current_milestone === 'day60').length,
+      day90: all.filter(i => i.current_milestone === 'day90').length,
+      at_risk: all.filter(i => i.health === 'at_risk').length,
+    };
+  }, [items]);
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-extrabold tracking-tight">Onboarding</h1>
+        <p className="text-xs text-gray-500">Plan 30/60/90 para nuevos hires · integrado con People file</p>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-2 mb-4">
+        <KpiTile label="Total activos" value={counts.total} accent="#111" />
+        <KpiTile label="Día 1" value={counts.day1} accent={MS_COLOR.day1} />
+        <KpiTile label="Semana 1" value={counts.week1} accent={MS_COLOR.week1} />
+        <KpiTile label="Día 30" value={counts.day30} accent={MS_COLOR.day30} />
+        <KpiTile label="Día 60" value={counts.day60} accent={MS_COLOR.day60} />
+        <KpiTile label="Día 90" value={counts.day90} accent={MS_COLOR.day90} />
+        <KpiTile label="At risk" value={counts.at_risk} accent="#EF4444" />
+      </div>
+
+      {/* Filter pills */}
+      <div className="flex gap-1.5 mb-4">
+        {(['active','completed','all'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
+              filter === f ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+            }`}
+          >
+            {f === 'active' ? 'Activos' : f === 'completed' ? 'Completados' : 'Todos'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div className="text-sm text-gray-400">Cargando…</div>}
+
+      {!loading && items.length === 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
+          <div className="text-4xl mb-3">🎉</div>
+          <div className="text-base font-bold text-gray-900">Sin onboardings activos</div>
+          <p className="text-xs text-gray-500 mt-1">Cuando un candidato pase a "contratado" en el funnel, aparecerá aquí automáticamente con su plan 30/60/90.</p>
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {items.map(it => (
+            <OnboardingCard key={it.id} item={it} onClick={() => setActiveId(it.id)} />
+          ))}
+        </div>
+      )}
+
+      {activeId && (
+        <OnboardingDetailDrawer
+          id={activeId}
+          onClose={() => setActiveId(null)}
+          onChange={load}
+        />
+      )}
+    </div>
+  );
+}
+
+function KpiTile({ label, value, accent }: { label: string; value: number; accent: string }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-2 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: accent }} />
+      <div className="text-[9px] uppercase tracking-wider font-bold text-gray-500">{label}</div>
+      <div className="text-2xl font-extrabold mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function OnboardingCard({ item, onClick }: { item: OnboardingItem; onClick: () => void }) {
+  const healthColor = item.health === 'at_risk' ? '#EF4444' : item.health === 'behind' ? '#F59E0B' : '#10B981';
+  const healthLabel = item.health === 'at_risk' ? 'At risk' : item.health === 'behind' ? 'Atrasado' : 'On track';
+  const mColor = MS_COLOR[item.current_milestone];
+
+  return (
+    <button
+      onClick={onClick}
+      className="text-left bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow relative overflow-hidden"
+    >
+      <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ background: healthColor }} />
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-gray-900 truncate">{item.person.name}</div>
+          <div className="text-[10px] text-gray-500 truncate">{item.person.role} · {item.person.area || '—'}</div>
+        </div>
+        <span
+          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase"
+          style={{ background: `${healthColor}1A`, color: healthColor }}
+        >
+          {healthLabel}
+        </span>
+      </div>
+
+      {/* Days + milestone */}
+      <div className="mb-3 p-2 rounded-lg" style={{ background: `${mColor}10` }}>
+        <div className="flex items-baseline justify-between mb-1">
+          <span className="text-[10px] uppercase font-bold" style={{ color: mColor }}>Milestone actual</span>
+          <span className="text-[10px] font-bold" style={{ color: mColor }}>{item.days_since_start}d desde inicio</span>
+        </div>
+        <div className="text-base font-extrabold" style={{ color: mColor }}>{MS_LABEL[item.current_milestone]}</div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-3">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="uppercase font-bold text-gray-500">Progreso total</span>
+          <span className="font-bold text-gray-700">{item.progress.done}/{item.progress.total} · {item.progress.pct}%</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${item.progress.pct}%`, background: healthColor }} />
+        </div>
+      </div>
+
+      {/* Milestones strip */}
+      <div className="flex gap-1 mb-3">
+        {(['day1','week1','day30','day60','day90'] as const).map(m => {
+          const ms = item.progress.byMilestone[m] || { total: 0, done: 0, pct: 0 };
+          const isComplete = ms.pct === 100;
+          return (
+            <div key={m} className="flex-1">
+              <div className={`h-1.5 rounded ${isComplete ? '' : 'bg-gray-100'}`} style={isComplete ? { background: MS_COLOR[m] } : {}} />
+              <div className="text-[8px] text-center text-gray-500 font-bold mt-0.5">{ms.done}/{ms.total}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Next task */}
+      {item.next_task && (
+        <div className="bg-gray-50 border border-gray-100 rounded p-2 text-[10px]">
+          <div className="text-[9px] uppercase font-bold text-gray-500 mb-0.5">Próximo</div>
+          <div className="font-semibold text-gray-900 truncate">{item.next_task.label}</div>
+          <div className="text-gray-500 mt-0.5">{OWNER_LABEL[item.next_task.owner] || item.next_task.owner} · {MS_LABEL[item.next_task.milestone]}</div>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function OnboardingDetailDrawer({
+  id,
+  onClose,
+  onChange,
+}: {
+  id: string;
+  onClose: () => void;
+  onChange: () => void;
+}) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(() => {
+    fetch(`/api/onboarding/${id}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setData(j.onboarding); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleTask = async (taskId: string) => {
+    setSaving(true);
+    const r = await fetch(`/api/onboarding/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toggle_task_id: taskId }),
+    });
+    const j = await r.json();
+    if (j.success) {
+      setData(j.onboarding);
+      onChange();
+    }
+    setSaving(false);
+  };
+
+  const updateField = async (field: string, value: any) => {
+    setSaving(true);
+    const r = await fetch(`/api/onboarding/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    });
+    const j = await r.json();
+    if (j.success) {
+      setData(j.onboarding);
+      onChange();
+    }
+    setSaving(false);
+  };
+
+  if (loading || !data) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center" onClick={onClose}>
+        <div className="bg-white p-6 rounded-xl">Cargando…</div>
+      </div>
+    );
+  }
+
+  const tasks: OnboardingTaskUI[] = (data.tasks || []) as OnboardingTaskUI[];
+  const tasksByMs: Record<string, OnboardingTaskUI[]> = {};
+  (['day1','week1','day30','day60','day90'] as const).forEach(m => {
+    tasksByMs[m] = tasks.filter(t => t.milestone === m);
+  });
+
+  const totalDone = tasks.filter(t => t.done).length;
+  const total = tasks.length;
+  const pct = total ? Math.round((totalDone / total) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-end" onClick={onClose}>
+      <div
+        className="bg-gray-50 w-full max-w-2xl h-full overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-black text-white px-5 py-4 z-10 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Onboarding</div>
+            <div className="text-lg font-extrabold leading-tight">{data.person?.name}</div>
+            <div className="text-[11px] opacity-70">{data.person?.role} · {data.person?.area || '—'}</div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-2xl px-2">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Progress overview */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex justify-between items-baseline mb-2">
+              <span className="text-xs uppercase font-bold text-gray-500">Progreso</span>
+              <span className="text-2xl font-extrabold">{pct}%</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="text-[11px] text-gray-500 mt-1">{totalDone}/{total} tareas completadas · started {data.start_date}</div>
+          </div>
+
+          {/* Person info */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 grid grid-cols-2 gap-3 text-xs">
+            <Info k="Email" v={data.person?.email} />
+            <Info k="Nivel" v={data.person?.role_level === 'c_suite' ? 'C-Suite' : data.person?.role_level} />
+            <Info k="Manager" v={data.person?.manager_email || '—'} />
+            <Info k="Buddy" v={data.person?.buddy_email || '—'} />
+            <Info k="Ubicación" v={data.person?.location || '—'} />
+            <Info k="Status" v={data.status} />
+          </div>
+
+          {/* Tasks by milestone */}
+          {(['day1','week1','day30','day60','day90'] as const).map(m => {
+            const list = tasksByMs[m] || [];
+            if (list.length === 0) return null;
+            const done = list.filter(t => t.done).length;
+            const msColor = MS_COLOR[m];
+            return (
+              <div key={m} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 flex justify-between items-center" style={{ background: `${msColor}15` }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: msColor }} />
+                    <span className="text-sm font-extrabold" style={{ color: msColor }}>{MS_LABEL[m]}</span>
+                  </div>
+                  <span className="text-[11px] font-bold" style={{ color: msColor }}>{done}/{list.length}</span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {list.map(t => (
+                    <div key={t.id} className="px-4 py-2.5 flex items-start gap-3 hover:bg-gray-50">
+                      <button
+                        onClick={() => !saving && toggleTask(t.id)}
+                        disabled={saving}
+                        className={`w-5 h-5 mt-0.5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                          t.done ? 'bg-emerald-500 border-emerald-600' : 'border-gray-300 hover:border-gray-500'
+                        }`}
+                      >
+                        {t.done && <span className="text-white text-xs font-bold">✓</span>}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm ${t.done ? 'line-through text-gray-400' : 'text-gray-900 font-medium'}`}>{t.label}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1.5">
+                          <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold">{OWNER_LABEL[t.owner] || t.owner}</span>
+                          {t.done && t.done_at && <span>· {new Date(t.done_at).toLocaleDateString('es-CO')}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Manager check-ins */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h4 className="text-xs uppercase font-extrabold text-gray-700">Check-ins de manager</h4>
+            <CheckInRow label="30 días" value={data.manager_30d_check_in} onSave={v => updateField('manager_30d_check_in', v)} />
+            <CheckInRow label="60 días" value={data.manager_60d_check_in} onSave={v => updateField('manager_60d_check_in', v)} />
+            <CheckInRow label="90 días · review final" value={data.manager_90d_review} onSave={v => updateField('manager_90d_review', v)} />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] uppercase font-bold text-gray-500">Ramp-up score (1-5):</span>
+              <select
+                value={data.ramp_up_score || ''}
+                onChange={e => updateField('ramp_up_score', e.target.value ? Number(e.target.value) : null)}
+                className="text-xs border border-gray-300 rounded px-2 py-1"
+              >
+                <option value="">—</option>
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Info({ k, v }: { k: string; v?: string }) {
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-wider font-bold text-gray-500">{k}</div>
+      <div className="text-sm font-semibold text-gray-900">{v || '—'}</div>
+    </div>
+  );
+}
+
+function CheckInRow({ label, value, onSave }: { label: string; value: string | null; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value || '');
+  return (
+    <div>
+      <div className="text-[11px] uppercase font-bold text-gray-500 mb-1">{label}</div>
+      {editing ? (
+        <div>
+          <textarea
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            rows={2}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-black"
+            autoFocus
+          />
+          <div className="flex gap-1.5 mt-1">
+            <button onClick={() => { onSave(val); setEditing(false); }} className="text-[11px] font-bold bg-black text-white px-3 py-1 rounded">Guardar</button>
+            <button onClick={() => { setVal(value || ''); setEditing(false); }} className="text-[11px] text-gray-500 px-2">Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <div onClick={() => setEditing(true)} className="text-xs text-gray-700 hover:bg-gray-50 px-2 py-1.5 rounded cursor-text border border-transparent hover:border-gray-200 min-h-[32px]">
+          {value || <span className="text-gray-400 italic">Click para escribir…</span>}
+        </div>
+      )}
     </div>
   );
 }
