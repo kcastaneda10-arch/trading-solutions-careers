@@ -53,6 +53,21 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
 
 export default function HRAdminPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Global Cmd+K / Ctrl+K shortcut to open search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchOpen]);
 
   return (
     <div className="min-h-screen font-sans" style={{ background: "#EBEBEB" }}>
@@ -70,6 +85,16 @@ export default function HRAdminPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {/* Buscador global */}
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/15 text-white/70 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+              title="Buscar candidatos (Cmd+K)"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Buscar candidatos</span>
+              <kbd className="text-[9px] font-mono bg-white/10 border border-white/20 rounded px-1 py-0.5 ml-1">⌘K</kbd>
+            </button>
             <button className="text-white/70 hover:text-white relative p-1.5">
               <Bell className="w-[18px] h-[18px]" />
               <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500" />
@@ -129,6 +154,8 @@ export default function HRAdminPage() {
         {tab === "cvbank" && <CVBank />}
         {tab === "agentes" && <Agentes />}
       </main>
+
+      {searchOpen && <CandidateSearchModal onClose={() => setSearchOpen(false)} onJumpFunnel={() => { setTab('funnel'); setSearchOpen(false); }} />}
     </div>
   );
 }
@@ -4841,6 +4868,221 @@ function ImportCSVModal({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Candidate Search Modal · global Cmd+K                    */
+/* ======================================================== */
+type CandidateSearchResult = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  current_role: string | null;
+  vacancy_id: string;
+  vacancy_title: string | null;
+  vacancy_area: string | null;
+  stage: string;
+  status: string;
+  overall_score: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const STAGE_CHIP_COLOR: Record<string, string> = {
+  aplico: 'bg-gray-100 text-gray-700',
+  prefiltro_enviado: 'bg-blue-100 text-blue-700',
+  prefiltro_pasado: 'bg-blue-100 text-blue-700',
+  prefiltro_revision: 'bg-amber-100 text-amber-800',
+  assessment_invitado: 'bg-indigo-100 text-indigo-700',
+  assessment_en_progreso: 'bg-indigo-100 text-indigo-700',
+  assessment_completado: 'bg-purple-100 text-purple-700',
+  entrevista_ia: 'bg-purple-100 text-purple-700',
+  bateria_psicometrica: 'bg-purple-100 text-purple-700',
+  recruiter_interview: 'bg-cyan-100 text-cyan-800',
+  cwo_interview: 'bg-emerald-100 text-emerald-800',
+  touring: 'bg-emerald-100 text-emerald-800',
+  terna: 'bg-emerald-100 text-emerald-800',
+  oferta: 'bg-emerald-100 text-emerald-800',
+  contratado: 'bg-emerald-200 text-emerald-900',
+  rechazado: 'bg-red-100 text-red-700',
+};
+
+function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; onJumpFunnel: () => void }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<CandidateSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filterStage, setFilterStage] = useState<string>('');
+  const [filterMinScore, setFilterMinScore] = useState<string>('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus on mount
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Run search
+  useEffect(() => {
+    if (!debouncedQ && !filterStage && !filterMinScore) {
+      // Mostrar últimos 25 actualizados como exploración
+      runSearch();
+      return;
+    }
+    runSearch();
+  }, [debouncedQ, filterStage, filterMinScore]);
+
+  const runSearch = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (debouncedQ) params.set('q', debouncedQ);
+    if (filterStage) params.set('stage', filterStage);
+    if (filterMinScore) params.set('min_score', filterMinScore);
+    params.set('limit', '25');
+    try {
+      const r = await fetch(`/api/headhunting/candidates/search?${params.toString()}`, { cache: 'no-store' });
+      const j = await r.json();
+      setResults(j.results || []);
+    } catch {
+      setResults([]);
+    }
+    setLoading(false);
+  }, [debouncedQ, filterStage, filterMinScore]);
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[8vh] px-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Search bar */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
+          <Search className="w-5 h-5 text-gray-400 flex-shrink-0" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Buscar por nombre, email, rol actual…"
+            className="flex-1 text-base font-medium focus:outline-none placeholder-gray-400"
+          />
+          {q && (
+            <button onClick={() => setQ('')} className="text-gray-400 hover:text-gray-700 text-xs font-bold px-2">×</button>
+          )}
+          <kbd className="text-[9px] font-mono bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5 text-gray-500">ESC</kbd>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-gray-100 bg-gray-50">
+          <span className="text-[10px] uppercase font-bold text-gray-500">Filtros:</span>
+          <select
+            value={filterStage}
+            onChange={e => setFilterStage(e.target.value)}
+            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-black"
+          >
+            <option value="">Todos los stages</option>
+            <optgroup label="Activos">
+              {['aplico','prefiltro_enviado','prefiltro_pasado','prefiltro_revision','assessment_invitado','assessment_en_progreso','assessment_completado','entrevista_ia','bateria_psicometrica','recruiter_interview','cwo_interview','touring','terna','oferta'].map(s => (
+                <option key={s} value={s}>{stageLabelShort(s)}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Cerrados">
+              <option value="contratado">Contratados</option>
+              <option value="rechazado">Rechazados</option>
+            </optgroup>
+          </select>
+          <select
+            value={filterMinScore}
+            onChange={e => setFilterMinScore(e.target.value)}
+            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-black"
+          >
+            <option value="">Score mínimo</option>
+            <option value="50">≥ 50</option>
+            <option value="70">≥ 70</option>
+            <option value="80">≥ 80</option>
+            <option value="90">≥ 90</option>
+          </select>
+          {(filterStage || filterMinScore) && (
+            <button
+              onClick={() => { setFilterStage(''); setFilterMinScore(''); }}
+              className="text-[10px] text-red-600 font-bold hover:underline"
+            >
+              Limpiar filtros
+            </button>
+          )}
+          <span className="ml-auto text-[10px] text-gray-500">
+            {loading ? 'Buscando…' : `${results.length} resultado${results.length !== 1 ? 's' : ''}`}
+          </span>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {!loading && results.length === 0 && (
+            <div className="text-center py-12 px-4">
+              <div className="text-3xl mb-2">🔎</div>
+              <div className="text-sm font-bold text-gray-700">Sin resultados</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {debouncedQ ? `No encontramos candidatos para "${debouncedQ}"` : 'Empezá a escribir para buscar'}
+              </div>
+            </div>
+          )}
+
+          {results.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onJumpFunnel(); }}
+              className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-gray-900">{c.name}</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${STAGE_CHIP_COLOR[c.stage] || 'bg-gray-100 text-gray-700'}`}>
+                      {stageLabelShort(c.stage)}
+                    </span>
+                    {c.overall_score != null && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        c.overall_score >= 80 ? 'bg-emerald-100 text-emerald-800' :
+                        c.overall_score >= 60 ? 'bg-amber-100 text-amber-800' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        Score {c.overall_score}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-0.5 truncate">{c.email}{c.phone ? ` · ${c.phone}` : ''}</div>
+                  <div className="text-[11px] text-gray-700 mt-0.5 truncate">
+                    {c.current_role && <span>{c.current_role}</span>}
+                    {c.vacancy_title && <span className="text-gray-400"> → </span>}
+                    {c.vacancy_title && <span className="font-semibold">{c.vacancy_title}</span>}
+                  </div>
+                </div>
+                <div className="text-[10px] text-gray-400 flex-shrink-0 text-right">
+                  <div>{fmtDate(c.created_at)}</div>
+                  <div className="text-gray-300">creado</div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer hints */}
+        <div className="border-t border-gray-100 px-4 py-2 bg-gray-50 flex items-center justify-between text-[10px] text-gray-500">
+          <div className="flex gap-3">
+            <span><kbd className="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] font-mono">↑↓</kbd> navegar</span>
+            <span><kbd className="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] font-mono">↵</kbd> abrir</span>
+            <span><kbd className="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] font-mono">ESC</kbd> cerrar</span>
+          </div>
+          <span>Click en candidato → Funnel</span>
+        </div>
       </div>
     </div>
   );
