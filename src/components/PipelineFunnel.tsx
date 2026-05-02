@@ -467,17 +467,40 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
         </div>
 
         {/* Action bar */}
-        {!isTerminal && (
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-2 flex-wrap">
-            {nextStage && (
-              <button
-                onClick={() => moveToStage(nextStage.id, nextStage.label)}
-                disabled={busy}
-                className="text-xs font-bold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {nextStage.emoji} {nextStage.label} →
-              </button>
-            )}
+        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-2 flex-wrap">
+          {!isTerminal && nextStage && (
+            <button
+              onClick={() => moveToStage(nextStage.id, nextStage.label)}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {nextStage.emoji} {nextStage.label} →
+            </button>
+          )}
+
+          {/* Move to ANY stage dropdown */}
+          <select
+            value=""
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              const s = [...STAGES, REJECTED_STAGE].find(x => x.id === v);
+              if (s) moveToStage(s.id, `Movido a ${s.label}`);
+              e.target.value = "";
+            }}
+            disabled={busy}
+            className="text-xs font-semibold px-3 py-2 rounded-full border-2 border-purple-300 text-purple-800 bg-white hover:bg-purple-50 disabled:opacity-50 cursor-pointer"
+            title="Mover a cualquier etapa (salta el flujo lineal)"
+          >
+            <option value="">📍 Mover a etapa…</option>
+            {STAGES.filter(s => s.id !== currentStage).map(s => (
+              <option key={s.id} value={s.id}>{s.emoji} {s.label}</option>
+            ))}
+            <option disabled>──────────</option>
+            <option value={REJECTED_STAGE.id}>{REJECTED_STAGE.emoji} {REJECTED_STAGE.label}</option>
+          </select>
+
+          {!isTerminal && (
             <button
               onClick={reject}
               disabled={busy}
@@ -485,18 +508,18 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
             >
               ❌ Rechazar (draft auto)
             </button>
-            {feedback && (
-              <span className="text-xs ml-auto text-gray-700">{feedback}</span>
-            )}
-          </div>
-        )}
-        {isTerminal && (
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+          )}
+
+          {isTerminal && (
             <span className="text-xs text-gray-500 italic">
-              {currentStage === "rechazado" ? "❌ Candidato rechazado · etapa terminal" : "🎉 Candidato contratado · etapa terminal"}
+              {currentStage === "rechazado" ? "❌ Etapa terminal — usa dropdown para reactivar" : "🎉 Contratado — usa dropdown si necesitas mover"}
             </span>
-          </div>
-        )}
+          )}
+
+          {feedback && (
+            <span className="text-xs ml-auto text-gray-700">{feedback}</span>
+          )}
+        </div>
 
         <div className="p-6 space-y-5 text-sm">
           {/* Identidad */}
