@@ -37,30 +37,16 @@ import PipelineFunnel from "@/components/PipelineFunnel";
 type Tab =
   | "dashboard"
   | "vacantes"
-  | "pipeline"
   | "funnel"
-  | "prefiltros"
   | "cvbank"
-  | "entrevistas"
-  | "pruebas"
-  | "agentes"
-  | "analytics"
-  | "linkedin"
-  | "datos";
+  | "agentes";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
-  { id: "pipeline", label: "Pipeline", icon: Kanban },
-  { id: "funnel", label: "Funnel ✨", icon: Kanban },
-  { id: "prefiltros", label: "Prefiltros", icon: ClipboardCheck },
+  { id: "funnel", label: "Funnel", icon: Kanban },
   { id: "cvbank", label: "CV Bank", icon: Database },
-  { id: "entrevistas", label: "Entrevistas IA", icon: Video },
-  { id: "pruebas", label: "Evaluaciones", icon: Brain },
   { id: "agentes", label: "Agentes IA", icon: Bot },
-  { id: "analytics", label: "Analytics", icon: LineChart },
-  { id: "linkedin", label: "LinkedIn TS", icon: Linkedin },
-  { id: "datos", label: "Bases de datos", icon: Database },
 ];
 
 export default function HRAdminPage() {
@@ -136,16 +122,9 @@ export default function HRAdminPage() {
       <main className="max-w-[1440px] mx-auto px-6 py-7 pb-16">
         {tab === "dashboard" && <Dashboard />}
         {tab === "vacantes" && <Vacantes />}
-        {tab === "pipeline" && <Pipeline />}
         {tab === "funnel" && <PipelineFunnel />}
-        {tab === "prefiltros" && <PrefiltrosPanel />}
         {tab === "cvbank" && <CVBank />}
-        {tab === "entrevistas" && <Entrevistas />}
-        {tab === "pruebas" && <Pruebas />}
         {tab === "agentes" && <Agentes />}
-        {tab === "analytics" && <Analytics />}
-        {tab === "linkedin" && <LinkedInTS />}
-        {tab === "datos" && <Datos />}
       </main>
     </div>
   );
@@ -898,6 +877,7 @@ type VacancyOverview = {
 function VacanciesOverview() {
   const [vacs, setVacs] = useState<VacancyOverview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [researchVac, setResearchVac] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
@@ -945,7 +925,11 @@ function VacanciesOverview() {
           <h3 className="text-[11px] uppercase font-bold text-gray-500 tracking-wider mb-2">🟡 Abiertas</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {abiertas.map(v => (
-              <OpenVacancyCard key={v.vacancy_id} v={v} />
+              <OpenVacancyCard
+                key={v.vacancy_id}
+                v={v}
+                onResearch={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
+              />
             ))}
           </div>
         </div>
@@ -967,6 +951,7 @@ function VacanciesOverview() {
                   <th className="text-right px-3 py-2 font-bold">TTF total</th>
                   <th className="text-right px-3 py-2 font-bold">TTF LinkedIn</th>
                   <th className="text-right px-3 py-2 font-bold">Días sin titular</th>
+                  <th className="text-right px-3 py-2 font-bold">Estudio</th>
                 </tr>
               </thead>
               <tbody>
@@ -980,6 +965,15 @@ function VacanciesOverview() {
                     <td className="px-3 py-2 text-right font-bold">{v.metrics.time_to_fill ?? '—'}d</td>
                     <td className="px-3 py-2 text-right text-blue-700 font-bold">{v.metrics.days_since_linkedin ?? '—'}{v.metrics.days_since_linkedin != null ? 'd' : ''}</td>
                     <td className="px-3 py-2 text-right text-amber-700 font-bold">{v.metrics.days_vacant != null ? v.metrics.days_vacant + 'd' : '—'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
+                        className="text-[10px] font-bold text-purple-700 hover:text-purple-900 hover:underline"
+                        title="Estudio de mercado"
+                      >
+                        🤖 Ver
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -990,11 +984,19 @@ function VacanciesOverview() {
           </p>
         </div>
       )}
+
+      {researchVac && (
+        <VacancyMarketResearchModal
+          vacancyId={researchVac.id}
+          vacancyTitle={researchVac.title}
+          onClose={() => setResearchVac(null)}
+        />
+      )}
     </div>
   );
 }
 
-function OpenVacancyCard({ v }: { v: VacancyOverview }) {
+function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: () => void }) {
   const m = v.milestones;
   const hasLinkedIn = !!m.linkedin_active_date;
   const healthColor = v.health.score === 'green' ? '#10B981' : v.health.score === 'yellow' ? '#F59E0B' : '#EF4444';
@@ -1117,6 +1119,500 @@ function OpenVacancyCard({ v }: { v: VacancyOverview }) {
         <span className="text-gray-500">Total: <strong className="text-gray-800">{v.metrics.candidates_total}</strong></span>
         <span className="text-red-600">Rechazados: <strong>{v.metrics.rechazados}</strong></span>
       </div>
+
+      {/* Market Research CTA */}
+      <button
+        onClick={onResearch}
+        className="mt-2 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-[11px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+        title="Generar/ver estudio de mercado por IA"
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        Estudio de mercado IA
+      </button>
+    </div>
+  );
+}
+
+// ─── Market Research Modal · Agente IA por vacante ──────────────────
+type MarketResearchReport = {
+  exec_summary?: string;
+  compensation?: {
+    currency?: string;
+    base_monthly_min?: number;
+    base_monthly_median?: number;
+    base_monthly_max?: number;
+    total_annual_min?: number;
+    total_annual_median?: number;
+    total_annual_max?: number;
+    typical_bonuses?: string[];
+    benefits_market_standard?: string[];
+    latam_remote_comparison?: string;
+    sources_referenced?: string[];
+    notes?: string;
+  };
+  recruiting_timeline?: {
+    industry_avg_ttf_days_min?: number;
+    industry_avg_ttf_days_max?: number;
+    ts_target_days?: number;
+    comparison?: string;
+    candidate_in_market_days_typical?: number;
+    factors_speeding_up?: string[];
+    factors_slowing_down?: string[];
+  };
+  talent_landscape?: {
+    pool_size_estimate?: string;
+    pool_size_explanation?: string;
+    demand_level?: string;
+    supply_demand_balance?: string;
+    main_competing_companies?: string[];
+    active_passive_ratio?: string;
+    geographic_hotspots?: string[];
+  };
+  in_demand_skills_2026?: {
+    must_have_technical?: string[];
+    must_have_soft?: string[];
+    nice_to_have?: string[];
+    emerging_trends?: string[];
+  };
+  sourcing_strategy?: {
+    linkedin_search_strings?: string[];
+    universities_to_target?: string[];
+    industry_associations?: string[];
+    communities_groups?: string[];
+    alternative_channels?: string[];
+    outreach_message_template?: string;
+  };
+  process_risks?: {
+    counter_offer_likelihood?: string;
+    counter_offer_explanation?: string;
+    common_dropout_reasons?: string[];
+    red_flags_in_candidates?: string[];
+    negotiation_pain_points?: string[];
+  };
+  tactical_recommendations?: {
+    ts_value_props_to_highlight?: string[];
+    what_to_avoid_saying?: string[];
+    interview_focus_areas?: string[];
+    decision_speed_recommended_days?: number;
+    salary_negotiation_strategy?: string;
+  };
+  competitive_intelligence?: {
+    typical_offer_packages?: string;
+    ts_advantages?: string[];
+    ts_disadvantages?: string[];
+    differentiators_to_communicate?: string[];
+  };
+};
+
+function VacancyMarketResearchModal({
+  vacancyId,
+  vacancyTitle,
+  onClose,
+}: {
+  vacancyId: string;
+  vacancyTitle: string;
+  onClose: () => void;
+}) {
+  const [report, setReport] = useState<MarketResearchReport | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Carga cache
+  useEffect(() => {
+    fetch(`/api/headhunting/vacancies/${vacancyId}/market-research`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.research) {
+          setReport(j.research.report || null);
+          setGeneratedAt(j.research.generated_at || null);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [vacancyId]);
+
+  const generate = useCallback(async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/headhunting/vacancies/${vacancyId}/market-research`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) {
+        setError(j.error || 'Error generando estudio');
+      } else {
+        setReport(j.research?.report || null);
+        setGeneratedAt(j.research?.generated_at || new Date().toISOString());
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setGenerating(false);
+    }
+  }, [vacancyId]);
+
+  const fmtCOP = (n?: number) => {
+    if (n == null) return '—';
+    return n.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8 relative"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-3 rounded-t-xl flex items-center justify-between z-10">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">Estudio de mercado IA</div>
+              <div className="text-base font-extrabold leading-tight">{vacancyTitle}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generate}
+              disabled={generating}
+              className="bg-white/20 hover:bg-white/30 disabled:opacity-50 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              {generating ? '⏳ Generando…' : (report ? '🔄 Regenerar' : '✨ Generar')}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-white/80 hover:text-white text-xl leading-none px-2"
+              title="Cerrar"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          {loading && <div className="text-sm text-gray-400 py-8 text-center">Cargando…</div>}
+
+          {!loading && !report && !generating && (
+            <div className="text-center py-10">
+              <div className="text-5xl mb-3">🤖</div>
+              <h3 className="text-lg font-bold text-gray-900">Aún no hay estudio</h3>
+              <p className="text-sm text-gray-500 mt-1 mb-4">
+                Generaremos un análisis completo: compensación COP, tiempos de reclutamiento,<br />
+                talent pool, sourcing strategy y recomendaciones tácticas.
+              </p>
+              <button
+                onClick={generate}
+                disabled={generating}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg shadow-md inline-flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                Generar estudio de mercado
+              </button>
+            </div>
+          )}
+
+          {generating && (
+            <div className="text-center py-12">
+              <div className="text-5xl mb-3 animate-pulse">🧠</div>
+              <h3 className="text-base font-bold text-gray-900">Claude está investigando…</h3>
+              <p className="text-xs text-gray-500 mt-1">Analizando mercado de logística internacional Colombia 2026 · ~30s</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-xs text-red-800">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          {!loading && !generating && report && (
+            <div className="space-y-5">
+              {generatedAt && (
+                <div className="text-[10px] text-gray-400 italic">
+                  Generado: {new Date(generatedAt).toLocaleString('es-CO')} · Cache servido si no se regenera
+                </div>
+              )}
+
+              {/* Exec summary */}
+              {report.exec_summary && (
+                <Section title="Resumen ejecutivo" icon="📊" color="purple">
+                  <p className="text-sm text-gray-700 leading-relaxed">{report.exec_summary}</p>
+                </Section>
+              )}
+
+              {/* Compensación */}
+              {report.compensation && (
+                <Section title="Compensación · Mercado Colombia 2026" icon="💰" color="emerald">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <SalaryBox label="MIN" amount={fmtCOP(report.compensation.base_monthly_min)} bg="#FEF3C7" />
+                    <SalaryBox label="MEDIANA" amount={fmtCOP(report.compensation.base_monthly_median)} bg="#D1FAE5" highlight />
+                    <SalaryBox label="MAX" amount={fmtCOP(report.compensation.base_monthly_max)} bg="#DBEAFE" />
+                  </div>
+                  {report.compensation.total_annual_median != null && (
+                    <div className="text-[11px] text-gray-600 mb-2">
+                      Total anual mediana: <strong>{fmtCOP(report.compensation.total_annual_median)}</strong>
+                    </div>
+                  )}
+                  {report.compensation.typical_bonuses && report.compensation.typical_bonuses.length > 0 && (
+                    <PillRow label="Bonos típicos" items={report.compensation.typical_bonuses} color="amber" />
+                  )}
+                  {report.compensation.benefits_market_standard && report.compensation.benefits_market_standard.length > 0 && (
+                    <PillRow label="Beneficios estándar" items={report.compensation.benefits_market_standard} color="emerald" />
+                  )}
+                  {report.compensation.latam_remote_comparison && (
+                    <p className="text-xs text-gray-700 mt-2"><strong>LATAM remoto:</strong> {report.compensation.latam_remote_comparison}</p>
+                  )}
+                  {report.compensation.notes && (
+                    <p className="text-[11px] text-gray-500 italic mt-2">{report.compensation.notes}</p>
+                  )}
+                </Section>
+              )}
+
+              {/* Timeline reclutamiento */}
+              {report.recruiting_timeline && (
+                <Section title="Tiempos de reclutamiento" icon="⏱️" color="blue">
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
+                      <div className="text-[10px] uppercase font-bold text-blue-700">Industria</div>
+                      <div className="text-base font-extrabold text-blue-900">
+                        {report.recruiting_timeline.industry_avg_ttf_days_min}-{report.recruiting_timeline.industry_avg_ttf_days_max} días
+                      </div>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-100 rounded-lg p-2">
+                      <div className="text-[10px] uppercase font-bold text-purple-700">Target TS</div>
+                      <div className="text-base font-extrabold text-purple-900">{report.recruiting_timeline.ts_target_days} días</div>
+                    </div>
+                  </div>
+                  {report.recruiting_timeline.comparison && (
+                    <p className="text-xs text-gray-700 mb-2">{report.recruiting_timeline.comparison}</p>
+                  )}
+                  {report.recruiting_timeline.factors_speeding_up && report.recruiting_timeline.factors_speeding_up.length > 0 && (
+                    <PillRow label="✓ Aceleran" items={report.recruiting_timeline.factors_speeding_up} color="emerald" />
+                  )}
+                  {report.recruiting_timeline.factors_slowing_down && report.recruiting_timeline.factors_slowing_down.length > 0 && (
+                    <PillRow label="⚠️ Frenan" items={report.recruiting_timeline.factors_slowing_down} color="red" />
+                  )}
+                </Section>
+              )}
+
+              {/* Talent landscape */}
+              {report.talent_landscape && (
+                <Section title="Talent landscape" icon="🌎" color="indigo">
+                  <div className="grid grid-cols-3 gap-2 mb-2 text-[11px]">
+                    <KV k="Pool" v={report.talent_landscape.pool_size_estimate} />
+                    <KV k="Demanda" v={report.talent_landscape.demand_level} />
+                    <KV k="Balance" v={report.talent_landscape.supply_demand_balance} />
+                  </div>
+                  {report.talent_landscape.pool_size_explanation && (
+                    <p className="text-xs text-gray-700 mb-2">{report.talent_landscape.pool_size_explanation}</p>
+                  )}
+                  {report.talent_landscape.main_competing_companies && (
+                    <PillRow label="Empresas que compiten por el talento" items={report.talent_landscape.main_competing_companies} color="indigo" />
+                  )}
+                  {report.talent_landscape.geographic_hotspots && (
+                    <PillRow label="Hotspots geográficos" items={report.talent_landscape.geographic_hotspots} color="blue" />
+                  )}
+                </Section>
+              )}
+
+              {/* Skills 2026 */}
+              {report.in_demand_skills_2026 && (
+                <Section title="Skills más demandadas 2026" icon="🎯" color="orange">
+                  {report.in_demand_skills_2026.must_have_technical && (
+                    <PillRow label="Técnicas (must-have)" items={report.in_demand_skills_2026.must_have_technical} color="purple" />
+                  )}
+                  {report.in_demand_skills_2026.must_have_soft && (
+                    <PillRow label="Soft (must-have)" items={report.in_demand_skills_2026.must_have_soft} color="emerald" />
+                  )}
+                  {report.in_demand_skills_2026.nice_to_have && (
+                    <PillRow label="Nice-to-have" items={report.in_demand_skills_2026.nice_to_have} color="gray" />
+                  )}
+                  {report.in_demand_skills_2026.emerging_trends && (
+                    <PillRow label="Tendencias emergentes" items={report.in_demand_skills_2026.emerging_trends} color="amber" />
+                  )}
+                </Section>
+              )}
+
+              {/* Sourcing */}
+              {report.sourcing_strategy && (
+                <Section title="Sourcing strategy" icon="🔍" color="cyan">
+                  {report.sourcing_strategy.linkedin_search_strings && report.sourcing_strategy.linkedin_search_strings.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">LinkedIn Recruiter · Search strings</div>
+                      <div className="space-y-1">
+                        {report.sourcing_strategy.linkedin_search_strings.map((q, i) => (
+                          <div key={i} className="bg-gray-900 text-emerald-300 px-2 py-1.5 rounded font-mono text-[11px] flex justify-between items-center gap-2 group">
+                            <code className="flex-1 break-all">{q}</code>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(q)}
+                              className="opacity-0 group-hover:opacity-100 bg-emerald-500 hover:bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded flex-shrink-0"
+                              title="Copiar"
+                            >Copy</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {report.sourcing_strategy.universities_to_target && (
+                    <PillRow label="Universidades objetivo" items={report.sourcing_strategy.universities_to_target} color="indigo" />
+                  )}
+                  {report.sourcing_strategy.industry_associations && (
+                    <PillRow label="Asociaciones gremiales" items={report.sourcing_strategy.industry_associations} color="purple" />
+                  )}
+                  {report.sourcing_strategy.communities_groups && (
+                    <PillRow label="Comunidades / grupos" items={report.sourcing_strategy.communities_groups} color="cyan" />
+                  )}
+                  {report.sourcing_strategy.alternative_channels && (
+                    <PillRow label="Canales alternativos" items={report.sourcing_strategy.alternative_channels} color="gray" />
+                  )}
+                  {report.sourcing_strategy.outreach_message_template && (
+                    <div className="mt-2 bg-cyan-50 border-l-4 border-cyan-400 p-3 rounded">
+                      <div className="text-[10px] uppercase font-bold text-cyan-700 mb-1">Outreach template</div>
+                      <p className="text-xs text-gray-800 italic whitespace-pre-line">{report.sourcing_strategy.outreach_message_template}</p>
+                    </div>
+                  )}
+                </Section>
+              )}
+
+              {/* Riesgos del proceso */}
+              {report.process_risks && (
+                <Section title="Riesgos del proceso" icon="⚠️" color="red">
+                  <div className="mb-2">
+                    <span className="text-[10px] uppercase font-bold text-gray-500">Counter-offer:</span>
+                    <span className="ml-2 text-xs font-bold uppercase text-red-700">{report.process_risks.counter_offer_likelihood}</span>
+                    {report.process_risks.counter_offer_explanation && (
+                      <p className="text-xs text-gray-700 mt-1">{report.process_risks.counter_offer_explanation}</p>
+                    )}
+                  </div>
+                  {report.process_risks.common_dropout_reasons && (
+                    <PillRow label="Razones comunes de drop-off" items={report.process_risks.common_dropout_reasons} color="red" />
+                  )}
+                  {report.process_risks.red_flags_in_candidates && (
+                    <PillRow label="🚩 Red flags" items={report.process_risks.red_flags_in_candidates} color="red" />
+                  )}
+                  {report.process_risks.negotiation_pain_points && (
+                    <PillRow label="Puntos de fricción en negociación" items={report.process_risks.negotiation_pain_points} color="amber" />
+                  )}
+                </Section>
+              )}
+
+              {/* Recomendaciones tácticas */}
+              {report.tactical_recommendations && (
+                <Section title="Recomendaciones tácticas" icon="🎯" color="emerald">
+                  {report.tactical_recommendations.ts_value_props_to_highlight && (
+                    <PillRow label="Diferenciales TS a destacar" items={report.tactical_recommendations.ts_value_props_to_highlight} color="emerald" />
+                  )}
+                  {report.tactical_recommendations.what_to_avoid_saying && (
+                    <PillRow label="❌ Evitar decir" items={report.tactical_recommendations.what_to_avoid_saying} color="red" />
+                  )}
+                  {report.tactical_recommendations.interview_focus_areas && (
+                    <PillRow label="Áreas a profundizar en entrevista" items={report.tactical_recommendations.interview_focus_areas} color="purple" />
+                  )}
+                  {report.tactical_recommendations.decision_speed_recommended_days != null && (
+                    <p className="text-xs text-gray-700 mt-2">
+                      <strong>Velocidad de decisión recomendada:</strong> {report.tactical_recommendations.decision_speed_recommended_days} días
+                    </p>
+                  )}
+                  {report.tactical_recommendations.salary_negotiation_strategy && (
+                    <div className="mt-2 bg-emerald-50 border-l-4 border-emerald-400 p-3 rounded">
+                      <div className="text-[10px] uppercase font-bold text-emerald-700 mb-1">Estrategia de negociación salarial</div>
+                      <p className="text-xs text-gray-800">{report.tactical_recommendations.salary_negotiation_strategy}</p>
+                    </div>
+                  )}
+                </Section>
+              )}
+
+              {/* Competitive intel */}
+              {report.competitive_intelligence && (
+                <Section title="Competitive intelligence" icon="🔬" color="purple">
+                  {report.competitive_intelligence.typical_offer_packages && (
+                    <p className="text-xs text-gray-700 mb-2"><strong>Paquetes típicos competencia:</strong> {report.competitive_intelligence.typical_offer_packages}</p>
+                  )}
+                  {report.competitive_intelligence.ts_advantages && (
+                    <PillRow label="✓ Ventajas TS" items={report.competitive_intelligence.ts_advantages} color="emerald" />
+                  )}
+                  {report.competitive_intelligence.ts_disadvantages && (
+                    <PillRow label="⚠️ Desventajas TS" items={report.competitive_intelligence.ts_disadvantages} color="amber" />
+                  )}
+                  {report.competitive_intelligence.differentiators_to_communicate && (
+                    <PillRow label="Diferenciadores a comunicar" items={report.competitive_intelligence.differentiators_to_communicate} color="purple" />
+                  )}
+                </Section>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, icon, color, children }: { title: string; icon: string; color: string; children: React.ReactNode }) {
+  const colorMap: Record<string, string> = {
+    purple: 'border-purple-200 bg-purple-50/30',
+    emerald: 'border-emerald-200 bg-emerald-50/30',
+    blue: 'border-blue-200 bg-blue-50/30',
+    indigo: 'border-indigo-200 bg-indigo-50/30',
+    orange: 'border-orange-200 bg-orange-50/30',
+    cyan: 'border-cyan-200 bg-cyan-50/30',
+    red: 'border-red-200 bg-red-50/30',
+  };
+  return (
+    <div className={`border rounded-lg p-3 ${colorMap[color] || 'border-gray-200 bg-gray-50/30'}`}>
+      <h4 className="text-[11px] uppercase tracking-wider font-extrabold text-gray-700 mb-2 flex items-center gap-1.5">
+        <span>{icon}</span>
+        <span>{title}</span>
+      </h4>
+      {children}
+    </div>
+  );
+}
+
+function SalaryBox({ label, amount, bg, highlight }: { label: string; amount: string; bg: string; highlight?: boolean }) {
+  return (
+    <div
+      className={`rounded-lg p-2 text-center ${highlight ? 'ring-2 ring-emerald-400' : ''}`}
+      style={{ background: bg }}
+    >
+      <div className="text-[9px] uppercase font-bold text-gray-600">{label}</div>
+      <div className="text-sm font-extrabold text-gray-900 mt-0.5 leading-tight">{amount}</div>
+      <div className="text-[9px] text-gray-500">/ mes</div>
+    </div>
+  );
+}
+
+function PillRow({ label, items, color }: { label: string; items: string[]; color: string }) {
+  if (!items || items.length === 0) return null;
+  const colorMap: Record<string, string> = {
+    purple: 'bg-purple-100 text-purple-800 border-purple-200',
+    emerald: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    blue: 'bg-blue-100 text-blue-800 border-blue-200',
+    indigo: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    cyan: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+    amber: 'bg-amber-100 text-amber-800 border-amber-200',
+    orange: 'bg-orange-100 text-orange-800 border-orange-200',
+    red: 'bg-red-100 text-red-800 border-red-200',
+    gray: 'bg-gray-100 text-gray-800 border-gray-200',
+  };
+  return (
+    <div className="mb-2">
+      <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">{label}</div>
+      <div className="flex flex-wrap gap-1">
+        {items.map((it, i) => (
+          <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full border ${colorMap[color] || colorMap.gray}`}>{it}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KV({ k, v }: { k: string; v?: string }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded p-1.5">
+      <div className="text-[9px] uppercase font-bold text-gray-500">{k}</div>
+      <div className="text-xs font-bold text-gray-900 capitalize">{v || '—'}</div>
     </div>
   );
 }
