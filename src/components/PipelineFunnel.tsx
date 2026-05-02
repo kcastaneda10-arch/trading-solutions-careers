@@ -232,31 +232,12 @@ export default function PipelineFunnel() {
             />
           )}
 
-          {/* Rechazados separado debajo */}
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xl">{REJECTED_STAGE.emoji}</span>
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: REJECTED_STAGE.color }}>
-                {REJECTED_STAGE.label} · {byStage[REJECTED_STAGE.id]?.length || 0}
-              </h2>
-            </div>
-            {byStage[REJECTED_STAGE.id]?.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                {byStage[REJECTED_STAGE.id].map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedCand(c)}
-                    className="text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg p-2 transition-colors"
-                  >
-                    <div className="text-xs font-semibold text-red-900 truncate">{c.name}</div>
-                    <div className="text-[10px] text-red-700 truncate">{c.ht_vacancies?.title || "—"}</div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic">Sin rechazos por ahora.</p>
-            )}
-          </div>
+          {/* Rechazados — colapsable + búsqueda + agrupado por vacante */}
+          <RejectedSection
+            cands={byStage[REJECTED_STAGE.id] || []}
+            onSelect={setSelectedCand}
+          />
+          {/* end rechazados */}
         </>
       )}
 
@@ -279,6 +260,132 @@ const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> =
   terna: { id: "oferta", label: "Pasar a Oferta", emoji: "📨" },
   oferta: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
 };
+
+// ─── Rechazados · sección rediseñada (colapsable + búsqueda + grupos) ─
+function RejectedSection({
+  cands, onSelect,
+}: {
+  cands: Cand[];
+  onSelect: (c: Cand) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [search, setSearch] = useState("");
+
+  // Filter
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return cands;
+    return cands.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      (c.ht_vacancies?.title || "").toLowerCase().includes(q)
+    );
+  }, [cands, search]);
+
+  // Group by vacancy
+  const groups = useMemo(() => {
+    const m: Record<string, Cand[]> = {};
+    filtered.forEach(c => {
+      const key = c.ht_vacancies?.title || "Sin vacante";
+      if (!m[key]) m[key] = [];
+      m[key].push(c);
+    });
+    // Sort groups by size desc
+    return Object.entries(m).sort((a, b) => b[1].length - a[1].length);
+  }, [filtered]);
+
+  if (cands.length === 0) {
+    return (
+      <div className="mt-6 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+        <span className="text-xs text-gray-400 italic">Sin rechazos por ahora.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 border border-red-200 rounded-xl bg-red-50/30 overflow-hidden">
+      {/* Header bar */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-100/50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">❌</span>
+          <span className="text-sm font-bold uppercase tracking-wide text-red-700">Rechazados</span>
+          <span className="text-xs font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded-full">
+            {cands.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-red-700">
+          {!expanded && (
+            <span className="text-[10px] text-gray-500 italic">click para expandir</span>
+          )}
+          <span className="font-bold">{expanded ? "▲" : "▼"}</span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-red-200 bg-white px-4 py-3">
+          {/* Search */}
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="🔍 Buscar por nombre, email, vacante…"
+              className="flex-1 text-xs border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-red-400"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="text-xs text-gray-500 hover:text-black px-2"
+              >
+                ✕
+              </button>
+            )}
+            <span className="text-[11px] text-gray-500 whitespace-nowrap">
+              {filtered.length} {filtered.length === 1 ? "resultado" : "resultados"}
+            </span>
+          </div>
+
+          {/* Groups */}
+          {groups.length === 0 ? (
+            <p className="text-xs text-gray-400 italic text-center py-4">Sin coincidencias.</p>
+          ) : (
+            <div className="space-y-3">
+              {groups.map(([vacancy, list]) => (
+                <details key={vacancy} open={groups.length <= 2 || !!search}>
+                  <summary className="text-[11px] uppercase font-bold text-gray-600 cursor-pointer mb-1.5 hover:text-red-700 select-none">
+                    {vacancy}{" "}
+                    <span className="font-normal text-gray-400">·</span>{" "}
+                    <span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">{list.length}</span>
+                  </summary>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 ml-1">
+                    {list.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => onSelect(c)}
+                        className="text-left bg-white hover:bg-red-50 border border-red-100 rounded-md px-2 py-1.5 transition-colors group"
+                        title={c.email}
+                      >
+                        <div className="text-[11px] font-semibold text-gray-800 truncate group-hover:text-red-900">
+                          {c.name}
+                        </div>
+                        <div className="text-[9px] text-gray-400 truncate group-hover:text-red-600">
+                          {c.email}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Floating bulk action bar ─────────────────────────────────────
 function BulkActionBar({
