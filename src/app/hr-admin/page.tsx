@@ -120,7 +120,7 @@ export default function HRAdminPage() {
       </nav>
 
       <main className="max-w-[1440px] mx-auto px-6 py-7 pb-16">
-        {tab === "dashboard" && <Dashboard />}
+        {tab === "dashboard" && <Dashboard setTab={setTab} />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "funnel" && <PipelineFunnel />}
         {tab === "cvbank" && <CVBank />}
@@ -258,7 +258,7 @@ function matchLight(matchPct: number | null): 'green' | 'amber' | 'red' | 'gray'
   return 'red';
 }
 
-function Dashboard() {
+function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedVacancyId, setSelectedVacancyId] = useState<number | 'all'>('all');
@@ -480,6 +480,9 @@ function Dashboard() {
         }
       />
 
+      {/* ═════ TODAY'S FOCUS · qué requiere acción HOY ═════ */}
+      <TodayFocus onJumpToVacancy={() => setTab("vacantes")} onJumpToFunnel={() => setTab("funnel")} />
+
       {/* ═════ OVERVIEW · Big Picture · Hero KPIs vs Targets ═════ */}
       <DashboardHero />
 
@@ -678,6 +681,245 @@ type HeroData = {
   pipeline: { active: number; aging: number; in_late_stages: number; forecast_hires_30d: number };
   nps: number | null;
 };
+
+// ─── Today's Focus · qué requiere acción HOY ────────────────────────
+type TodayFocusData = {
+  generated_at: string;
+  counts: {
+    aging: number;
+    pending_decisions: number;
+    urgent_vacancies: number;
+    stale_vacancies: number;
+    quick_wins: number;
+  };
+  aging: { candidate_id: string; name: string; email: string; stage: string; days_since_update: number; vacancy_id: string; vacancy_title: string; severity: 'high'|'medium' }[];
+  pending_decisions: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string; action: string }[];
+  urgent_vacancies: { vacancy_id: string; title: string; area: string; role_level: string; days_active: number; target_days: number; days_over: number }[];
+  stale_vacancies: { vacancy_id: string; title: string; area: string; candidates_count: number }[];
+  quick_wins: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string }[];
+};
+
+function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
+  const [data, setData] = useState<TodayFocusData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/dashboard/today', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setData(j); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-4 mb-4 text-white text-sm">Cargando focus de hoy…</div>
+    );
+  }
+
+  if (!data) return null;
+
+  const totalAlerts = data.counts.aging + data.counts.pending_decisions + data.counts.urgent_vacancies + data.counts.stale_vacancies;
+  const noActionNeeded = totalAlerts === 0 && data.counts.quick_wins === 0;
+
+  if (noActionNeeded) {
+    return (
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 mb-4 flex items-center gap-3">
+        <span className="text-2xl">🎯</span>
+        <div>
+          <div className="text-sm font-extrabold text-emerald-900">Today's Focus · Todo bajo control</div>
+          <div className="text-xs text-emerald-700">Sin alertas críticas, candidatos avanzando, vacantes en ritmo. Buen día para sourcing.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-xl p-4 mb-4 text-white relative overflow-hidden shadow-lg">
+      {/* Decorative bg glow */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl" />
+
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🎯</span>
+            <div>
+              <div className="text-[10px] uppercase tracking-[2px] font-bold text-purple-300">Today's Focus</div>
+              <div className="text-base font-extrabold leading-tight">
+                {totalAlerts} acci{totalAlerts !== 1 ? 'ones' : 'ón'} pendiente{totalAlerts !== 1 ? 's' : ''}
+                {data.counts.quick_wins > 0 && <span className="ml-2 text-emerald-300">· {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''} 🏆</span>}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className="text-white/60 hover:text-white text-xs font-medium"
+          >
+            {collapsed ? 'Expandir ↓' : 'Colapsar ↑'}
+          </button>
+        </div>
+
+        {/* Counter pills */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <CountPill icon="⏰" label="Aging" count={data.counts.aging} color="amber" active={data.counts.aging > 0} />
+          <CountPill icon="✋" label="Decisiones" count={data.counts.pending_decisions} color="blue" active={data.counts.pending_decisions > 0} />
+          <CountPill icon="🔴" label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red" active={data.counts.urgent_vacancies > 0} />
+          <CountPill icon="💤" label="Sin movimiento" count={data.counts.stale_vacancies} color="gray" active={data.counts.stale_vacancies > 0} />
+          <CountPill icon="🏆" label="Quick wins" count={data.counts.quick_wins} color="emerald" active={data.counts.quick_wins > 0} />
+        </div>
+
+        {!collapsed && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Quick wins primero — mood positivo */}
+            {data.quick_wins.length > 0 && (
+              <FocusList
+                title="Quick wins · cierres inminentes"
+                emoji="🏆"
+                tone="emerald"
+                items={data.quick_wins.slice(0, 5).map(c => ({
+                  primary: c.name,
+                  secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
+                  meta: `${c.days_in_stage}d en stage`,
+                  onClick: onJumpToFunnel,
+                }))}
+              />
+            )}
+
+            {/* Pending decisions */}
+            {data.pending_decisions.length > 0 && (
+              <FocusList
+                title="Decisiones pendientes"
+                emoji="✋"
+                tone="blue"
+                items={data.pending_decisions.slice(0, 5).map(c => ({
+                  primary: c.name,
+                  secondary: c.action,
+                  meta: `${stageLabelShort(c.stage)} · ${c.days_in_stage}d`,
+                  onClick: onJumpToFunnel,
+                }))}
+              />
+            )}
+
+            {/* Aging candidates */}
+            {data.aging.length > 0 && (
+              <FocusList
+                title="Candidatos aging (>5d sin avance)"
+                emoji="⏰"
+                tone="amber"
+                items={data.aging.slice(0, 5).map(c => ({
+                  primary: c.name,
+                  secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
+                  meta: `${c.days_since_update}d sin moverse`,
+                  severity: c.severity === 'high' ? 'high' : undefined,
+                  onClick: onJumpToFunnel,
+                }))}
+              />
+            )}
+
+            {/* Urgent vacancies */}
+            {data.urgent_vacancies.length > 0 && (
+              <FocusList
+                title="Vacantes pasadas del target"
+                emoji="🔴"
+                tone="red"
+                items={data.urgent_vacancies.slice(0, 5).map(v => ({
+                  primary: v.title,
+                  secondary: `${v.area} · ${v.role_level === 'c_suite' ? 'C-Suite' : v.role_level}`,
+                  meta: `${v.days_active}d / ${v.target_days}d (+${v.days_over}d)`,
+                  onClick: onJumpToVacancy,
+                }))}
+              />
+            )}
+
+            {/* Stale vacancies */}
+            {data.stale_vacancies.length > 0 && (
+              <FocusList
+                title="Sin movimiento >7 días"
+                emoji="💤"
+                tone="gray"
+                items={data.stale_vacancies.slice(0, 5).map(v => ({
+                  primary: v.title,
+                  secondary: `${v.area} · ${v.candidates_count} candidato${v.candidates_count !== 1 ? 's' : ''} activos`,
+                  meta: 'Revisar pipeline',
+                  onClick: onJumpToVacancy,
+                }))}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CountPill({ icon, label, count, color, active }: { icon: string; label: string; count: number; color: string; active: boolean }) {
+  const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
+    amber: { bg: 'bg-amber-500/20', text: 'text-amber-200', ring: 'ring-amber-400/40' },
+    blue: { bg: 'bg-blue-500/20', text: 'text-blue-200', ring: 'ring-blue-400/40' },
+    red: { bg: 'bg-red-500/20', text: 'text-red-200', ring: 'ring-red-400/40' },
+    gray: { bg: 'bg-white/10', text: 'text-white/70', ring: 'ring-white/20' },
+    emerald: { bg: 'bg-emerald-500/20', text: 'text-emerald-200', ring: 'ring-emerald-400/40' },
+  };
+  const c = colorMap[color] || colorMap.gray;
+  return (
+    <div className={`${active ? c.bg : 'bg-white/5'} ${active ? c.text : 'text-white/40'} ${active ? `ring-1 ${c.ring}` : ''} rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5`}>
+      <span>{icon}</span>
+      <span>{label}:</span>
+      <span className="text-sm font-extrabold">{count}</span>
+    </div>
+  );
+}
+
+function FocusList({
+  title,
+  emoji,
+  tone,
+  items,
+}: {
+  title: string;
+  emoji: string;
+  tone: 'amber' | 'blue' | 'red' | 'gray' | 'emerald';
+  items: { primary: string; secondary: string; meta: string; severity?: 'high'; onClick?: () => void }[];
+}) {
+  const toneMap: Record<string, string> = {
+    amber: 'border-amber-400/30 bg-amber-500/5',
+    blue: 'border-blue-400/30 bg-blue-500/5',
+    red: 'border-red-400/30 bg-red-500/5',
+    gray: 'border-white/10 bg-white/5',
+    emerald: 'border-emerald-400/30 bg-emerald-500/5',
+  };
+  return (
+    <div className={`rounded-lg border ${toneMap[tone]} p-3`}>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold text-white/90 mb-2">
+        <span>{emoji}</span>
+        <span>{title}</span>
+        <span className="text-white/40 text-[10px] font-medium">· {items.length}</span>
+      </div>
+      <div className="space-y-1.5">
+        {items.map((it, i) => (
+          <button
+            key={i}
+            onClick={it.onClick}
+            className="w-full text-left bg-white/5 hover:bg-white/10 rounded px-2.5 py-1.5 text-xs transition-colors group"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-white truncate flex items-center gap-1">
+                  {it.severity === 'high' && <span className="text-red-400">🚨</span>}
+                  {it.primary}
+                </div>
+                <div className="text-[10px] text-white/60 truncate">{it.secondary}</div>
+              </div>
+              <div className="text-[10px] text-white/50 flex-shrink-0 group-hover:text-white/80">{it.meta} →</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function DashboardHero() {
   const [data, setData] = useState<HeroData | null>(null);
