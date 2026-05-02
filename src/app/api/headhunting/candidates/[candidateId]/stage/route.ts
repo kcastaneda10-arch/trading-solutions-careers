@@ -26,6 +26,8 @@ const VALID_STAGES = [
   "recruiter_interview",
   "cwo_interview",
   "touring",
+  "terna",
+  "oferta",
   "contratado",
   "rechazado",
 ];
