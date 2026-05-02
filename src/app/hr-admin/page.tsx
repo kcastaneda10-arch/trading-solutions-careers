@@ -681,8 +681,225 @@ function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Vacancies overview — abiertas vs cerradas */}
+      <VacanciesOverview />
     </>
   );
+}
+
+// ─── Vacancies Overview · abiertas y cerradas con métricas ──────────
+type VacancyOverview = {
+  vacancy_id: string;
+  title: string;
+  area: string;
+  status: "abierta" | "cerrada";
+  milestones: {
+    hr_request_date: string | null;
+    organic_traction_date: string | null;
+    linkedin_active_date: string | null;
+    vacancy_started_date: string | null;
+    hire_date: string | null;
+    notes: string | null;
+  };
+  metrics: {
+    days_active: number | null;
+    time_to_fill: number | null;
+    days_since_linkedin: number | null;
+    days_vacant: number | null;
+    candidates_total: number;
+    activos: number;
+    rechazados: number;
+    contratados: number;
+    by_stage: Record<string, number>;
+  };
+  hired: { id: string; name: string; email: string } | null;
+};
+
+function VacanciesOverview() {
+  const [vacs, setVacs] = useState<VacancyOverview[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setVacs(j.vacancies || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="mt-5 text-sm text-gray-400">Cargando vacantes…</div>;
+
+  const abiertas = vacs.filter(v => v.status === 'abierta');
+  const cerradas = vacs.filter(v => v.status === 'cerrada');
+  const avgTtfRecruitment = cerradas.length > 0
+    ? Math.round(cerradas.reduce((sum, v) => sum + (v.metrics.time_to_fill || 0), 0) / cerradas.length)
+    : 0;
+  const avgTtfLinkedin = cerradas.filter(v => v.metrics.days_since_linkedin != null).length > 0
+    ? Math.round(cerradas.filter(v => v.metrics.days_since_linkedin != null).reduce((sum, v) => sum + (v.metrics.days_since_linkedin || 0), 0) / cerradas.filter(v => v.metrics.days_since_linkedin != null).length)
+    : 0;
+
+  return (
+    <div className="mt-5">
+      {/* Header con KPIs agregados */}
+      <div className="flex items-end justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-extrabold tracking-tight">Vacantes</h2>
+          <p className="text-xs text-gray-500">{abiertas.length} abierta{abiertas.length !== 1 ? 's' : ''} · {cerradas.length} cerrada{cerradas.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="flex gap-2 text-[11px]">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+            <div className="text-[9px] uppercase font-bold text-emerald-700">Avg time-to-fill</div>
+            <div className="text-base font-extrabold text-emerald-900">{avgTtfRecruitment}<span className="text-[10px] font-medium ml-1">días</span></div>
+            <div className="text-[9px] text-emerald-600">desde solicitud HR</div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+            <div className="text-[9px] uppercase font-bold text-blue-700">Avg desde LinkedIn</div>
+            <div className="text-base font-extrabold text-blue-900">{avgTtfLinkedin}<span className="text-[10px] font-medium ml-1">días</span></div>
+            <div className="text-[9px] text-blue-600">canal pago activo</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Abiertas — cards grandes */}
+      {abiertas.length > 0 && (
+        <div>
+          <h3 className="text-[11px] uppercase font-bold text-gray-500 tracking-wider mb-2">🟡 Abiertas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {abiertas.map(v => (
+              <OpenVacancyCard key={v.vacancy_id} v={v} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cerradas — tabla compacta */}
+      {cerradas.length > 0 && (
+        <div className="mt-5">
+          <h3 className="text-[11px] uppercase font-bold text-gray-500 tracking-wider mb-2">✅ Cerradas</h3>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr className="text-[10px] uppercase text-gray-500">
+                  <th className="text-left px-3 py-2 font-bold">Vacante</th>
+                  <th className="text-left px-3 py-2 font-bold">Contratado</th>
+                  <th className="text-left px-3 py-2 font-bold">Solicitud</th>
+                  <th className="text-left px-3 py-2 font-bold">LinkedIn</th>
+                  <th className="text-left px-3 py-2 font-bold">Hire</th>
+                  <th className="text-right px-3 py-2 font-bold">TTF total</th>
+                  <th className="text-right px-3 py-2 font-bold">TTF LinkedIn</th>
+                  <th className="text-right px-3 py-2 font-bold">Días sin titular</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cerradas.map(v => (
+                  <tr key={v.vacancy_id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 font-semibold">{v.title}</td>
+                    <td className="px-3 py-2 text-gray-700">{v.hired?.name || '—'}</td>
+                    <td className="px-3 py-2 text-gray-500">{fmtDate(v.milestones.hr_request_date)}</td>
+                    <td className="px-3 py-2 text-gray-500">{fmtDate(v.milestones.linkedin_active_date)}</td>
+                    <td className="px-3 py-2 text-gray-500">{fmtDate(v.milestones.hire_date)}</td>
+                    <td className="px-3 py-2 text-right font-bold">{v.metrics.time_to_fill ?? '—'}d</td>
+                    <td className="px-3 py-2 text-right text-blue-700 font-bold">{v.metrics.days_since_linkedin ?? '—'}{v.metrics.days_since_linkedin != null ? 'd' : ''}</td>
+                    <td className="px-3 py-2 text-right text-amber-700 font-bold">{v.metrics.days_vacant != null ? v.metrics.days_vacant + 'd' : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5 italic">
+            TTF total = días desde Solicitud HR · TTF LinkedIn = días desde activación canal pago · Días sin titular = desde salida real → contratación
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpenVacancyCard({ v }: { v: VacancyOverview }) {
+  const m = v.milestones;
+  const hasLinkedIn = !!m.linkedin_active_date;
+  const linkedInGapDays = m.hr_request_date && m.linkedin_active_date
+    ? Math.floor((new Date(m.linkedin_active_date).getTime() - new Date(m.hr_request_date).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="text-sm font-bold text-gray-900 leading-tight">{v.title}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5">{v.area}</div>
+        </div>
+        <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+          {v.metrics.days_active}d activa
+        </span>
+      </div>
+
+      {/* Pipeline mini */}
+      <div className="mb-3">
+        <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Pipeline ({v.metrics.activos} activos)</div>
+        <div className="grid grid-cols-2 gap-1 text-[10px]">
+          {Object.entries(v.metrics.by_stage)
+            .filter(([s]) => !['rechazado', 'contratado'].includes(s))
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([stage, count]) => (
+              <div key={stage} className="flex justify-between bg-gray-50 px-1.5 py-0.5 rounded">
+                <span className="text-gray-600 truncate">{stageLabelShort(stage)}</span>
+                <span className="font-bold ml-1">{count}</span>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {/* Milestones */}
+      <div className="text-[10px] space-y-0.5 border-t border-gray-100 pt-2">
+        {m.hr_request_date && (
+          <div className="flex justify-between"><span className="text-gray-500">📋 Solicitud HR</span><span className="font-medium">{fmtDate(m.hr_request_date)}</span></div>
+        )}
+        {m.organic_traction_date && (
+          <div className="flex justify-between"><span className="text-gray-500">🌱 Tracción orgánica</span><span className="font-medium">{fmtDate(m.organic_traction_date)}</span></div>
+        )}
+        {m.linkedin_active_date && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">🔵 LinkedIn activo</span>
+            <span className="font-medium">{fmtDate(m.linkedin_active_date)}</span>
+          </div>
+        )}
+        {!hasLinkedIn && (
+          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 text-amber-800">
+            ⚠️ LinkedIn aún no activado
+          </div>
+        )}
+        {hasLinkedIn && linkedInGapDays && linkedInGapDays > 7 && (
+          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 text-amber-800 text-[9px]">
+            ⏰ {linkedInGapDays}d entre solicitud y activación LinkedIn
+          </div>
+        )}
+      </div>
+
+      {/* Counts */}
+      <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-[10px]">
+        <span className="text-gray-500">Total: <strong className="text-gray-800">{v.metrics.candidates_total}</strong></span>
+        <span className="text-red-600">Rechazados: <strong>{v.metrics.rechazados}</strong></span>
+      </div>
+    </div>
+  );
+}
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+}
+
+function stageLabelShort(s: string): string {
+  const map: Record<string, string> = {
+    aplico: 'Aplicó', prefiltro_enviado: 'Pref. enviado', prefiltro_pasado: 'Pref. ✓',
+    prefiltro_revision: 'Pref. ⚠️', assessment_invitado: 'Elev. inv', assessment_en_progreso: 'Elev. prog',
+    assessment_completado: 'Elev. ✓', entrevista_ia: 'IA', bateria_psicometrica: 'Batería',
+    recruiter_interview: 'Recr.', cwo_interview: 'CWO', touring: 'Touring', terna: 'Terna', oferta: 'Oferta',
+  };
+  return map[s] || s;
 }
 
 function Funnel({
