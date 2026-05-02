@@ -1045,6 +1045,25 @@ function DashboardHero() {
           {data.pipeline.in_late_stages} en etapas finales (CWO/Touring/Terna/Oferta)
         </div>
       </HeroCard>
+
+      {/* NPS strip — full width below cards, solo si hay surveys */}
+      {data.nps != null && (
+        <div className="md:col-span-2 lg:col-span-4 bg-white border border-gray-200 rounded-2xl p-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">{data.nps >= 50 ? '🌟' : data.nps >= 0 ? '👍' : '⚠️'}</div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500">NPS · Experiencia del candidato</div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-extrabold ${data.nps >= 50 ? 'text-emerald-600' : data.nps >= 0 ? 'text-amber-600' : 'text-red-600'}`}>{data.nps}</span>
+                <span className="text-[10px] text-gray-500">
+                  {data.nps >= 70 ? 'Excelente' : data.nps >= 50 ? 'Muy bueno' : data.nps >= 30 ? 'Bueno' : data.nps >= 0 ? 'Aceptable' : 'A mejorar'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-gray-400 italic">Encuestas enviadas a rechazados/contratados</div>
+        </div>
+      )}
     </div>
   );
 }

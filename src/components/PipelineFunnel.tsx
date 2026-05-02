@@ -417,6 +417,8 @@ function BulkActionBar({
     prefiltro_revision: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     assessment_completado: { label: "Enviar entrevista IA", emoji: "🎙️", endpoint: (id) => `/api/headhunting/candidates/${id}/send-ai-interview`, method: "POST" },
     entrevista_ia: { label: "Enviar batería psicométrica", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-test-battery`, method: "POST" },
+    rechazado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
+    contratado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
   };
   const stageAction = allSameStage ? stageActions[dominantStage] : null;
 
