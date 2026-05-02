@@ -501,6 +501,9 @@ function Dashboard() {
         }
       />
 
+      {/* ═════ OVERVIEW · Big Picture · Hero KPIs vs Targets ═════ */}
+      <DashboardHero />
+
       <div className="grid grid-cols-5 gap-3 mb-4">
         <KPI
           label="Total ATS"
@@ -685,6 +688,175 @@ function Dashboard() {
       {/* Vacancies overview — abiertas vs cerradas */}
       <VacanciesOverview />
     </>
+  );
+}
+
+// ─── Dashboard Hero · Big Picture KPIs vs Targets ─────────────────
+type HeroData = {
+  hires: { quarter: number; month: number; all_time: number; by_level: Record<string, number> };
+  time_to_fill: Record<string, { target: number; avg: number; on_track: boolean; values: number[] }>;
+  vacancies: { open: number; avg_days_open: number; closed_count: number };
+  pipeline: { active: number; aging: number; in_late_stages: number; forecast_hires_30d: number };
+  nps: number | null;
+};
+
+function DashboardHero() {
+  const [data, setData] = useState<HeroData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dashboard/overview', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setData(j); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="mb-5 h-[180px] rounded-2xl bg-gradient-to-br from-gray-50 to-white border border-gray-200 flex items-center justify-center text-sm text-gray-400">
+      Cargando overview…
+    </div>
+  );
+  if (!data) return null;
+
+  const TARGET_HIRES_QUARTER = 5; // Editable target Q
+  const hiresProgress = Math.min(100, Math.round((data.hires.quarter / TARGET_HIRES_QUARTER) * 100));
+
+  const allTtfOk = Object.values(data.time_to_fill).every(t => t.values.length === 0 || t.on_track);
+
+  return (
+    <div className="mb-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* CARD 1: Hires Q · Progress vs target */}
+      <HeroCard
+        title="Hires este Q"
+        accent="#10B981"
+        icon="🎯"
+      >
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-4xl font-extrabold tracking-tight">{data.hires.quarter}</span>
+          <span className="text-sm text-gray-400 mb-1">/ {TARGET_HIRES_QUARTER}</span>
+        </div>
+        <ProgressBar pct={hiresProgress} color={hiresProgress >= 100 ? '#10B981' : hiresProgress >= 60 ? '#F59E0B' : '#3B82F6'} />
+        <div className="flex justify-between text-[10px] mt-2 text-gray-500">
+          <span>{hiresProgress}% del target</span>
+          <span className="font-semibold">{data.hires.month} este mes</span>
+        </div>
+        <div className="flex gap-1.5 mt-2 pt-2 border-t border-gray-100 text-[10px]">
+          {Object.entries(data.hires.by_level).filter(([, n]) => n > 0).map(([level, count]) => (
+            <span key={level} className="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-semibold">
+              {count} {level === 'c_suite' ? 'C-Suite' : level}
+            </span>
+          ))}
+        </div>
+      </HeroCard>
+
+      {/* CARD 2: Time-to-fill por level vs target */}
+      <HeroCard
+        title="Time-to-fill"
+        accent={allTtfOk ? "#10B981" : "#F59E0B"}
+        icon="⏱️"
+      >
+        <div className="space-y-1.5 mt-1">
+          {Object.entries(data.time_to_fill).map(([level, t]) => {
+            const hasData = t.values.length > 0;
+            const pct = hasData ? Math.min(100, Math.round((t.avg / t.target) * 100)) : 0;
+            const color = !hasData ? '#9CA3AF' : t.on_track ? '#10B981' : '#EF4444';
+            return (
+              <div key={level} className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-semibold text-gray-500 w-16">
+                  {level === 'c_suite' ? 'C-Suite' : level === 'lead' ? 'Lead' : 'Entry'}
+                </span>
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div style={{ width: `${pct}%`, background: color }} className="h-full transition-all" />
+                </div>
+                <span className="text-[11px] font-bold w-14 text-right" style={{ color }}>
+                  {hasData ? `${t.avg}d` : '—'}<span className="text-gray-400 font-normal">/{t.target}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+          {allTtfOk ? '✅ Dentro de targets' : '⚠️ Algún nivel sobre target'}
+        </div>
+      </HeroCard>
+
+      {/* CARD 3: Vacancies · open & health */}
+      <HeroCard
+        title="Vacantes activas"
+        accent="#F59E0B"
+        icon="💼"
+      >
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-4xl font-extrabold tracking-tight">{data.vacancies.open}</span>
+          <span className="text-sm text-gray-400 mb-1">abiertas</span>
+        </div>
+        <div className="text-xs text-gray-700">
+          Promedio <strong className="text-gray-900">{data.vacancies.avg_days_open} días</strong> abiertas
+        </div>
+        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+          🏆 {data.vacancies.closed_count} cerradas en historial
+        </div>
+      </HeroCard>
+
+      {/* CARD 4: Pipeline · activos + forecast + aging */}
+      <HeroCard
+        title="Pipeline"
+        accent="#2C64ED"
+        icon="📊"
+      >
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-4xl font-extrabold tracking-tight">{data.pipeline.active}</span>
+          <span className="text-sm text-gray-400 mb-1">activos</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
+          <div className="bg-blue-50 rounded-md px-2 py-1.5">
+            <div className="text-gray-500 uppercase font-bold text-[9px]">Forecast 30d</div>
+            <div className="text-base font-extrabold text-blue-700">+{data.pipeline.forecast_hires_30d}</div>
+          </div>
+          <div className={`${data.pipeline.aging > 0 ? 'bg-amber-50' : 'bg-emerald-50'} rounded-md px-2 py-1.5`}>
+            <div className="text-gray-500 uppercase font-bold text-[9px]">Aging &gt;5d</div>
+            <div className={`text-base font-extrabold ${data.pipeline.aging > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+              {data.pipeline.aging}
+            </div>
+          </div>
+        </div>
+        <div className="text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+          {data.pipeline.in_late_stages} en etapas finales (CWO/Touring/Terna/Oferta)
+        </div>
+      </HeroCard>
+    </div>
+  );
+}
+
+function HeroCard({ title, accent, icon, children }: {
+  title: string;
+  accent: string;
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md transition-shadow relative overflow-hidden">
+      <div
+        className="absolute top-0 left-0 right-0 h-[3px]"
+        style={{ background: `linear-gradient(90deg, ${accent} 0%, ${accent}33 100%)` }}
+      />
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{title}</span>
+        <span className="text-base">{icon}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ProgressBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-700"
+        style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }}
+      />
+    </div>
   );
 }
 
