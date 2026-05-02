@@ -167,7 +167,7 @@ export async function POST(
 
     const { data: vacancy, error: vErr } = await supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, role_level")
+      .select("id, title, area, role_level, vacancy_type")
       .eq("id", vacancyId)
       .single();
 
@@ -175,12 +175,17 @@ export async function POST(
       return NextResponse.json({ error: "Vacante no encontrada" }, { status: 404 });
     }
 
+    // Target RYS-híbrido por (role_level, vacancy_type)
     const { data: targetRow } = await supabaseAdmin
       .from("ts_targets")
       .select("target_days_to_fill")
       .eq("role_level", vacancy.role_level || "entry")
-      .single();
-    const targetDays = targetRow?.target_days_to_fill || 30;
+      .eq("vacancy_type", vacancy.vacancy_type || "incremental")
+      .maybeSingle();
+    const fallback = vacancy.role_level === 'c_suite'
+      ? (vacancy.vacancy_type === 'reemplazo' ? 60 : 80)
+      : (vacancy.vacancy_type === 'reemplazo' ? 35 : 50);
+    const targetDays = targetRow?.target_days_to_fill || fallback;
 
     const prompt = MARKET_RESEARCH_PROMPT
       .replace("{vacancy_title}", vacancy.title)

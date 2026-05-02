@@ -20,15 +20,26 @@ export async function GET() {
     const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Targets
+    // Targets — RYS-aligned matriz (role_level + vacancy_type)
     const { data: targets } = await supabaseAdmin.from("ts_targets").select("*");
-    const targetByLevel: Record<string, number> = {};
-    (targets || []).forEach((t: any) => { targetByLevel[t.role_level] = t.target_days_to_fill; });
+    const targetMap: Record<string, number> = {};
+    (targets || []).forEach((t: any) => {
+      const key = `${t.role_level}|${t.vacancy_type || 'incremental'}`;
+      targetMap[key] = t.target_days_to_fill;
+    });
+    const lookupTarget = (rl: string, vt: string): number => {
+      const k = `${rl || 'entry'}|${vt || 'incremental'}`;
+      return targetMap[k] ?? (
+        rl === 'c_suite'
+          ? (vt === 'reemplazo' ? 60 : 80)
+          : (vt === 'reemplazo' ? 35 : 50)
+      );
+    };
 
-    // Vacancies + role_level
+    // Vacancies + role_level + vacancy_type
     const { data: vacs } = await supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, role_level, status")
+      .select("id, title, role_level, vacancy_type, status")
       .eq("client_id", TS_CLIENT_ID);
 
     // Milestones
@@ -55,25 +66,46 @@ export async function GET() {
       if (v?.role_level) hiresByLevel[v.role_level]++;
     });
 
-    // ─── KPI 2: Time-to-fill performance ───
-    const ttfByLevel: Record<string, { values: number[]; target: number; avg: number; on_track: boolean }> = {
-      entry: { values: [], target: targetByLevel.entry || 20, avg: 0, on_track: false },
-      lead: { values: [], target: targetByLevel.lead || 30, avg: 0, on_track: false },
-      c_suite: { values: [], target: targetByLevel.c_suite || 40, avg: 0, on_track: false },
-    };
+    // ─── KPI 2: Time-to-fill performance · Matriz (role_level × vacancy_type) ───
+    type TtfBucket = { values: number[]; target: number; avg: number; on_track: boolean };
+    const ttfByCategory: Record<string, TtfBucket> = {};
+    // Inicializar las 6 combinaciones con sus targets RYS-híbridos
+    const combos: Array<[string, string]> = [
+      ['entry','reemplazo'], ['entry','incremental'],
+      ['lead','reemplazo'], ['lead','incremental'],
+      ['c_suite','reemplazo'], ['c_suite','incremental'],
+    ];
+    combos.forEach(([rl, vt]) => {
+      ttfByCategory[`${rl}|${vt}`] = { values: [], target: lookupTarget(rl, vt), avg: 0, on_track: false };
+    });
+
     (milestones || []).forEach((m: any) => {
       if (!m.hire_date || !m.hr_request_date) return;
       const v = (vacs || []).find((vv: any) => vv.id === m.vacancy_id);
       if (!v?.role_level) return;
       const ttf = daysBetween(m.hr_request_date, m.hire_date);
-      ttfByLevel[v.role_level].values.push(ttf);
+      const key = `${v.role_level}|${v.vacancy_type || 'incremental'}`;
+      if (ttfByCategory[key]) ttfByCategory[key].values.push(ttf);
     });
-    Object.keys(ttfByLevel).forEach(level => {
-      const vals = ttfByLevel[level].values;
+    Object.keys(ttfByCategory).forEach(k => {
+      const vals = ttfByCategory[k].values;
       if (vals.length > 0) {
-        ttfByLevel[level].avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-        ttfByLevel[level].on_track = ttfByLevel[level].avg <= ttfByLevel[level].target;
+        ttfByCategory[k].avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+        ttfByCategory[k].on_track = ttfByCategory[k].avg <= ttfByCategory[k].target;
       }
+    });
+
+    // Agregado por role_level (para retrocompatibilidad / Hero card)
+    const ttfByLevel: Record<string, TtfBucket> = {};
+    ['entry','lead','c_suite'].forEach(rl => {
+      const r = ttfByCategory[`${rl}|reemplazo`].values;
+      const i = ttfByCategory[`${rl}|incremental`].values;
+      const all = [...r, ...i];
+      const target = Math.round(
+        (ttfByCategory[`${rl}|reemplazo`].target + ttfByCategory[`${rl}|incremental`].target) / 2
+      );
+      const avg = all.length > 0 ? Math.round(all.reduce((a, b) => a + b, 0) / all.length) : 0;
+      ttfByLevel[rl] = { values: all, target, avg, on_track: avg > 0 && avg <= target };
     });
 
     // ─── KPI 3: Vacancies open ───
@@ -124,6 +156,7 @@ export async function GET() {
         by_level: hiresByLevel,
       },
       time_to_fill: ttfByLevel,
+      time_to_fill_matrix: ttfByCategory,
       vacancies: {
         open: openVacs.length,
         avg_days_open: avgDaysOpen,

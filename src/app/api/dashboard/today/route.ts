@@ -41,16 +41,27 @@ export async function GET() {
     // Vacancies + milestones + targets
     const { data: vacs } = await supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, role_level, status")
+      .select("id, title, area, role_level, vacancy_type, status")
       .eq("client_id", TS_CLIENT_ID);
 
     const { data: milestones } = await supabaseAdmin.from("ht_vacancy_milestones").select("*");
     const milestoneByVac: Record<string, any> = {};
     (milestones || []).forEach((m: any) => { milestoneByVac[m.vacancy_id] = m; });
 
+    // Targets RYS-aligned · matriz (role_level + vacancy_type)
     const { data: targets } = await supabaseAdmin.from("ts_targets").select("*");
-    const targetByLevel: Record<string, number> = {};
-    (targets || []).forEach((t: any) => { targetByLevel[t.role_level] = t.target_days_to_fill; });
+    const targetMap: Record<string, number> = {};
+    (targets || []).forEach((t: any) => {
+      targetMap[`${t.role_level}|${t.vacancy_type || 'incremental'}`] = t.target_days_to_fill;
+    });
+    const lookupTarget = (rl: string, vt: string): number => {
+      const k = `${rl || 'entry'}|${vt || 'incremental'}`;
+      return targetMap[k] ?? (
+        rl === 'c_suite'
+          ? (vt === 'reemplazo' ? 60 : 80)
+          : (vt === 'reemplazo' ? 35 : 50)
+      );
+    };
 
     // Candidatos
     const { data: cands } = await supabaseAdmin
@@ -101,7 +112,7 @@ export async function GET() {
       .filter(Boolean)
       .sort((a: any, b: any) => b.days_in_stage - a.days_in_stage);
 
-    // ─── Urgent (red) vacancies ───
+    // ─── Urgent (red) vacancies — target RYS-híbrido ───
     const today = new Date();
     const urgentVacancies = (vacs || [])
       .filter((v: any) => {
@@ -109,18 +120,19 @@ export async function GET() {
         if (!m || m.hire_date) return false;
         if (!m.hr_request_date) return false;
         const days = Math.floor((today.getTime() - new Date(m.hr_request_date).getTime()) / (1000 * 60 * 60 * 24));
-        const target = targetByLevel[v.role_level] || 30;
+        const target = lookupTarget(v.role_level, v.vacancy_type);
         return days > target;
       })
       .map((v: any) => {
         const m = milestoneByVac[v.id];
         const days = Math.floor((today.getTime() - new Date(m.hr_request_date).getTime()) / (1000 * 60 * 60 * 24));
-        const target = targetByLevel[v.role_level] || 30;
+        const target = lookupTarget(v.role_level, v.vacancy_type);
         return {
           vacancy_id: v.id,
           title: v.title,
           area: v.area,
           role_level: v.role_level,
+          vacancy_type: v.vacancy_type || 'incremental',
           days_active: days,
           target_days: target,
           days_over: days - target,

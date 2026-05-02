@@ -672,6 +672,9 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
 
       {/* Vacancies overview — abiertas vs cerradas */}
       <VacanciesOverview />
+
+      {/* Analytics deep — funnel conversion + sources + time per stage */}
+      <AnalyticsDeep />
     </>
   );
 }
@@ -1109,6 +1112,7 @@ type VacancyOverview = {
   title: string;
   area: string;
   role_level: string;
+  vacancy_type: 'reemplazo' | 'incremental';
   status: "abierta" | "cerrada";
   milestones: {
     hr_request_date: string | null;
@@ -1283,10 +1287,21 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold text-gray-900 leading-tight truncate">{v.title}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1">
+          <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 flex-wrap">
             <span>{v.area}</span>
             <span className="text-gray-300">·</span>
             <span className="uppercase font-semibold">{v.role_level === 'c_suite' ? 'C-Suite' : v.role_level}</span>
+            <span className="text-gray-300">·</span>
+            <span
+              className={`uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
+                v.vacancy_type === 'reemplazo'
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'bg-blue-100 text-blue-700'
+              }`}
+              title="RYS Corporate Standard"
+            >
+              {v.vacancy_type === 'reemplazo' ? 'Reempl.' : 'Increm.'}
+            </span>
           </div>
         </div>
         <span className="text-base flex-shrink-0" title={v.health.reason}>{healthEmoji}</span>
@@ -4826,6 +4841,256 @@ function ImportCSVModal({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Analytics Deep · funnel + sources + time + comparison    */
+/* ======================================================== */
+type AnalyticsData = {
+  generated_at: string;
+  funnel_conversion: { stage: string; label: string; reached: number; conv_from_prev: number | null }[];
+  top_dropoffs: { from: string; to: string; lost: number; lost_pct: number; conv_pct: number }[];
+  sources: { linkedin: { count: number; pct: number }; organic: { count: number; pct: number }; unknown: { count: number; pct: number } };
+  sources_quality: { linkedin_hire_rate: number; organic_hire_rate: number; linkedin_hires: number; organic_hires: number };
+  vacancy_comparison: { vacancy_id: string; title: string; role_level: string; ttf: number | null; ttf_linkedin: number | null; candidates_total: number; hire_rate: number }[];
+  time_per_stage: { stage: string; label: string; count: number; avg_days: number }[];
+  avg_elevare_score: number | null;
+};
+
+function AnalyticsDeep() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/dashboard/analytics', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setData(j); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando analytics…</div>;
+  if (!data) return null;
+
+  const maxFunnelReached = Math.max(...data.funnel_conversion.map(f => f.reached), 1);
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-end justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-extrabold tracking-tight">Analytics</h2>
+          <p className="text-xs text-gray-500">Conversion · Sources · Tiempos · Comparación de vacantes</p>
+        </div>
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="text-xs font-bold text-gray-500 hover:text-gray-900 px-2 py-1"
+        >
+          {collapsed ? 'Expandir ↓' : 'Colapsar ↑'}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="space-y-3">
+          {/* Funnel + Drop-offs row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Funnel */}
+            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider font-extrabold text-gray-700 mb-3">Funnel completo · Conversión por stage</h3>
+              <div className="space-y-1.5">
+                {data.funnel_conversion.filter(f => f.reached > 0).map((f, i) => {
+                  const pct = (f.reached / maxFunnelReached) * 100;
+                  return (
+                    <div
+                      key={f.stage}
+                      className="grid items-center gap-2"
+                      style={{ gridTemplateColumns: '160px 1fr 50px 60px' }}
+                    >
+                      <span className="text-xs text-gray-700 font-medium truncate">{f.label}</span>
+                      <div className="h-6 bg-gray-100 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-black rounded-l flex items-center justify-end pr-2 text-[10px] font-bold text-white transition-all"
+                          style={{ width: `${Math.max(pct, f.reached > 0 ? 4 : 0)}%` }}
+                        >
+                          {f.reached > 0 ? f.reached : ''}
+                        </div>
+                      </div>
+                      <span
+                        className={`text-right text-[11px] font-bold ${
+                          f.conv_from_prev === null ? 'text-gray-300' :
+                          f.conv_from_prev >= 80 ? 'text-emerald-600' :
+                          f.conv_from_prev >= 50 ? 'text-amber-600' :
+                          'text-red-500'
+                        }`}
+                        title="Conversión desde el stage anterior"
+                      >
+                        {f.conv_from_prev !== null ? `${f.conv_from_prev}%` : '—'}
+                      </span>
+                      <span className="text-right font-bold text-sm">{f.reached}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-gray-400 italic mt-2">% en columna 3 = conversión desde el stage anterior</p>
+            </div>
+
+            {/* Top drop-offs */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider font-extrabold text-gray-700 mb-3">Top drop-offs 🚨</h3>
+              {data.top_dropoffs.length === 0 ? (
+                <p className="text-xs text-gray-400">Sin data suficiente aún.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.top_dropoffs.map((d, i) => (
+                    <div key={i} className="bg-red-50 border border-red-200 rounded p-2">
+                      <div className="text-[10px] uppercase font-bold text-red-700 mb-0.5">#{i + 1} · -{d.lost_pct}%</div>
+                      <div className="text-xs font-bold text-gray-900 leading-tight">
+                        {d.from} → {d.to}
+                      </div>
+                      <div className="text-[10px] text-red-700 mt-1">
+                        {d.lost} candidatos perdidos · solo {d.conv_pct}% pasaron
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sources + Time per stage */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Sources */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider font-extrabold text-gray-700 mb-3">Sources · LinkedIn vs Orgánica</h3>
+              <div className="space-y-3">
+                <SourceBarRow
+                  label="LinkedIn (canal pago activo)"
+                  count={data.sources.linkedin.count}
+                  pct={data.sources.linkedin.pct}
+                  hire_rate={data.sources_quality.linkedin_hire_rate}
+                  hires={data.sources_quality.linkedin_hires}
+                  color="#0A66C2"
+                />
+                <SourceBarRow
+                  label="Orgánica (referrals, careers, etc.)"
+                  count={data.sources.organic.count}
+                  pct={data.sources.organic.pct}
+                  hire_rate={data.sources_quality.organic_hire_rate}
+                  hires={data.sources_quality.organic_hires}
+                  color="#10B981"
+                />
+                {data.sources.unknown.count > 0 && (
+                  <SourceBarRow
+                    label="Sin fuente identificada"
+                    count={data.sources.unknown.count}
+                    pct={data.sources.unknown.pct}
+                    hire_rate={0}
+                    hires={0}
+                    color="#9CA3AF"
+                  />
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 italic mt-3">Hire rate compara cuántos terminaron contratados vs total que entró por ese canal</p>
+            </div>
+
+            {/* Time per stage */}
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h3 className="text-xs uppercase tracking-wider font-extrabold text-gray-700 mb-3">Tiempo promedio por stage</h3>
+              {data.time_per_stage.length === 0 ? (
+                <p className="text-xs text-gray-400">Sin data suficiente.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {data.time_per_stage.slice(0, 8).map((t, i) => {
+                    const maxDays = Math.max(...data.time_per_stage.map(s => s.avg_days), 1);
+                    const pct = (t.avg_days / maxDays) * 100;
+                    const colorClass = t.avg_days > 14 ? 'bg-red-500' : t.avg_days > 7 ? 'bg-amber-500' : 'bg-emerald-500';
+                    return (
+                      <div key={t.stage} className="grid items-center gap-2" style={{ gridTemplateColumns: '140px 1fr 60px' }}>
+                        <span className="text-xs text-gray-700 truncate">{t.label}</span>
+                        <div className="h-4 bg-gray-100 rounded overflow-hidden">
+                          <div className={`h-full ${colorClass} rounded transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-right text-[11px] font-bold">{t.avg_days}d <span className="text-gray-400 font-normal">({t.count})</span></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400 italic mt-2">Estimado desde delta created_at → updated_at · n entre paréntesis</p>
+            </div>
+          </div>
+
+          {/* Vacancy comparison table */}
+          {data.vacancy_comparison.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-xs uppercase tracking-wider font-extrabold text-gray-700">Comparación de vacantes cerradas</h3>
+                <p className="text-[10px] text-gray-500">Ordenadas por TTF total ascendente · best performers primero</p>
+              </div>
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr className="text-[10px] uppercase text-gray-500">
+                    <th className="text-left px-3 py-2 font-bold">Vacante</th>
+                    <th className="text-left px-3 py-2 font-bold">Nivel</th>
+                    <th className="text-right px-3 py-2 font-bold">TTF total</th>
+                    <th className="text-right px-3 py-2 font-bold">TTF LinkedIn</th>
+                    <th className="text-right px-3 py-2 font-bold">Candidatos</th>
+                    <th className="text-right px-3 py-2 font-bold">Hire rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.vacancy_comparison.map((v) => (
+                    <tr key={v.vacancy_id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2 font-semibold">{v.title}</td>
+                      <td className="px-3 py-2 text-gray-600 uppercase text-[10px] font-bold">{v.role_level === 'c_suite' ? 'C-Suite' : v.role_level}</td>
+                      <td className="px-3 py-2 text-right font-bold">{v.ttf ?? '—'}{v.ttf != null ? 'd' : ''}</td>
+                      <td className="px-3 py-2 text-right text-blue-700 font-bold">{v.ttf_linkedin ?? '—'}{v.ttf_linkedin != null ? 'd' : ''}</td>
+                      <td className="px-3 py-2 text-right">{v.candidates_total}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`font-bold ${v.hire_rate >= 5 ? 'text-emerald-600' : v.hire_rate >= 2 ? 'text-amber-600' : 'text-red-500'}`}>
+                          {v.hire_rate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Footer micro-stats */}
+          <div className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-4 text-xs">
+            {data.avg_elevare_score != null && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-gray-500">Elevare avg score</span>
+                <span className={`text-base font-extrabold ${data.avg_elevare_score >= 70 ? 'text-emerald-600' : data.avg_elevare_score >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{data.avg_elevare_score}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
+              <span>Generado: {new Date(data.generated_at).toLocaleTimeString('es-CO')}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourceBarRow({ label, count, pct, hire_rate, hires, color }: { label: string; count: number; pct: number; hire_rate: number; hires: number; color: string }) {
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-1">
+        <span className="text-xs font-medium text-gray-700">{label}</span>
+        <span className="text-[11px] font-bold" style={{ color }}>{count} · {pct}%</span>
+      </div>
+      <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+        <span>Hire rate: <strong className="text-gray-800">{hire_rate}%</strong></span>
+        <span>{hires} hire{hires !== 1 ? 's' : ''}</span>
       </div>
     </div>
   );

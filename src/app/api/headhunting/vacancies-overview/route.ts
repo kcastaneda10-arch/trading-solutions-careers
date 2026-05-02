@@ -19,14 +19,26 @@ export async function GET() {
     // 1. Vacancies + their milestones
     const { data: vacs, error: vErr } = await supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, status, role_level")
+      .select("id, title, area, status, role_level, vacancy_type")
       .eq("client_id", TS_CLIENT_ID);
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
 
-    // Targets per role level
+    // Targets RYS-aligned: matriz (role_level, vacancy_type)
     const { data: targets } = await supabaseAdmin.from("ts_targets").select("*");
-    const targetByLevel: Record<string, number> = {};
-    (targets || []).forEach((t: any) => { targetByLevel[t.role_level] = t.target_days_to_fill; });
+    const targetMap: Record<string, number> = {};
+    (targets || []).forEach((t: any) => {
+      const key = `${t.role_level}|${t.vacancy_type || 'incremental'}`;
+      targetMap[key] = t.target_days_to_fill;
+    });
+    const lookupTarget = (roleLevel: string, vacancyType: string): number => {
+      const k = `${roleLevel || 'entry'}|${vacancyType || 'incremental'}`;
+      // Fallback hardcoded híbrido si la tabla está vacía
+      return targetMap[k] ?? (
+        roleLevel === 'c_suite'
+          ? (vacancyType === 'reemplazo' ? 60 : 80)
+          : (vacancyType === 'reemplazo' ? 35 : 50)
+      );
+    };
 
     const { data: milestones } = await supabaseAdmin
       .from("ht_vacancy_milestones")
@@ -92,8 +104,8 @@ export async function GET() {
       const daysSinceLinkedin = m.linkedin_active_date ? daysBetween(m.linkedin_active_date, isClosed ? m.hire_date : null) : null;
       const daysVacant = m.vacancy_started_date && isClosed ? daysBetween(m.vacancy_started_date, m.hire_date) : null;
 
-      // ─── Health Score (solo abiertas) ───
-      const target = targetByLevel[v.role_level] || 30;
+      // ─── Health Score (solo abiertas) — RYS-aligned target by (role_level, vacancy_type) ───
+      const target = lookupTarget(v.role_level, v.vacancy_type);
       let healthScore: 'green' | 'yellow' | 'red' | 'closed' = 'closed';
       let healthReason = '';
       if (!isClosed) {
@@ -138,6 +150,7 @@ export async function GET() {
         title: v.title,
         area: v.area,
         role_level: v.role_level,
+        vacancy_type: v.vacancy_type || 'incremental',
         status: isClosed ? "cerrada" : "abierta",
         milestones: {
           hr_request_date: m.hr_request_date,
