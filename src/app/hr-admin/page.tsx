@@ -865,6 +865,7 @@ type VacancyOverview = {
   vacancy_id: string;
   title: string;
   area: string;
+  role_level: string;
   status: "abierta" | "cerrada";
   milestones: {
     hr_request_date: string | null;
@@ -876,6 +877,7 @@ type VacancyOverview = {
   };
   metrics: {
     days_active: number | null;
+    target_days: number;
     time_to_fill: number | null;
     days_since_linkedin: number | null;
     days_vacant: number | null;
@@ -884,7 +886,12 @@ type VacancyOverview = {
     rechazados: number;
     contratados: number;
     by_stage: Record<string, number>;
+    velocity_7d: number;
+    in_late_stages: number;
+    forecast_close_in_days: number | null;
   };
+  health: { score: 'green'|'yellow'|'red'|'closed'; reason: string };
+  aging_candidates: { id: string; name: string; stage: string; days_since_update: number }[];
   hired: { id: string; name: string; email: string } | null;
 };
 
@@ -990,67 +997,123 @@ function VacanciesOverview() {
 function OpenVacancyCard({ v }: { v: VacancyOverview }) {
   const m = v.milestones;
   const hasLinkedIn = !!m.linkedin_active_date;
-  const linkedInGapDays = m.hr_request_date && m.linkedin_active_date
-    ? Math.floor((new Date(m.linkedin_active_date).getTime() - new Date(m.hr_request_date).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const healthColor = v.health.score === 'green' ? '#10B981' : v.health.score === 'yellow' ? '#F59E0B' : '#EF4444';
+  const healthBg = v.health.score === 'green' ? '#ECFDF5' : v.health.score === 'yellow' ? '#FFFBEB' : '#FEF2F2';
+  const healthEmoji = v.health.score === 'green' ? '🟢' : v.health.score === 'yellow' ? '🟡' : '🔴';
+  const targetPct = v.metrics.target_days > 0
+    ? Math.min(100, Math.round(((v.metrics.days_active || 0) / v.metrics.target_days) * 100))
+    : 0;
+
+  // Mini funnel data — solo etapas que tienen >0 candidatos
+  const funnelStages = ['aplico','prefiltro_enviado','assessment_invitado','assessment_completado','entrevista_ia','bateria_psicometrica','recruiter_interview','cwo_interview','touring','terna','oferta'];
+  const totalActivos = v.metrics.activos || 1;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <div className="text-sm font-bold text-gray-900 leading-tight">{v.title}</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">{v.area}</div>
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow relative overflow-hidden">
+      {/* Top accent bar - color del health */}
+      <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ background: healthColor }} />
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-gray-900 leading-tight truncate">{v.title}</div>
+          <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1">
+            <span>{v.area}</span>
+            <span className="text-gray-300">·</span>
+            <span className="uppercase font-semibold">{v.role_level === 'c_suite' ? 'C-Suite' : v.role_level}</span>
+          </div>
         </div>
-        <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-          {v.metrics.days_active}d activa
-        </span>
+        <span className="text-base flex-shrink-0" title={v.health.reason}>{healthEmoji}</span>
       </div>
 
-      {/* Pipeline mini */}
+      {/* Days vs target progress */}
+      <div className="mb-3 p-2 rounded-lg" style={{ background: healthBg }}>
+        <div className="flex items-baseline justify-between mb-1">
+          <span className="text-[10px] uppercase font-bold" style={{ color: healthColor }}>Health</span>
+          <span className="text-[10px] font-bold" style={{ color: healthColor }}>
+            {v.metrics.days_active}d / {v.metrics.target_days}d target
+          </span>
+        </div>
+        <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{ width: `${targetPct}%`, background: healthColor }} />
+        </div>
+        <div className="text-[9px] mt-1 leading-tight" style={{ color: healthColor }}>
+          {v.health.reason}
+        </div>
+      </div>
+
+      {/* Mini funnel horizontal */}
       <div className="mb-3">
-        <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Pipeline ({v.metrics.activos} activos)</div>
-        <div className="grid grid-cols-2 gap-1 text-[10px]">
-          {Object.entries(v.metrics.by_stage)
-            .filter(([s]) => !['rechazado', 'contratado'].includes(s))
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 6)
-            .map(([stage, count]) => (
-              <div key={stage} className="flex justify-between bg-gray-50 px-1.5 py-0.5 rounded">
-                <span className="text-gray-600 truncate">{stageLabelShort(stage)}</span>
-                <span className="font-bold ml-1">{count}</span>
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] uppercase font-bold text-gray-500">Pipeline</span>
+          <span className="text-[10px] text-gray-700 font-bold">{v.metrics.activos} activos</span>
+        </div>
+        <div className="flex gap-0.5 h-5">
+          {funnelStages.map(stage => {
+            const count = v.metrics.by_stage[stage] || 0;
+            if (count === 0) return null;
+            const pct = (count / totalActivos) * 100;
+            const isLate = ['cwo_interview','touring','terna','oferta'].includes(stage);
+            return (
+              <div
+                key={stage}
+                className={`relative group ${isLate ? 'bg-emerald-500' : 'bg-purple-400'} hover:opacity-80 cursor-help transition-opacity`}
+                style={{ width: `${pct}%`, minWidth: '12px' }}
+                title={`${stageLabelShort(stage)}: ${count}`}
+              >
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">{count}</span>
               </div>
-            ))}
+            );
+          })}
+        </div>
+        <div className="flex justify-between text-[9px] text-gray-500 mt-1">
+          <span>← Aplicó</span>
+          <span>Late stages →</span>
         </div>
       </div>
 
-      {/* Milestones */}
-      <div className="text-[10px] space-y-0.5 border-t border-gray-100 pt-2">
-        {m.hr_request_date && (
-          <div className="flex justify-between"><span className="text-gray-500">📋 Solicitud HR</span><span className="font-medium">{fmtDate(m.hr_request_date)}</span></div>
-        )}
-        {m.organic_traction_date && (
-          <div className="flex justify-between"><span className="text-gray-500">🌱 Tracción orgánica</span><span className="font-medium">{fmtDate(m.organic_traction_date)}</span></div>
-        )}
-        {m.linkedin_active_date && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">🔵 LinkedIn activo</span>
-            <span className="font-medium">{fmtDate(m.linkedin_active_date)}</span>
+      {/* Velocity + Forecast */}
+      <div className="grid grid-cols-2 gap-2 mb-3 text-[10px]">
+        <div className="bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
+          <div className="text-[9px] uppercase font-bold text-blue-700">Velocity 7d</div>
+          <div className="text-base font-extrabold text-blue-900">{v.metrics.velocity_7d}</div>
+          <div className="text-[9px] text-blue-600">avanzaron etapa</div>
+        </div>
+        {v.metrics.forecast_close_in_days != null ? (
+          <div className="bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5">
+            <div className="text-[9px] uppercase font-bold text-emerald-700">Forecast</div>
+            <div className="text-base font-extrabold text-emerald-900">~{v.metrics.forecast_close_in_days}d</div>
+            <div className="text-[9px] text-emerald-600">para cierre</div>
           </div>
-        )}
-        {!hasLinkedIn && (
-          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 text-amber-800">
-            ⚠️ LinkedIn aún no activado
-          </div>
-        )}
-        {hasLinkedIn && linkedInGapDays && linkedInGapDays > 7 && (
-          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1 text-amber-800 text-[9px]">
-            ⏰ {linkedInGapDays}d entre solicitud y activación LinkedIn
+        ) : (
+          <div className="bg-gray-50 border border-gray-100 rounded px-2 py-1.5">
+            <div className="text-[9px] uppercase font-bold text-gray-500">Forecast</div>
+            <div className="text-base font-extrabold text-gray-400">—</div>
+            <div className="text-[9px] text-gray-400">sin etapas finales</div>
           </div>
         )}
       </div>
 
-      {/* Counts */}
-      <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-[10px]">
+      {/* Aging alert */}
+      {v.aging_candidates.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3 text-[10px]">
+          <div className="font-bold text-amber-800 mb-0.5">⏰ {v.aging_candidates.length} candidato{v.aging_candidates.length > 1 ? 's' : ''} aging (&gt;5d sin moverse)</div>
+          <div className="text-amber-700 truncate">
+            {v.aging_candidates.slice(0, 2).map(a => `${a.name.split(' ')[0]} (${a.days_since_update}d)`).join(', ')}
+            {v.aging_candidates.length > 2 && ` +${v.aging_candidates.length - 2} más`}
+          </div>
+        </div>
+      )}
+
+      {/* LinkedIn warning */}
+      {!hasLinkedIn && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2 text-[10px] text-amber-800">
+          ⚠️ LinkedIn aún no activado
+        </div>
+      )}
+
+      {/* Footer counts */}
+      <div className="flex justify-between text-[10px] pt-2 border-t border-gray-100">
         <span className="text-gray-500">Total: <strong className="text-gray-800">{v.metrics.candidates_total}</strong></span>
         <span className="text-red-600">Rechazados: <strong>{v.metrics.rechazados}</strong></span>
       </div>

@@ -19,9 +19,14 @@ export async function GET() {
     // 1. Vacancies + their milestones
     const { data: vacs, error: vErr } = await supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, status")
+      .select("id, title, area, status, role_level")
       .eq("client_id", TS_CLIENT_ID);
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+
+    // Targets per role level
+    const { data: targets } = await supabaseAdmin.from("ts_targets").select("*");
+    const targetByLevel: Record<string, number> = {};
+    (targets || []).forEach((t: any) => { targetByLevel[t.role_level] = t.target_days_to_fill; });
 
     const { data: milestones } = await supabaseAdmin
       .from("ht_vacancy_milestones")
@@ -30,11 +35,16 @@ export async function GET() {
     const milestoneByVacancy: Record<string, any> = {};
     (milestones || []).forEach((m: any) => { milestoneByVacancy[m.vacancy_id] = m; });
 
-    // 2. Candidates per vacancy by stage
+    // 2. Candidates per vacancy by stage (incluye updated_at para aging)
     const { data: cands } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, vacancy_id, stage, status, email")
+      .select("id, name, vacancy_id, stage, status, email, updated_at, created_at")
       .not("email", "ilike", "%@tradingsolutions.com");
+
+    function daysSince(dt?: string | null) {
+      if (!dt) return 0;
+      return Math.floor((today.getTime() - new Date(dt).getTime()) / (1000 * 60 * 60 * 24));
+    }
 
     const candsByVacancy: Record<string, any[]> = {};
     (cands || []).forEach((c: any) => {
@@ -82,10 +92,52 @@ export async function GET() {
       const daysSinceLinkedin = m.linkedin_active_date ? daysBetween(m.linkedin_active_date, isClosed ? m.hire_date : null) : null;
       const daysVacant = m.vacancy_started_date && isClosed ? daysBetween(m.vacancy_started_date, m.hire_date) : null;
 
+      // ─── Health Score (solo abiertas) ───
+      const target = targetByLevel[v.role_level] || 30;
+      let healthScore: 'green' | 'yellow' | 'red' | 'closed' = 'closed';
+      let healthReason = '';
+      if (!isClosed) {
+        const days = daysActive || 0;
+        if (days <= target * 0.5) {
+          healthScore = 'green';
+          healthReason = `${days}d activa · dentro de ritmo (target ${target}d)`;
+        } else if (days <= target) {
+          healthScore = 'yellow';
+          healthReason = `${days}/${target}d · acercándose al target, atención`;
+        } else {
+          healthScore = 'red';
+          healthReason = `${days}d activa · pasó target ${target}d (${days - target}d sobre)`;
+        }
+      }
+
+      // ─── Aging candidates (>5d en mismo stage en stages activos) ───
+      const activeStages = ['aplico','prefiltro_enviado','prefiltro_pasado','prefiltro_revision','assessment_invitado','assessment_en_progreso','assessment_completado','entrevista_ia','bateria_psicometrica','recruiter_interview','cwo_interview','touring','terna','oferta'];
+      const agingCandidates = candidates.filter((c: any) =>
+        activeStages.includes(c.stage || 'aplico') && c.updated_at && daysSince(c.updated_at) > 5
+      ).map((c: any) => ({
+        id: c.id, name: c.name, stage: c.stage, days_since_update: daysSince(c.updated_at),
+      }));
+
+      // ─── Velocity (candidatos que avanzaron en últimos 7 días) ───
+      const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const velocity = candidates.filter((c: any) =>
+        c.updated_at && new Date(c.updated_at) >= lastWeek && activeStages.includes(c.stage || '')
+      ).length;
+
+      // ─── Forecast simple: si tiene candidatos en etapas finales, predice cierre ───
+      const lateStages = ['cwo_interview','touring','terna','oferta'];
+      const inLate = candidates.filter((c: any) => lateStages.includes(c.stage || '')).length;
+      let forecastCloseInDays: number | null = null;
+      if (!isClosed && inLate > 0) {
+        // Conservative: avg de tiempo en late stages es ~10 días
+        forecastCloseInDays = Math.max(7, 14 - velocity);
+      }
+
       return {
         vacancy_id: v.id,
         title: v.title,
         area: v.area,
+        role_level: v.role_level,
         status: isClosed ? "cerrada" : "abierta",
         milestones: {
           hr_request_date: m.hr_request_date,
@@ -97,13 +149,19 @@ export async function GET() {
         },
         metrics: {
           days_active: daysActive,
+          target_days: target,
           time_to_fill: timeToFill,
           days_since_linkedin: daysSinceLinkedin,
           days_vacant: daysVacant,
           candidates_total: candidates.length,
           activos, rechazados, contratados,
           by_stage: byStage,
+          velocity_7d: velocity,
+          in_late_stages: inLate,
+          forecast_close_in_days: forecastCloseInDays,
         },
+        health: { score: healthScore, reason: healthReason },
+        aging_candidates: agingCandidates,
         hired: hired ? { id: hired.id, name: hired.name, email: hired.email } : null,
       };
     });
