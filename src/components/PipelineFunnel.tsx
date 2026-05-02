@@ -56,6 +56,7 @@ const STAGES: Array<{ id: string; label: string; emoji: string; color: string }>
   { id: "assessment_en_progreso", label: "Elevare en progreso",   emoji: "⏳", color: "#A855F7" },
   { id: "assessment_completado",  label: "Elevare completado",    emoji: "🎯", color: "#7C3AED" },
   { id: "entrevista_ia",          label: "Entrevista IA",         emoji: "🎥", color: "#EC4899" },
+  { id: "bateria_psicometrica",   label: "Batería Psicométrica",  emoji: "📋", color: "#D946EF" },
   { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
   { id: "cwo_interview",          label: "CWO + Hiring",          emoji: "👔", color: "#DB2777" },
   { id: "touring",                label: "Prueba Touring",        emoji: "🏢", color: "#BE185D" },
@@ -253,7 +254,8 @@ const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> =
   prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a Elevare", emoji: "📨" },
   prefiltro_revision: { id: "assessment_invitado", label: "Invitar a Elevare (override)", emoji: "📨" },
   assessment_completado: { id: "entrevista_ia", label: "Pasar a Entrevista IA", emoji: "🎥" },
-  entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
+  entrevista_ia: { id: "bateria_psicometrica", label: "Pasar a Batería Psicométrica", emoji: "📋" },
+  bateria_psicometrica: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
   recruiter_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
   cwo_interview: { id: "touring", label: "Pasar a Prueba Touring", emoji: "🏢" },
   touring: { id: "terna", label: "Pasar a Terna", emoji: "🏆" },
@@ -414,6 +416,7 @@ function BulkActionBar({
     prefiltro_pasado: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     prefiltro_revision: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     assessment_completado: { label: "Enviar entrevista IA", emoji: "🎙️", endpoint: (id) => `/api/headhunting/candidates/${id}/send-ai-interview`, method: "POST" },
+    entrevista_ia: { label: "Enviar batería psicométrica", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-test-battery`, method: "POST" },
   };
   const stageAction = allSameStage ? stageActions[dominantStage] : null;
 

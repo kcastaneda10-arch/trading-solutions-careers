@@ -23,6 +23,7 @@ const VALID_STAGES = [
   "assessment_en_progreso",
   "assessment_completado",
   "entrevista_ia",
+  "bateria_psicometrica",
   "recruiter_interview",
   "cwo_interview",
   "touring",
