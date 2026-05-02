@@ -72,8 +72,28 @@ export default function PipelineFunnel() {
   const [vacFilter, setVacFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [selectedCand, setSelectedCand] = useState<Cand | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
 
   useEffect(() => { void load(); }, []);
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+  function selectAllInStage(stageId: string) {
+    const ids = (candidates.filter(c => (c.stage || "aplico") === stageId && (vacFilter === "all" || c.vacancy_id === vacFilter))).map(c => c.id);
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      ids.forEach(id => n.add(id));
+      return n;
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -143,6 +163,7 @@ export default function PipelineFunnel() {
             <div className="flex gap-3 min-w-max">
               {STAGES.map((stage) => {
                 const cands = byStage[stage.id] || [];
+                const stageSelected = cands.filter(c => selectedIds.has(c.id)).length;
                 return (
                   <div key={stage.id} className="w-[260px] flex-shrink-0">
                     <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style={{ background: stage.color, color: "white" }}>
@@ -150,30 +171,66 @@ export default function PipelineFunnel() {
                         <span>{stage.emoji}</span>
                         <span className="text-xs font-bold uppercase tracking-wide">{stage.label}</span>
                       </div>
-                      <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full">{cands.length}</span>
+                      <div className="flex items-center gap-1">
+                        {cands.length > 0 && (
+                          <button
+                            onClick={() => stageSelected === cands.length ? cands.forEach(c => toggleSelect(c.id)) : selectAllInStage(stage.id)}
+                            className="text-[9px] font-semibold bg-white/30 hover:bg-white/50 px-1.5 py-0.5 rounded transition-colors"
+                            title={stageSelected === cands.length ? "Deseleccionar todos" : "Seleccionar todos en esta etapa"}
+                          >
+                            {stageSelected === cands.length ? "✓✓" : "☐"}
+                          </button>
+                        )}
+                        <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full">{cands.length}</span>
+                      </div>
                     </div>
                     <div className="bg-white border border-gray-200 border-t-0 rounded-b-xl p-2 min-h-[120px] max-h-[600px] overflow-y-auto">
                       {cands.length === 0 ? (
                         <div className="text-xs text-gray-400 text-center py-4 italic">Vacío</div>
-                      ) : cands.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => setSelectedCand(c)}
-                          className="w-full text-left bg-white hover:bg-gray-50 border border-gray-200 rounded-lg p-2.5 mb-2 transition-colors"
-                        >
-                          <div className="text-sm font-semibold leading-tight">{c.name}</div>
-                          <div className="text-[11px] text-gray-500 truncate mt-0.5">{c.email}</div>
-                          <div className="text-[10px] mt-1.5 inline-block bg-gray-100 px-1.5 py-0.5 rounded font-medium text-gray-700">
-                            {c.ht_vacancies?.title || "—"}
+                      ) : cands.map(c => {
+                        const isSelected = selectedIds.has(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            className={`relative bg-white border rounded-lg p-2.5 mb-2 transition-colors ${isSelected ? "border-purple-500 bg-purple-50" : "border-gray-200 hover:bg-gray-50"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => { e.stopPropagation(); toggleSelect(c.id); }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute top-2 right-2 w-3.5 h-3.5 cursor-pointer"
+                              title="Seleccionar para acción masiva"
+                            />
+                            <button onClick={() => setSelectedCand(c)} className="w-full text-left pr-5">
+                              <div className="text-sm font-semibold leading-tight">{c.name}</div>
+                              <div className="text-[11px] text-gray-500 truncate mt-0.5">{c.email}</div>
+                              <div className="text-[10px] mt-1.5 inline-block bg-gray-100 px-1.5 py-0.5 rounded font-medium text-gray-700">
+                                {c.ht_vacancies?.title || "—"}
+                              </div>
+                            </button>
                           </div>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Bulk action bar — floating bottom */}
+          {selectedIds.size > 0 && (
+            <BulkActionBar
+              selectedCands={candidates.filter(c => selectedIds.has(c.id))}
+              onClear={clearSelection}
+              onActionComplete={() => { clearSelection(); load(); }}
+              running={bulkRunning}
+              setRunning={setBulkRunning}
+              progress={bulkProgress}
+              setProgress={setBulkProgress}
+            />
+          )}
 
           {/* Rechazados separado debajo */}
           <div className="mt-6">
@@ -222,6 +279,134 @@ const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> =
   terna: { id: "oferta", label: "Pasar a Oferta", emoji: "📨" },
   oferta: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
 };
+
+// ─── Floating bulk action bar ─────────────────────────────────────
+function BulkActionBar({
+  selectedCands, onClear, onActionComplete,
+  running, setRunning, progress, setProgress,
+}: {
+  selectedCands: Cand[];
+  onClear: () => void;
+  onActionComplete: () => void;
+  running: boolean;
+  setRunning: (v: boolean) => void;
+  progress: { done: number; total: number; ok: number; fail: number } | null;
+  setProgress: (p: { done: number; total: number; ok: number; fail: number } | null) => void;
+}) {
+  const n = selectedCands.length;
+  if (n === 0) return null;
+
+  // Detect dominant stage for contextual actions
+  const stageCounts: Record<string, number> = {};
+  selectedCands.forEach(c => { const s = c.stage || "aplico"; stageCounts[s] = (stageCounts[s] || 0) + 1; });
+  const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0][0];
+  const allSameStage = Object.keys(stageCounts).length === 1;
+
+  const stageActions: Record<string, { label: string; emoji: string; endpoint: (id: string) => string; method: "POST" }> = {
+    aplico: { label: "Enviar prefiltro", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-prefilter`, method: "POST" },
+    prefiltro_pasado: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    prefiltro_revision: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    assessment_completado: { label: "Enviar entrevista IA", emoji: "🎙️", endpoint: (id) => `/api/headhunting/candidates/${id}/send-ai-interview`, method: "POST" },
+  };
+  const stageAction = allSameStage ? stageActions[dominantStage] : null;
+
+  async function runBulk(action: "stage_action" | "advance" | "reject") {
+    if (running) return;
+    if (!confirm(`Aplicar acción a ${n} candidatos seleccionados? Se crearán drafts en tu Gmail (revisar antes de enviar).`)) return;
+    setRunning(true);
+    setProgress({ done: 0, total: n, ok: 0, fail: 0 });
+    let ok = 0, fail = 0;
+
+    for (let i = 0; i < selectedCands.length; i++) {
+      const c = selectedCands[i];
+      try {
+        let url = "";
+        let body: object | null = null;
+        if (action === "stage_action" && stageAction) {
+          url = stageAction.endpoint(c.id);
+          // For stage transitions like prefiltro_pasado → assessment_invitado
+          if (dominantStage === "prefiltro_pasado" || dominantStage === "prefiltro_revision") {
+            body = { stage: "assessment_invitado" };
+          }
+        } else if (action === "advance") {
+          const next = NEXT_STAGE[c.stage || "aplico"];
+          if (!next) { fail++; setProgress({ done: i + 1, total: n, ok, fail }); continue; }
+          url = `/api/headhunting/candidates/${c.id}/stage`;
+          body = { stage: next.id };
+        } else if (action === "reject") {
+          url = `/api/headhunting/candidates/${c.id}/stage`;
+          body = { stage: "rechazado" };
+        }
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (r.ok) ok++; else fail++;
+      } catch { fail++; }
+      setProgress({ done: i + 1, total: n, ok, fail });
+    }
+
+    setRunning(false);
+    setTimeout(() => {
+      setProgress(null);
+      onActionComplete();
+    }, 2500);
+  }
+
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-black text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 max-w-3xl">
+      <div className="flex items-center gap-2">
+        <span className="bg-purple-600 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center">{n}</span>
+        <span className="text-xs font-semibold">seleccionado{n > 1 ? "s" : ""}</span>
+        {!allSameStage && (
+          <span className="text-[10px] bg-amber-500/30 text-amber-100 px-2 py-0.5 rounded">⚠️ etapas mixtas</span>
+        )}
+      </div>
+
+      {progress && (
+        <div className="text-xs flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full">
+          <span>{progress.done}/{progress.total}</span>
+          {progress.ok > 0 && <span className="text-emerald-400">✓ {progress.ok}</span>}
+          {progress.fail > 0 && <span className="text-red-400">✗ {progress.fail}</span>}
+        </div>
+      )}
+
+      {!running && (
+        <>
+          {stageAction && allSameStage && (
+            <button
+              onClick={() => runBulk("stage_action")}
+              className="text-xs font-bold px-3 py-1.5 rounded-full bg-pink-600 hover:bg-pink-700"
+              title={`${stageAction.label} a los ${n} seleccionados`}
+            >
+              {stageAction.emoji} {stageAction.label} ({n})
+            </button>
+          )}
+          <button
+            onClick={() => runBulk("advance")}
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700"
+            title="Avanzar cada uno a su siguiente etapa"
+          >
+            → Avanzar etapa
+          </button>
+          <button
+            onClick={() => runBulk("reject")}
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-red-600 hover:bg-red-700"
+          >
+            ❌ Rechazar
+          </button>
+          <button
+            onClick={onClear}
+            className="text-xs px-2 py-1.5 text-gray-300 hover:text-white"
+          >
+            Limpiar
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ─── Side panel con detalle + respuestas del prefiltro ──────────────
 function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void }) {
