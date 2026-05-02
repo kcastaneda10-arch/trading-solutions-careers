@@ -54,6 +54,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
 export default function HRAdminPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   // Global Cmd+K / Ctrl+K shortcut to open search
   useEffect(() => {
@@ -94,6 +95,15 @@ export default function HRAdminPage() {
               <Search className="w-3.5 h-3.5" />
               <span>Buscar candidatos</span>
               <kbd className="text-[9px] font-mono bg-white/10 border border-white/20 rounded px-1 py-0.5 ml-1">⌘K</kbd>
+            </button>
+            {/* Agendar entrevista */}
+            <button
+              onClick={() => setScheduleOpen(true)}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
+              title="Agendar entrevista"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Agendar</span>
             </button>
             <button className="text-white/70 hover:text-white relative p-1.5">
               <Bell className="w-[18px] h-[18px]" />
@@ -156,6 +166,7 @@ export default function HRAdminPage() {
       </main>
 
       {searchOpen && <CandidateSearchModal onClose={() => setSearchOpen(false)} onJumpFunnel={() => { setTab('funnel'); setSearchOpen(false); }} />}
+      {scheduleOpen && <ScheduleInterviewModal onClose={() => setScheduleOpen(false)} />}
     </div>
   );
 }
@@ -724,12 +735,14 @@ type TodayFocusData = {
     urgent_vacancies: number;
     stale_vacancies: number;
     quick_wins: number;
+    todays_interviews?: number;
   };
   aging: { candidate_id: string; name: string; email: string; stage: string; days_since_update: number; vacancy_id: string; vacancy_title: string; severity: 'high'|'medium' }[];
   pending_decisions: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string; action: string }[];
   urgent_vacancies: { vacancy_id: string; title: string; area: string; role_level: string; days_active: number; target_days: number; days_over: number }[];
   stale_vacancies: { vacancy_id: string; title: string; area: string; candidates_count: number }[];
   quick_wins: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string }[];
+  todays_interviews?: { id: string; candidate_id: string; candidate_name: string; vacancy_id: string; vacancy_title: string; interview_type: string; scheduled_at: string; duration_min: number; meeting_url: string | null; location: string | null; status: string }[];
 };
 
 function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
@@ -753,7 +766,8 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
   if (!data) return null;
 
   const totalAlerts = data.counts.aging + data.counts.pending_decisions + data.counts.urgent_vacancies + data.counts.stale_vacancies;
-  const noActionNeeded = totalAlerts === 0 && data.counts.quick_wins === 0;
+  const interviewsCount = data.counts.todays_interviews || 0;
+  const noActionNeeded = totalAlerts === 0 && data.counts.quick_wins === 0 && interviewsCount === 0;
 
   if (noActionNeeded) {
     return (
@@ -796,6 +810,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
 
         {/* Counter pills */}
         <div className="flex flex-wrap gap-2 mb-3">
+          <CountPill icon="📅" label="Entrevistas hoy" count={interviewsCount} color="blue" active={interviewsCount > 0} />
           <CountPill icon="⏰" label="Aging" count={data.counts.aging} color="amber" active={data.counts.aging > 0} />
           <CountPill icon="✋" label="Decisiones" count={data.counts.pending_decisions} color="blue" active={data.counts.pending_decisions > 0} />
           <CountPill icon="🔴" label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red" active={data.counts.urgent_vacancies > 0} />
@@ -805,6 +820,38 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
 
         {!collapsed && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Today's interviews primero — agenda del día */}
+            {data.todays_interviews && data.todays_interviews.length > 0 && (
+              <div className="rounded-lg border border-blue-400/30 bg-blue-500/5 p-3 lg:col-span-2">
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold text-white/90 mb-2">
+                  <span>📅</span>
+                  <span>Agenda de hoy · entrevistas programadas</span>
+                  <span className="text-white/40 text-[10px] font-medium">· {data.todays_interviews.length}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                  {data.todays_interviews.map(it => {
+                    const time = new Date(it.scheduled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                    const typeLabel = it.interview_type.replace('_',' ');
+                    return (
+                      <div key={it.id} className="bg-white/5 hover:bg-white/10 rounded px-2.5 py-1.5 text-xs">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="text-blue-200 font-bold text-sm">{time}</span>
+                          <span className="text-[9px] text-white/50">{it.duration_min}min</span>
+                        </div>
+                        <div className="font-bold text-white truncate">{it.candidate_name}</div>
+                        <div className="text-[10px] text-white/60 truncate capitalize">{typeLabel} · {it.vacancy_title}</div>
+                        {it.meeting_url && (
+                          <a href={it.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-300 hover:text-blue-200 underline truncate block mt-0.5">
+                            🔗 Abrir reunión
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Quick wins primero — mood positivo */}
             {data.quick_wins.length > 0 && (
               <FocusList
@@ -4918,12 +4965,24 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
   const [filterStage, setFilterStage] = useState<string>('');
   const [filterMinScore, setFilterMinScore] = useState<string>('');
   const [debouncedQ, setDebouncedQ] = useState('');
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
 
   // Auto-focus on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Reset selection when results change
+  useEffect(() => { setSelectedIdx(0); }, [results]);
+
+  // Scroll selected into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const el = listRef.current.querySelectorAll<HTMLElement>('[data-search-item]')[selectedIdx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIdx]);
 
   // Debounce search input
   useEffect(() => {
@@ -4958,11 +5017,25 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
     setLoading(false);
   }, [debouncedQ, filterStage, filterMinScore]);
 
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIdx(i => Math.min(i + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && results[selectedIdx]) {
+      e.preventDefault();
+      onJumpFunnel();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[8vh] px-4" onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden"
         onClick={e => e.stopPropagation()}
+        onKeyDown={onKeyDown}
       >
         {/* Search bar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
@@ -5024,7 +5097,7 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
         </div>
 
         {/* Results */}
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
           {!loading && results.length === 0 && (
             <div className="text-center py-12 px-4">
               <div className="text-3xl mb-2">🔎</div>
@@ -5035,11 +5108,15 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
             </div>
           )}
 
-          {results.map((c) => (
+          {results.map((c, i) => (
             <button
               key={c.id}
+              data-search-item
+              onMouseEnter={() => setSelectedIdx(i)}
               onClick={() => { onJumpFunnel(); }}
-              className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors ${
+                i === selectedIdx ? 'bg-purple-50 border-l-2 border-l-purple-500' : 'hover:bg-gray-50 border-l-2 border-l-transparent'
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -5084,6 +5161,276 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
           <span>Click en candidato → Funnel</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Schedule Interview Modal — Google Calendar integration    */
+/* ======================================================== */
+function ScheduleInterviewModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<'pick'|'form'|'success'>('pick');
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<CandidateSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [picked, setPicked] = useState<CandidateSearchResult | null>(null);
+
+  const [interviewType, setInterviewType] = useState<'recruiter'|'cwo'|'technical'|'area_lead'|'wellness'|'final'>('recruiter');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('10:00');
+  const [duration, setDuration] = useState(45);
+  const [location, setLocation] = useState('');
+  const [meetingUrl, setMeetingUrl] = useState('');
+  const [interviewerEmails, setInterviewerEmails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ google_calendar_url: string; email_sent: boolean } | null>(null);
+
+  // Default date: tomorrow
+  useEffect(() => {
+    const t = new Date(); t.setDate(t.getDate() + 1);
+    setDate(t.toISOString().slice(0, 10));
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    if (step !== 'pick') return;
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (debouncedQ) params.set('q', debouncedQ);
+    params.set('limit', '15');
+    fetch(`/api/headhunting/candidates/search?${params.toString()}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setResults(j.results || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [debouncedQ, step]);
+
+  const submit = async () => {
+    if (!picked || !date || !time) {
+      setError('Faltan campos requeridos');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+
+    const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+    const interviewers = interviewerEmails.split(',').map(s => s.trim()).filter(Boolean);
+
+    try {
+      const r = await fetch(`/api/headhunting/candidates/${picked.id}/schedule-interview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          interview_type: interviewType,
+          scheduled_at: scheduledAt,
+          duration_min: duration,
+          location: location || null,
+          meeting_url: meetingUrl || null,
+          interviewer_emails: interviewers,
+          send_email: true,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.success) {
+        setError(j.error || 'Error al agendar');
+      } else {
+        setResult({
+          google_calendar_url: j.google_calendar_url,
+          email_sent: j.email?.sent === true,
+        });
+        setStep('success');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[6vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-4 overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">Agendar entrevista</div>
+              <div className="text-base font-extrabold leading-tight">
+                {step === 'pick' ? '1 · Elegí candidato' : step === 'form' ? '2 · Configurá la entrevista' : '✓ Listo'}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-xl px-2">×</button>
+        </div>
+
+        {/* Step 1: pick candidate */}
+        {step === 'pick' && (
+          <div className="p-4">
+            <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg mb-3">
+              <Search className="w-4 h-4 text-gray-400" />
+              <input
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                placeholder="Buscar candidato por nombre o email…"
+                className="flex-1 text-sm focus:outline-none"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-[40vh] overflow-y-auto -mx-4">
+              {loading && <div className="px-4 py-3 text-xs text-gray-400">Cargando…</div>}
+              {!loading && results.length === 0 && (
+                <div className="px-4 py-6 text-center text-xs text-gray-500">Sin resultados</div>
+              )}
+              {results.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => { setPicked(c); setStep('form'); }}
+                  className="w-full text-left px-4 py-2.5 border-b border-gray-100 hover:bg-blue-50"
+                >
+                  <div className="flex justify-between items-baseline gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold">{c.name}</div>
+                      <div className="text-[10px] text-gray-500 truncate">{c.email} · {c.vacancy_title}</div>
+                    </div>
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${STAGE_CHIP_COLOR[c.stage] || 'bg-gray-100 text-gray-700'}`}>
+                      {stageLabelShort(c.stage)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: form */}
+        {step === 'form' && picked && (
+          <div className="p-5">
+            {/* Picked candidate summary */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex justify-between items-center">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-blue-700">Candidato</div>
+                <div className="text-sm font-bold">{picked.name}</div>
+                <div className="text-[11px] text-blue-700">{picked.email} · {picked.vacancy_title}</div>
+              </div>
+              <button onClick={() => setStep('pick')} className="text-[11px] font-bold text-blue-700 hover:underline">Cambiar</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Tipo de entrevista">
+                <select
+                  value={interviewType}
+                  onChange={e => setInterviewType(e.target.value as any)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                >
+                  <option value="recruiter">Recruiter</option>
+                  <option value="cwo">CWO</option>
+                  <option value="wellness">Wellness / Fit cultural</option>
+                  <option value="area_lead">Líder del área</option>
+                  <option value="technical">Técnica</option>
+                  <option value="final">Final</option>
+                </select>
+              </FormField>
+              <FormField label="Duración (min)">
+                <select
+                  value={duration}
+                  onChange={e => setDuration(Number(e.target.value))}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                >
+                  <option value={30}>30 min</option>
+                  <option value={45}>45 min</option>
+                  <option value={60}>60 min</option>
+                  <option value={90}>90 min</option>
+                </select>
+              </FormField>
+              <FormField label="Fecha">
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+              </FormField>
+              <FormField label="Hora">
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+              </FormField>
+              <FormField label="Link de la reunión (opcional)" full>
+                <input
+                  type="url"
+                  value={meetingUrl}
+                  onChange={e => setMeetingUrl(e.target.value)}
+                  placeholder="https://meet.google.com/..."
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Ubicación física (si presencial)" full>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={e => setLocation(e.target.value)}
+                  placeholder="Ej: Oficinas TS Barranquilla, Sala 2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </FormField>
+              <FormField label="Emails de entrevistadores (separados por coma)" full>
+                <input
+                  type="text"
+                  value={interviewerEmails}
+                  onChange={e => setInterviewerEmails(e.target.value)}
+                  placeholder="cwo@tradingsolutions.com, lead@..."
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </FormField>
+            </div>
+
+            {error && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{error}</div>}
+
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+              <button onClick={onClose} className="text-xs font-bold text-gray-500 px-4 py-2">Cancelar</button>
+              <button
+                onClick={submit}
+                disabled={submitting}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-xs font-bold px-5 py-2 rounded-lg"
+              >
+                {submitting ? 'Agendando…' : '📅 Agendar y enviar invite'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: success */}
+        {step === 'success' && result && (
+          <div className="p-6 text-center">
+            <div className="text-5xl mb-3">✅</div>
+            <h3 className="text-xl font-extrabold mb-2">Entrevista agendada</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {result.email_sent ? 'Invitación enviada al candidato con el .ics adjunto.' : 'Entrevista guardada. Email no enviado (revisá Resend).'}
+            </p>
+            <a
+              href={result.google_calendar_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm mb-2"
+            >
+              📆 Agregar a tu Google Calendar
+            </a>
+            <div className="text-[11px] text-gray-500 mt-3">Ya aparece en "Today's Focus" del Dashboard si es para hoy.</div>
+            <button onClick={onClose} className="mt-4 text-xs font-bold text-gray-500">Cerrar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FormField({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return (
+    <div className={full ? 'col-span-2' : ''}>
+      <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">{label}</label>
+      {children}
     </div>
   );
 }

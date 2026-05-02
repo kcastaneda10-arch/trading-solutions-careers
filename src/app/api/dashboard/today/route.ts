@@ -176,6 +176,40 @@ export async function GET() {
       })
       .filter(Boolean);
 
+    // ─── Today's interviews — entrevistas agendadas para hoy ───
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    let todaysInterviews: any[] = [];
+    try {
+      const { data: ints } = await supabaseAdmin
+        .from("ts_interviews")
+        .select("id, interview_type, scheduled_at, duration_min, meeting_url, location, status, candidate:ht_candidates(id, name), vacancy:ht_vacancies(id, title)")
+        .gte("scheduled_at", todayStart.toISOString())
+        .lte("scheduled_at", todayEnd.toISOString())
+        .neq("status", "cancelled")
+        .order("scheduled_at", { ascending: true });
+
+      todaysInterviews = (ints || []).map((i: any) => ({
+        id: i.id,
+        candidate_id: i.candidate?.id,
+        candidate_name: i.candidate?.name,
+        vacancy_id: i.vacancy?.id,
+        vacancy_title: i.vacancy?.title,
+        interview_type: i.interview_type,
+        scheduled_at: i.scheduled_at,
+        duration_min: i.duration_min,
+        meeting_url: i.meeting_url,
+        location: i.location,
+        status: i.status,
+      }));
+    } catch {
+      // Si la tabla no existe aún, ignorar
+      todaysInterviews = [];
+    }
+
     return NextResponse.json({
       generated_at: today.toISOString(),
       counts: {
@@ -184,12 +218,14 @@ export async function GET() {
         urgent_vacancies: urgentVacancies.length,
         stale_vacancies: staleVacancies.length,
         quick_wins: quickWins.length,
+        todays_interviews: todaysInterviews.length,
       },
       aging,
       pending_decisions: pendingDecisions,
       urgent_vacancies: urgentVacancies,
       stale_vacancies: staleVacancies,
       quick_wins: quickWins,
+      todays_interviews: todaysInterviews,
     });
   } catch (err: any) {
     console.error("today route error:", err);
