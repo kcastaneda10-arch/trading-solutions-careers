@@ -55,8 +55,9 @@ const STAGES: Array<{ id: string; label: string; emoji: string; color: string }>
   { id: "assessment_invitado",    label: "Elevare invitado",      emoji: "📨", color: "#8B5CF6" },
   { id: "assessment_en_progreso", label: "Elevare en progreso",   emoji: "⏳", color: "#A855F7" },
   { id: "assessment_completado",  label: "Elevare completado",    emoji: "🎯", color: "#7C3AED" },
-  { id: "entrevista_ia",          label: "Entrevista IA",         emoji: "🎥", color: "#EC4899" },
-  { id: "bateria_psicometrica",   label: "Batería Psicométrica",  emoji: "📋", color: "#D946EF" },
+  // Stages legacy/opcionales — Entrevista IA pausada 2026-05; bateria adicional solo si RYS Phase 3 lo requiere
+  { id: "entrevista_ia",          label: "Entrevista IA · pausa", emoji: "⏸️",  color: "#9CA3AF" },
+  { id: "bateria_psicometrica",   label: "Batería extra (opcional)", emoji: "📋", color: "#D946EF" },
   { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
   { id: "cwo_interview",          label: "CWO + Hiring",          emoji: "👔", color: "#DB2777" },
   { id: "touring",                label: "Prueba Touring",        emoji: "🏢", color: "#BE185D" },
@@ -249,12 +250,15 @@ export default function PipelineFunnel() {
 }
 
 // Mapa de transiciones naturales (avanzar al siguiente stage)
+// 2026-05: Entrevista IA pausada — post-Elevare salta directo a recruiter_interview.
+// Entrevista IA y Batería Psicométrica se mantienen como stages opcionales para compatibilidad
+// con candidatos legacy o casos especiales (RYS Phase 3 sub-batería 2 / 3).
 const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> = {
   aplico: { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" },
   prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a Elevare", emoji: "📨" },
   prefiltro_revision: { id: "assessment_invitado", label: "Invitar a Elevare (override)", emoji: "📨" },
-  assessment_completado: { id: "entrevista_ia", label: "Pasar a Entrevista IA", emoji: "🎥" },
-  entrevista_ia: { id: "bateria_psicometrica", label: "Pasar a Batería Psicométrica", emoji: "📋" },
+  assessment_completado: { id: "recruiter_interview", label: "Agendar Entrevista Recruiter", emoji: "💬" },
+  entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
   bateria_psicometrica: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
   recruiter_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
   cwo_interview: { id: "touring", label: "Pasar a Prueba Touring", emoji: "🏢" },
@@ -415,8 +419,11 @@ function BulkActionBar({
     aplico: { label: "Enviar prefiltro", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-prefilter`, method: "POST" },
     prefiltro_pasado: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     prefiltro_revision: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    assessment_completado: { label: "Enviar entrevista IA", emoji: "🎙️", endpoint: (id) => `/api/headhunting/candidates/${id}/send-ai-interview`, method: "POST" },
-    entrevista_ia: { label: "Enviar batería psicométrica", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-test-battery`, method: "POST" },
+    // Post-Elevare: salta directo a Recruiter Interview (Entrevista IA pausada 2026-05)
+    assessment_completado: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    // Stages legacy mantenidos por compatibilidad — también avanzan a Recruiter
+    entrevista_ia: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    bateria_psicometrica: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     rechazado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
     contratado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
   };
@@ -436,9 +443,16 @@ function BulkActionBar({
         let body: object | null = null;
         if (action === "stage_action" && stageAction) {
           url = stageAction.endpoint(c.id);
-          // For stage transitions like prefiltro_pasado → assessment_invitado
+          // For stage transitions: incluir el target stage en el body
           if (dominantStage === "prefiltro_pasado" || dominantStage === "prefiltro_revision") {
             body = { stage: "assessment_invitado" };
+          } else if (
+            dominantStage === "assessment_completado" ||
+            dominantStage === "entrevista_ia" ||
+            dominantStage === "bateria_psicometrica"
+          ) {
+            // Post-Elevare → recruiter_interview directo (Entrevista IA pausada 2026-05)
+            body = { stage: "recruiter_interview" };
           }
         } else if (action === "advance") {
           const next = NEXT_STAGE[c.stage || "aplico"];

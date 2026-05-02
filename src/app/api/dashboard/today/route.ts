@@ -236,7 +236,7 @@ export async function GET() {
 function actionForStage(stage: string): string {
   switch (stage) {
     case 'prefiltro_revision': return 'Revisar prefiltro y decidir avance';
-    case 'assessment_completado': return 'Revisar resultado Elevare e invitar a entrevista';
+    case 'assessment_completado': return 'Agendar Recruiter Interview (botón 📅 Agendar)';
     case 'recruiter_interview': return 'Completar scorecard + decidir avance a CWO';
     case 'cwo_interview': return 'Decidir avance a touring/terna';
     case 'terna': return 'Selección final del candidato';
