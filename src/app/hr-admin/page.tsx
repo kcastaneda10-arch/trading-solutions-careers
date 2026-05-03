@@ -5687,6 +5687,363 @@ function SourceBarRow({ label, count, pct, hire_rate, hires, color }: { label: s
 }
 
 /* ======================================================== */
+/* People Import Modal · CSV bulk import de TPs              */
+/* ======================================================== */
+type ParsedRow = Record<string, string>;
+type ImportResult = {
+  index: number;
+  email: string | null;
+  action: 'inserted' | 'updated' | 'skipped' | 'error';
+  reason?: string;
+  person_id?: string;
+};
+
+function PeopleImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep] = useState<'upload'|'preview'|'submitting'|'done'>('upload');
+  const [rawCsv, setRawCsv] = useState('');
+  const [parsed, setParsed] = useState<ParsedRow[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [defaultIsTp, setDefaultIsTp] = useState(true);
+  const [dryRunResult, setDryRunResult] = useState<{ to_insert: number; to_update: number; errors: number; results: ImportResult[] } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [finalResult, setFinalResult] = useState<{ inserted: number; updated: number; errors: number } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // CSV parser simple — soporta comas dentro de comillas
+  const parseCsv = (text: string): ParsedRow[] => {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) throw new Error('El CSV necesita al menos un header y una fila');
+    const parseLine = (line: string): string[] => {
+      const out: string[] = [];
+      let cur = '';
+      let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+          else inQ = !inQ;
+        } else if (ch === ',' && !inQ) {
+          out.push(cur); cur = '';
+        } else { cur += ch; }
+      }
+      out.push(cur);
+      return out.map(s => s.trim());
+    };
+    const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'));
+    return lines.slice(1).map(line => {
+      const vals = parseLine(line);
+      const row: ParsedRow = {};
+      headers.forEach((h, i) => { if (vals[i] !== undefined) row[h] = vals[i]; });
+      return row;
+    });
+  };
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = String(e.target?.result || '');
+      setRawCsv(text);
+      try {
+        const rows = parseCsv(text);
+        if (rows.length === 0) throw new Error('CSV vacío');
+        if (!rows[0].name && !rows[0].nombre) {
+          setParseError('El CSV debe tener una columna "name" o "nombre"');
+          return;
+        }
+        // Normalize "nombre" → "name", "rol" → "role" si vienen en español
+        const normalized = rows.map(r => {
+          const n: ParsedRow = { ...r };
+          if (r.nombre && !r.name) n.name = r.nombre;
+          if (r.rol && !r.role) n.role = r.rol;
+          if (r.area && !r.area) n.area = r.area;
+          if (r.nivel && !r.role_level) n.role_level = r.nivel;
+          if (r.fecha_ingreso && !r.start_date) n.start_date = r.fecha_ingreso;
+          return n;
+        });
+        setParsed(normalized);
+        setParseError(null);
+      } catch (e: any) {
+        setParseError(e?.message || 'Error parseando CSV');
+        setParsed([]);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const runDryRun = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const r = await fetch('/api/people/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ people: parsed, default_is_tp: defaultIsTp, dry_run: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSubmitError(j.error || 'Error en validación');
+      } else {
+        setDryRunResult(j);
+        setStep('preview');
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message || 'Error de red');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const runImport = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    setStep('submitting');
+    try {
+      const r = await fetch('/api/people/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ people: parsed, default_is_tp: defaultIsTp, dry_run: false }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSubmitError(j.error || 'Error en import');
+        setStep('preview');
+      } else {
+        setFinalResult({ inserted: j.inserted, updated: j.updated, errors: j.errors });
+        setStep('done');
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message || 'Error de red');
+      setStep('preview');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sampleCsv = `name,email,role,area,role_level,start_date,manager_email,iq,conscientiousness,neuroticism,english_level
+Juan Pérez,juan.perez@tradingsolutions.com,Pricing Senior,Pricing,lead,2022-03-15,boss@tradingsolutions.com,118,80,28,B2
+María Rodríguez,maria.rod@tradingsolutions.com,Customer Documentation,CD,entry,2023-01-10,boss@tradingsolutions.com,115,76,32,B2`;
+
+  const downloadSample = () => {
+    const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'tps-template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[6vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl my-4 overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-black text-white px-5 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">Importar TPs · People file</div>
+            <div className="text-base font-extrabold leading-tight">
+              {step === 'upload' && '1 · Subí el CSV'}
+              {step === 'preview' && '2 · Revisá antes de importar'}
+              {step === 'submitting' && 'Importando…'}
+              {step === 'done' && '✓ Listo'}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-2xl px-2">×</button>
+        </div>
+
+        {step === 'upload' && (
+          <div className="p-5">
+            {/* Format info */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-xs">
+              <div className="font-bold text-gray-900 mb-1">Formato esperado</div>
+              <p className="text-gray-700 leading-relaxed">
+                CSV con header. Columnas requeridas: <strong>name</strong> · <strong>email</strong>. Recomendadas: <strong>role</strong>, <strong>area</strong>, <strong>role_level</strong> (entry/lead/c_suite), <strong>start_date</strong>, <strong>manager_email</strong>.
+                Cualquier columna extra (iq, conscientiousness, neuroticism, english_level, etc.) va automáticamente al campo psychometric_profile.
+              </p>
+              <button onClick={downloadSample} className="mt-2 text-xs font-bold text-blue-700 hover:underline">📥 Descargar template</button>
+            </div>
+
+            {/* Drag/drop file input */}
+            <label className="block">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+                className="hidden"
+                id="csv-input"
+              />
+              <div className="border-2 border-dashed border-gray-300 hover:border-black rounded-lg p-8 text-center cursor-pointer transition-colors">
+                <div className="text-3xl mb-2">📥</div>
+                <div className="text-sm font-bold text-gray-900">Click para elegir CSV</div>
+                <div className="text-[11px] text-gray-500 mt-1">o arrastrá el archivo aquí</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => document.getElementById('csv-input')?.click()}
+                className="hidden"
+              >Pick file</button>
+            </label>
+
+            {/* Or paste text */}
+            <div className="mt-3">
+              <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">…o pegá el contenido CSV directamente</label>
+              <textarea
+                value={rawCsv}
+                onChange={e => {
+                  setRawCsv(e.target.value);
+                  if (e.target.value.trim()) {
+                    try {
+                      const rows = parseCsv(e.target.value);
+                      setParsed(rows);
+                      setParseError(null);
+                    } catch (er: any) {
+                      setParseError(er.message);
+                      setParsed([]);
+                    }
+                  } else {
+                    setParsed([]);
+                    setParseError(null);
+                  }
+                }}
+                rows={5}
+                placeholder="name,email,role,area,role_level,start_date..."
+                className="w-full border border-gray-300 rounded p-2 text-xs font-mono focus:outline-none focus:border-black"
+              />
+            </div>
+
+            {parseError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{parseError}</div>}
+
+            {parsed.length > 0 && (
+              <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded p-3 text-xs">
+                <div className="font-bold text-emerald-800">✓ {parsed.length} fila{parsed.length !== 1 ? 's' : ''} parseada{parsed.length !== 1 ? 's' : ''}</div>
+                <div className="text-emerald-700 mt-0.5">Columnas detectadas: {Object.keys(parsed[0]).join(', ')}</div>
+              </div>
+            )}
+
+            {/* TP toggle */}
+            <label className="flex items-center gap-2 mt-4 text-sm">
+              <input
+                type="checkbox"
+                checked={defaultIsTp}
+                onChange={e => setDefaultIsTp(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span>Marcar a todos como <strong>Top Performers</strong> (recomendado para import inicial)</span>
+            </label>
+
+            <div className="flex justify-end gap-2 mt-5 pt-3 border-t border-gray-100">
+              <button onClick={onClose} className="text-xs font-bold text-gray-500 px-4 py-2">Cancelar</button>
+              <button
+                onClick={runDryRun}
+                disabled={parsed.length === 0 || submitting}
+                className="bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white text-xs font-bold px-5 py-2 rounded-lg"
+              >
+                {submitting ? 'Validando…' : `Validar ${parsed.length} ${parsed.length === 1 ? 'persona' : 'personas'} →`}
+              </button>
+            </div>
+            {submitError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{submitError}</div>}
+          </div>
+        )}
+
+        {step === 'preview' && dryRunResult && (
+          <div className="p-5">
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
+                <div className="text-[10px] uppercase font-bold text-blue-700">Nuevas</div>
+                <div className="text-2xl font-extrabold text-blue-900">{dryRunResult.to_insert}</div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded p-2 text-center">
+                <div className="text-[10px] uppercase font-bold text-amber-700">Actualizar (email existe)</div>
+                <div className="text-2xl font-extrabold text-amber-900">{dryRunResult.to_update}</div>
+              </div>
+              <div className={`${dryRunResult.errors > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'} border rounded p-2 text-center`}>
+                <div className={`text-[10px] uppercase font-bold ${dryRunResult.errors > 0 ? 'text-red-700' : 'text-gray-500'}`}>Errores</div>
+                <div className={`text-2xl font-extrabold ${dryRunResult.errors > 0 ? 'text-red-900' : 'text-gray-400'}`}>{dryRunResult.errors}</div>
+              </div>
+            </div>
+
+            <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[40vh] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-2 py-1.5 font-bold text-[10px] uppercase">#</th>
+                    <th className="text-left px-2 py-1.5 font-bold text-[10px] uppercase">Email</th>
+                    <th className="text-left px-2 py-1.5 font-bold text-[10px] uppercase">Acción</th>
+                    <th className="text-left px-2 py-1.5 font-bold text-[10px] uppercase">Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dryRunResult.results.map(r => (
+                    <tr key={r.index} className="border-t border-gray-100">
+                      <td className="px-2 py-1 text-gray-500">{r.index + 1}</td>
+                      <td className="px-2 py-1 truncate max-w-[200px]">{r.email || '—'}</td>
+                      <td className="px-2 py-1">
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                          r.action === 'inserted' ? 'bg-blue-100 text-blue-800' :
+                          r.action === 'updated' ? 'bg-amber-100 text-amber-800' :
+                          r.action === 'error' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'
+                        }`}>{r.action}</span>
+                      </td>
+                      <td className="px-2 py-1 text-gray-600 text-[11px]">{r.reason || ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+              <button onClick={() => setStep('upload')} className="text-xs font-bold text-gray-500 px-4 py-2">← Volver</button>
+              <button
+                onClick={runImport}
+                disabled={submitting || (dryRunResult.to_insert === 0 && dryRunResult.to_update === 0)}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold px-5 py-2 rounded-lg"
+              >
+                Confirmar e importar {dryRunResult.to_insert + dryRunResult.to_update} personas
+              </button>
+            </div>
+            {submitError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{submitError}</div>}
+          </div>
+        )}
+
+        {step === 'submitting' && (
+          <div className="p-10 text-center">
+            <div className="text-5xl mb-3 animate-pulse">📥</div>
+            <div className="text-base font-bold">Importando {parsed.length} personas…</div>
+            <div className="text-xs text-gray-500 mt-1">No cierres esta ventana</div>
+          </div>
+        )}
+
+        {step === 'done' && finalResult && (
+          <div className="p-8 text-center">
+            <div className="text-5xl mb-3">🎉</div>
+            <h3 className="text-2xl font-extrabold mb-2">Import completo</h3>
+            <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mb-4">
+              <div className="bg-emerald-50 rounded p-2">
+                <div className="text-3xl font-extrabold text-emerald-700">{finalResult.inserted}</div>
+                <div className="text-[10px] uppercase font-bold text-emerald-600">Insertadas</div>
+              </div>
+              <div className="bg-amber-50 rounded p-2">
+                <div className="text-3xl font-extrabold text-amber-700">{finalResult.updated}</div>
+                <div className="text-[10px] uppercase font-bold text-amber-600">Actualizadas</div>
+              </div>
+              <div className={`${finalResult.errors > 0 ? 'bg-red-50' : 'bg-gray-50'} rounded p-2`}>
+                <div className={`text-3xl font-extrabold ${finalResult.errors > 0 ? 'text-red-700' : 'text-gray-400'}`}>{finalResult.errors}</div>
+                <div className="text-[10px] uppercase font-bold text-gray-500">Errores</div>
+              </div>
+            </div>
+            <button
+              onClick={onDone}
+              className="bg-black hover:bg-gray-800 text-white font-bold px-5 py-2.5 rounded-lg text-sm"
+            >
+              Ver People file →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
 /* Onboarding · People file + 30/60/90                      */
 /* ======================================================== */
 type OnboardingItem = {
@@ -5720,6 +6077,8 @@ function OnboardingTab() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'active'|'completed'|'all'>('active');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [peopleStats, setPeopleStats] = useState<{ total: number; tps: number } | null>(null);
 
   const load = useCallback(() => {
     const qs = filter === 'active' ? '?status=active' : '';
@@ -5727,6 +6086,13 @@ function OnboardingTab() {
       .then(r => r.json())
       .then(j => { setItems(j.onboardings || []); setLoading(false); })
       .catch(() => setLoading(false));
+    // People directory stats
+    fetch('/api/people', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        const all = j.people || [];
+        setPeopleStats({ total: all.length, tps: all.filter((p: any) => p.is_top_performer).length });
+      });
   }, [filter]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
@@ -5746,9 +6112,27 @@ function OnboardingTab() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-xl font-extrabold tracking-tight">Onboarding</h1>
-        <p className="text-xs text-gray-500">Plan 30/60/90 para nuevos hires · integrado con People file</p>
+      <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-extrabold tracking-tight">Onboarding</h1>
+          <p className="text-xs text-gray-500">Plan 30/60/90 para nuevos hires · integrado con People file</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {peopleStats && (
+            <div className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-[11px]">
+              <span className="text-gray-500">People file: </span>
+              <strong className="text-gray-900">{peopleStats.total}</strong>
+              <span className="text-gray-400 mx-1">·</span>
+              <span className="text-purple-700 font-bold">{peopleStats.tps} TPs</span>
+            </div>
+          )}
+          <button
+            onClick={() => setImportOpen(true)}
+            className="bg-black hover:bg-gray-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+          >
+            📥 Importar TPs (CSV)
+          </button>
+        </div>
       </div>
 
       {/* KPI strip */}
@@ -5800,6 +6184,12 @@ function OnboardingTab() {
           id={activeId}
           onClose={() => setActiveId(null)}
           onChange={load}
+        />
+      )}
+      {importOpen && (
+        <PeopleImportModal
+          onClose={() => setImportOpen(false)}
+          onDone={() => { setImportOpen(false); load(); }}
         />
       )}
     </div>
