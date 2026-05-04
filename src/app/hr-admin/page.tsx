@@ -94,6 +94,7 @@ export default function HRAdminPage() {
   const [referralsOpen, setReferralsOpen] = useState(false);
   const [referralsPending, setReferralsPending] = useState(0);
   const [gmailAuditOpen, setGmailAuditOpen] = useState(false);
+  const [decisionsOpen, setDecisionsOpen] = useState(false);
 
   // Poll referrals pendientes cada 60s
   useEffect(() => {
@@ -188,6 +189,15 @@ export default function HRAdminPage() {
               <Mail className="w-3.5 h-3.5" />
               <span>Auditar Gmail</span>
             </button>
+            {/* Decision nudges */}
+            <button
+              onClick={() => setDecisionsOpen(true)}
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              title="Pedir decisión a CWO/Hiring Manager"
+            >
+              <Hand className="w-3.5 h-3.5" />
+              <span>Decisiones</span>
+            </button>
             {/* Agendar entrevista — pill negra estilo TS con borde blanco */}
             <button
               onClick={() => setScheduleOpen(true)}
@@ -272,6 +282,7 @@ export default function HRAdminPage() {
           .then(j => setReferralsPending(j.total || 0));
       }} />}
       {gmailAuditOpen && <GmailAuditModal onClose={() => setGmailAuditOpen(false)} />}
+      {decisionsOpen && <DecisionNudgesModal onClose={() => setDecisionsOpen(false)} />}
     </div>
   );
 }
@@ -6607,6 +6618,311 @@ function ReferralKV({ k, v }: { k: string; v: React.ReactNode }) {
     <div className="grid grid-cols-[80px_1fr] gap-2 text-xs items-baseline">
       <span className="text-gray-500">{k}</span>
       <span className="text-gray-900 truncate">{v}</span>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Decision Nudges Modal — pedir decisión a CWO/Manager     */
+/* ======================================================== */
+type PendingDecisionItem = {
+  candidate_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  vacancy_id: string;
+  vacancy_title: string | null;
+  vacancy_area: string | null;
+  stage: string;
+  status: string;
+  days_since_stage_update: number | null;
+  nudges_sent: number;
+  last_nudge_recipient: string | null;
+  last_nudge_at: string | null;
+  decision: string | null;
+  decided_at: string | null;
+};
+
+function DecisionNudgesModal({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<PendingDecisionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'pending' | 'overdue' | 'all'>('pending');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch('/api/admin/decision-nudges', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setItems(j.candidates || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const visible = items.filter(i => {
+    if (filter === 'pending') return !i.decision;
+    if (filter === 'overdue') return !i.decision && (i.days_since_stage_update || 0) > 5;
+    return true;
+  });
+
+  const counts = {
+    pending: items.filter(i => !i.decision).length,
+    overdue: items.filter(i => !i.decision && (i.days_since_stage_update || 0) > 5).length,
+    decided: items.filter(i => i.decision).length,
+  };
+
+  const active = items.find(i => i.candidate_id === activeId);
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[6vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl my-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-black text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Hand className="w-4 h-4" />
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] font-semibold opacity-70">Decisiones</div>
+              <div className="text-base font-bold leading-tight">Forzar respuesta a CWO/Hiring Managers</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none px-2">×</button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2 flex-wrap">
+          <button onClick={() => setFilter('pending')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'pending' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}>
+            Pendientes ({counts.pending})
+          </button>
+          <button onClick={() => setFilter('overdue')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'overdue' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700'}`}>
+            Atrasadas &gt;5d ({counts.overdue})
+          </button>
+          <button onClick={() => setFilter('all')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}>
+            Todas ({items.length})
+          </button>
+        </div>
+
+        <div className="p-5 max-h-[65vh] overflow-y-auto">
+          {loading && <div className="text-center text-gray-400 text-sm py-12">Cargando…</div>}
+
+          {!loading && active && (
+            <NudgeForm
+              item={active}
+              onBack={() => setActiveId(null)}
+              onSent={() => { setActiveId(null); load(); }}
+            />
+          )}
+
+          {!loading && !active && visible.length === 0 && (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-900">{filter === 'pending' ? 'Sin decisiones pendientes' : 'Sin candidatos en este filtro'}</h3>
+              <p className="text-xs text-gray-500 mt-1">Todos los candidatos en stages de entrevista tienen decisión registrada.</p>
+            </div>
+          )}
+
+          {!loading && !active && visible.length > 0 && (
+            <div className="space-y-2">
+              {visible.map(item => {
+                const overdue = !item.decision && (item.days_since_stage_update || 0) > 5;
+                return (
+                  <div key={item.candidate_id} className={`bg-white border ${overdue ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200'} rounded-lg p-3 hover:shadow-sm transition-shadow`}>
+                    <div className="flex items-start gap-3">
+                      <Avatar name={item.candidate_name} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-gray-900 truncate">{item.candidate_name}</span>
+                          <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
+                            {item.stage}
+                          </span>
+                          {overdue && (
+                            <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 inline-flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" /> {item.days_since_stage_update}d
+                            </span>
+                          )}
+                          {item.decision && (
+                            <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
+                              item.decision === 'avanza' ? 'bg-emerald-100 text-emerald-800' :
+                              item.decision === 'no_avanza' ? 'bg-red-100 text-red-800' :
+                              item.decision === 'recommend_other_vacancy' ? 'bg-blue-100 text-blue-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {item.decision === 'avanza' ? '✓ avanza'
+                                : item.decision === 'no_avanza' ? '✗ no avanza'
+                                : item.decision === 'recommend_other_vacancy' ? '→ otra vacante'
+                                : '? + info'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          {item.vacancy_title || '—'} · {item.vacancy_area || '—'}
+                        </div>
+                        {item.nudges_sent > 0 && (
+                          <div className="text-[10px] text-gray-400 mt-1">
+                            {item.nudges_sent} nudge{item.nudges_sent > 1 ? 's' : ''} enviado{item.nudges_sent > 1 ? 's' : ''}
+                            {item.last_nudge_recipient && ` · último a ${item.last_nudge_recipient}`}
+                            {item.last_nudge_at && ` · ${new Date(item.last_nudge_at).toLocaleDateString('es-CO')}`}
+                          </div>
+                        )}
+                      </div>
+                      {!item.decision && (
+                        <button
+                          onClick={() => setActiveId(item.candidate_id)}
+                          className="bg-black hover:bg-gray-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex-shrink-0"
+                        >
+                          {item.nudges_sent > 0 ? 'Re-enviar' : 'Pedir decisión'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NudgeForm({ item, onBack, onSent }: { item: PendingDecisionItem; onBack: () => void; onSent: () => void }) {
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientRole, setRecipientRole] = useState<'cwo' | 'hiring_manager' | 'area_lead'>('hiring_manager');
+  const [interviewType, setInterviewType] = useState(item.stage);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; draft_id?: string; decision_url?: string; error?: string } | null>(null);
+
+  const submit = async () => {
+    if (!recipientEmail) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const r = await fetch('/api/admin/decision-nudges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_id: item.candidate_id,
+          recipient_email: recipientEmail,
+          recipient_name: recipientName,
+          recipient_role: recipientRole,
+          interview_type: interviewType,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setResult({ success: false, error: j.error });
+      } else {
+        setResult({ success: true, draft_id: j.draft_id, decision_url: j.decision_url });
+      }
+    } catch (e: any) {
+      setResult({ success: false, error: e?.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (result?.success) {
+    return (
+      <div>
+        <button onClick={onBack} className="text-xs font-semibold text-gray-500 hover:text-black mb-3">← Volver</button>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-5 text-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          </div>
+          <h3 className="text-base font-bold text-emerald-900 mb-1">Draft creado en Gmail</h3>
+          <p className="text-xs text-emerald-800 mb-3">Revisalo y enviá manualmente desde tu Gmail. {recipientName || recipientEmail} recibirá el correo con los 4 botones forzados.</p>
+          <div className="flex gap-2 justify-center flex-wrap">
+            <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener noreferrer" className="bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-full inline-flex items-center gap-1.5">
+              <ExternalLink className="w-3 h-3" /> Abrir Gmail Drafts
+            </a>
+            <button onClick={onSent} className="bg-white text-black border border-gray-300 hover:border-black text-xs font-semibold px-4 py-2 rounded-full">
+              Volver al listado
+            </button>
+          </div>
+          {result.decision_url && (
+            <div className="mt-3 pt-3 border-t border-emerald-200 text-[10px] text-emerald-700">
+              Link de decisión que recibirá: <code className="bg-white px-1 rounded">{result.decision_url}</code>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} className="text-xs font-semibold text-gray-500 hover:text-black mb-3">← Volver al listado</button>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+        <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Candidato</div>
+        <div className="text-sm font-bold">{item.candidate_name}</div>
+        <div className="text-[11px] text-gray-600">{item.vacancy_title} · stage <code className="bg-white px-1 rounded">{item.stage}</code></div>
+      </div>
+
+      <h3 className="text-base font-bold mb-3">¿A quién le pedís decisión?</h3>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Rol</label>
+          <select value={recipientRole} onChange={e => setRecipientRole(e.target.value as any)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="hiring_manager">Hiring Manager</option>
+            <option value="area_lead">Area Lead (lead técnico del área)</option>
+            <option value="cwo">CWO</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Email *</label>
+          <input
+            type="email"
+            value={recipientEmail}
+            onChange={e => setRecipientEmail(e.target.value)}
+            placeholder="manager@tradingsolutions.com"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Nombre (opcional, para personalizar)</label>
+          <input
+            type="text"
+            value={recipientName}
+            onChange={e => setRecipientName(e.target.value)}
+            placeholder="Ej: Ana Pérez"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Tipo de entrevista que tuvo</label>
+          <input
+            type="text"
+            value={interviewType}
+            onChange={e => setInterviewType(e.target.value)}
+            placeholder="Ej: cwo_interview, recruiter_interview"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+      </div>
+
+      {result?.error && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 mt-3">{result.error}</div>}
+
+      <button
+        onClick={submit}
+        disabled={submitting || !recipientEmail}
+        className="w-full bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white text-sm font-bold py-3 rounded-full mt-5 inline-flex items-center justify-center gap-2"
+      >
+        {submitting ? 'Creando draft…' : (
+          <>
+            <Mail className="w-4 h-4" />
+            Crear draft en Gmail con 4 botones forzados
+            <ArrowRight className="w-4 h-4" />
+          </>
+        )}
+      </button>
+
+      <p className="text-[11px] text-gray-500 text-center mt-3 leading-relaxed">
+        El email tendrá 4 opciones que <strong>obligan a una decisión concreta</strong>: Sí avanza · No para esta pero sí otra · No avanza · Necesito otra entrevista. Cero ambigüedad.
+      </p>
     </div>
   );
 }
