@@ -951,6 +951,17 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
             </div>
           )}
         </>
+      ) : interview && interview.status === "completed" && interview.conversation_id && interview.ai_score == null ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-xs text-amber-900">
+          ✓ Entrevista completada · scoring AI pendiente.
+          {interview.audio_url && (
+            <div className="mt-2">
+              <p className="text-[10px] uppercase font-bold text-amber-700 mb-1">🎧 Audio disponible</p>
+              <audio src={interview.audio_url} controls className="w-full" preload="none" />
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-amber-700">Para correr el scoring AI: <code className="bg-amber-100 px-1 rounded">fetch('/api/admin/rescore-ai-interviews', {`{method:'POST'}`}).then(r=&gt;r.json()).then(console.log)</code></p>
+        </div>
       ) : interview && interview.status === "in_progress" ? (
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 text-xs text-blue-900">
           ⏳ Candidato en entrevista — esperando que termine. Iniciada: {new Date(interview.started_at).toLocaleString("es-CO")}

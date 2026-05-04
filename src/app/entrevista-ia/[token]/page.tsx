@@ -95,27 +95,103 @@ export default function AiInterviewPage() {
     return () => { cancelled = true; };
   }, [token]);
 
-  // Listen for the widget's "Call ended" event so we can finalize
-  useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      // ElevenLabs widget posts events to window
-      const data = e.data;
-      if (!data || typeof data !== "object") return;
-      if (data.type === "convai-call-ended" || data.event === "call_ended" || data.type === "call.ended") {
-        finalizeInterview(data.conversation_id || data.conversationId || null);
+  // ─── Captura robusta del conversation_id ────────────────────────────
+  // El widget emite el conversation_id en distintos lugares según versión:
+  //   · message event con data.conversation_id (formato viejo)
+  //   · message event con data.detail.conversation_id
+  //   · message event con data.payload.conversation_id
+  //   · custom event 'convai-conversation-started' en el elemento <elevenlabs-convai>
+  //   · custom event 'elevenlabs-convai:call' con .detail.conversation_id
+  // Capturamos en TODOS los lugares y guardamos en ref para usarlo al finalize.
+  const conversationIdRef = React.useRef<string | null>(null);
+
+  // Helper para extraer conversation_id de cualquier objeto recursivamente
+  function extractConversationId(obj: any, depth = 0): string | null {
+    if (!obj || depth > 4) return null;
+    if (typeof obj === 'string' && /^conv_[a-zA-Z0-9]{10,}$/.test(obj)) return obj;
+    if (typeof obj !== 'object') return null;
+    // Direct keys
+    for (const k of ['conversation_id', 'conversationId', 'conversation-id', 'convId', 'conv_id', 'id']) {
+      const v = obj[k];
+      if (typeof v === 'string' && /^conv_[a-zA-Z0-9]{10,}$/.test(v)) return v;
+    }
+    // Recurse into nested objects
+    for (const k of ['detail', 'payload', 'data', 'event', 'meta', 'message']) {
+      const v = obj[k];
+      if (v && typeof v === 'object') {
+        const found = extractConversationId(v, depth + 1);
+        if (found) return found;
       }
     }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return null;
+  }
+
+  useEffect(() => {
+    function captureId(payload: any) {
+      const id = extractConversationId(payload);
+      if (id && !conversationIdRef.current) {
+        conversationIdRef.current = id;
+        console.log('[ai-interview] captured conversation_id:', id);
+      }
+    }
+
+    function onMessage(e: MessageEvent) {
+      const data = e.data;
+      if (!data) return;
+      // Siempre intentar capturar el ID, sin importar el tipo de evento
+      captureId(data);
+      // Detectar el fin de llamada
+      const t = (data.type || data.event || data.name || '').toString().toLowerCase();
+      const isEnded = /call.?ended|conversation.?ended|call.?end|conversation.?end/.test(t);
+      if (isEnded) {
+        finalizeInterview(extractConversationId(data) || conversationIdRef.current);
+      }
+    }
+
+    function onCustomEvent(e: Event) {
+      const ce = e as CustomEvent;
+      captureId(ce.detail || (e as any));
+      const t = e.type.toLowerCase();
+      if (/end|complete|finish/.test(t)) {
+        finalizeInterview(extractConversationId(ce.detail) || conversationIdRef.current);
+      }
+    }
+
+    window.addEventListener('message', onMessage);
+    // Eventos del widget custom element
+    const widgetEvents = [
+      'convai-call-started', 'convai-call-ended', 'convai-conversation-started', 'convai-conversation-ended',
+      'elevenlabs-convai:call', 'elevenlabs-convai:end',
+      'call-started', 'call-ended', 'conversation-started', 'conversation-ended',
+    ];
+    widgetEvents.forEach(ev => window.addEventListener(ev, onCustomEvent));
+    document.addEventListener('convai-conversation-id', onCustomEvent);
+
+    return () => {
+      window.removeEventListener('message', onMessage);
+      widgetEvents.forEach(ev => window.removeEventListener(ev, onCustomEvent));
+      document.removeEventListener('convai-conversation-id', onCustomEvent);
+    };
   }, []);
 
   async function finalizeInterview(conversationId: string | null) {
     setPhase("ended");
+    // Última oportunidad de capturar — chequear el atributo del widget directamente
+    let finalId = conversationId || conversationIdRef.current;
+    if (!finalId) {
+      const widget: any = document.querySelector('elevenlabs-convai');
+      if (widget) {
+        finalId = widget.getAttribute('conversation-id') ||
+                  widget.getAttribute('data-conversation-id') ||
+                  widget.conversationId ||
+                  null;
+      }
+    }
     try {
       await fetch(`/api/headhunting/ai-interview/${token}/finalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: conversationId }),
+        body: JSON.stringify({ conversation_id: finalId }),
       });
     } catch (e) {
       console.error("finalize failed:", e);

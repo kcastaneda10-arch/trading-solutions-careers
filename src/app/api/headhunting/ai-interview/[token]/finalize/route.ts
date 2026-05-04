@@ -234,8 +234,39 @@ export async function POST(
       return NextResponse.json({ error: "invalid_token" }, { status: 401 });
     }
 
-    // If we have conversation_id but no transcript, fetch from ElevenLabs
-    const convoId = conversationId || interview.conversation_id;
+    // ─── Fallback: si no llega conversation_id, buscarlo en ElevenLabs ───
+    // Si el frontend no logró capturarlo del widget, buscamos la conversación más
+    // reciente del agente que esté después del started_at de esta entrevista.
+    let convoId = conversationId || interview.conversation_id;
+    if (!convoId && interview.agent_id && process.env.ELEVENLABS_API_KEY) {
+      try {
+        const startedAt = interview.started_at ? new Date(interview.started_at).getTime() : (Date.now() - 60 * 60 * 1000);
+        const startedAtUnix = Math.floor(startedAt / 1000);
+        const r = await fetch(
+          `https://api.elevenlabs.io/v1/convai/conversations?agent_id=${interview.agent_id}&page_size=20`,
+          { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+        );
+        if (r.ok) {
+          const j = await r.json();
+          const list = j.conversations || j.history || [];
+          // Buscar la conversación que comenzó cerca del started_at de la entrevista
+          // y está completada. Tolerancia: ±10 min.
+          const TOLERANCE = 10 * 60; // segundos
+          const match = list.find((c: any) => {
+            const cStart = c.start_time_unix_secs || 0;
+            return Math.abs(cStart - startedAtUnix) < TOLERANCE && (c.status === 'done' || c.status === 'completed' || c.status === 'success');
+          });
+          if (match?.conversation_id) {
+            convoId = match.conversation_id;
+            console.log(`[finalize] recovered conversation_id from ElevenLabs: ${convoId}`);
+          }
+        }
+      } catch (e) {
+        console.error("ElevenLabs fallback lookup failed:", e);
+      }
+    }
+
+    // If we have conversation_id but no transcript, fetch transcript from ElevenLabs
     if (!transcript && convoId && process.env.ELEVENLABS_API_KEY) {
       try {
         const r = await fetch(
