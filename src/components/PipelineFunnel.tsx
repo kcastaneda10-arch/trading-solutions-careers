@@ -744,7 +744,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
           {/* Entrevista IA — disponible desde assessment_completado en adelante */}
           {(cand.status === "completed" ||
             ["assessment_completado","entrevista_ia","recruiter_interview"].includes(String(cand.stage || ""))) && (
-            <AIInterviewBlock candidateId={cand.id} />
+            <AIInterviewBlock candidateId={cand.id} candidateEmail={cand.email} />
           )}
 
           {/* Respuestas del prefiltro */}
@@ -843,7 +843,7 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 // ─── Bloque Entrevista IA · ElevenLabs Conversational AI ──────────
-function AIInterviewBlock({ candidateId }: { candidateId: string }) {
+function AIInterviewBlock({ candidateId, candidateEmail }: { candidateId: string; candidateEmail?: string }) {
   const [interview, setInterview] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [sending, setSending] = React.useState(false);
@@ -920,12 +920,13 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
             )}
           </div>
 
-          {/* Audio player */}
+          {/* Audio player con manejo de errores */}
           {interview.audio_url && (
-            <div className="mb-3">
-              <p className="text-[10px] uppercase font-bold text-gray-500 mb-1">🎧 Audio de la entrevista</p>
-              <audio src={interview.audio_url} controls className="w-full" preload="metadata" />
-            </div>
+            <RobustAudioPlayer
+              audioUrl={interview.audio_url}
+              candidateEmail={candidateEmail}
+              label="🎧 Audio de la entrevista"
+            />
           )}
 
           {/* Competencias detalladas */}
@@ -1016,7 +1017,7 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
           )}
         </>
       ) : interview && interview.status === "completed" && interview.conversation_id && interview.ai_score == null ? (
-        <PendingScoringPanel interview={interview} onScored={() => load()} />
+        <PendingScoringPanel interview={interview} onScored={() => load()} candidateEmail={candidateEmail} />
       ) : interview && interview.status === "in_progress" ? (
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 text-xs text-blue-900">
           ⏳ Candidato en entrevista — esperando que termine. Iniciada: {new Date(interview.started_at).toLocaleString("es-CO")}
@@ -1059,7 +1060,7 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
 }
 
 // ─── Botón inline para correr scoring AI de UNA entrevista pendiente ─
-function PendingScoringPanel({ interview, onScored }: { interview: any; onScored: () => void }) {
+function PendingScoringPanel({ interview, onScored, candidateEmail }: { interview: any; onScored: () => void; candidateEmail?: string }) {
   const [running, setRunning] = React.useState(false);
   const [result, setResult] = React.useState<{ ok: boolean; message: string; score?: number } | null>(null);
 
@@ -1097,10 +1098,11 @@ function PendingScoringPanel({ interview, onScored }: { interview: any; onScored
         </div>
       </div>
       {interview.audio_url && (
-        <div className="mb-3">
-          <p className="text-[10px] uppercase font-bold text-amber-700 mb-1">🎧 Audio disponible</p>
-          <audio src={interview.audio_url} controls className="w-full" preload="none" />
-        </div>
+        <RobustAudioPlayer
+          audioUrl={interview.audio_url}
+          candidateEmail={candidateEmail}
+          label="🎧 Audio disponible"
+        />
       )}
       {result ? (
         <div className={`mt-2 p-2 rounded text-[11px] font-semibold ${result.ok ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
@@ -1362,5 +1364,96 @@ function ElevareResultsBlock({
         <div className="mt-2 text-xs text-gray-600 italic">{feedback}</div>
       )}
     </Section>
+  );
+}
+
+/* ─── Robust Audio Player · maneja errores y diagnostica ────────── */
+function RobustAudioPlayer({
+  audioUrl,
+  candidateEmail,
+  label = '🎧 Audio de la entrevista',
+}: {
+  audioUrl: string;
+  candidateEmail?: string;
+  label?: string;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagResult, setDiagResult] = useState<any>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const runDiagnosis = async () => {
+    if (!candidateEmail) return;
+    setDiagnosing(true);
+    setDiagResult(null);
+    try {
+      const r = await fetch(`/api/admin/diag/audio?email=${encodeURIComponent(candidateEmail)}`, { cache: 'no-store' });
+      const j = await r.json();
+      setDiagResult(j);
+    } catch (e: any) {
+      setDiagResult({ error: e?.message || 'Error de red' });
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
+  return (
+    <div className="mb-3">
+      <p className="text-[10px] uppercase font-bold text-gray-500 mb-1">{label}</p>
+      {!error ? (
+        <audio
+          key={reloadKey}
+          src={audioUrl}
+          controls
+          className="w-full"
+          preload="metadata"
+          onError={(e) => {
+            const target = e.currentTarget as HTMLAudioElement;
+            const code = target.error?.code;
+            const codeName = code === 1 ? 'MEDIA_ERR_ABORTED'
+              : code === 2 ? 'MEDIA_ERR_NETWORK'
+              : code === 3 ? 'MEDIA_ERR_DECODE'
+              : code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+              : 'desconocido';
+            setError(codeName);
+          }}
+        />
+      ) : (
+        <div className="bg-red-50 border border-red-200 rounded p-3 text-xs">
+          <div className="font-bold text-red-900 mb-1">No se pudo cargar el audio</div>
+          <div className="text-red-700 mb-2">Error: {error}. Causas comunes: el conversation_id de ElevenLabs ya no tiene audio guardado, o la API key cambió.</div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => { setError(null); setReloadKey(k => k + 1); }}
+              className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white border border-gray-300 hover:border-black"
+            >
+              ↻ Reintentar
+            </button>
+            {candidateEmail && (
+              <button
+                onClick={runDiagnosis}
+                disabled={diagnosing}
+                className="text-[11px] font-semibold px-3 py-1 rounded-full bg-black text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {diagnosing ? 'Diagnosticando…' : '🔬 Diagnosticar'}
+              </button>
+            )}
+          </div>
+          {diagResult && (
+            <div className="mt-2 p-2 bg-white border border-red-100 rounded text-[10px] font-mono whitespace-pre-wrap break-all">
+              <div className="font-bold mb-1">Diagnóstico:</div>
+              {diagResult.recommendation && (
+                <div className="text-red-900 font-semibold mb-1 not-italic">→ {diagResult.recommendation}</div>
+              )}
+              <pre className="text-gray-700">{JSON.stringify({
+                has_conversation_id: diagResult.diagnosis?.has_conversation_id,
+                audio_url_kind: diagResult.diagnosis?.audio_url_kind,
+                elevenlabs_check: diagResult.elevenlabs_check,
+              }, null, 2)}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
