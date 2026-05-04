@@ -16,7 +16,8 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.compose",  // crear drafts + send
+  "https://www.googleapis.com/auth/gmail.readonly",  // leer inbox para audit (Round 3 #3)
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 

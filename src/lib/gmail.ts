@@ -16,6 +16,7 @@ import { neon } from "@neondatabase/serverless";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const GMAIL_DRAFTS_URL = "https://gmail.googleapis.com/gmail/v1/users/me/drafts";
+const GMAIL_LIST_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
 export type GoogleTokens = {
   email: string;
@@ -108,7 +109,7 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   return j as { access_token: string; expires_in: number; scope?: string };
 }
 
-async function getValidAccessToken(): Promise<{ access_token: string; email: string } | null> {
+export async function getValidAccessToken(): Promise<{ access_token: string; email: string } | null> {
   const stored = await getStoredTokens();
   if (!stored) return null;
 
@@ -246,4 +247,118 @@ export async function sendViaGmail(opts: {
   }
   const j = await r.json();
   return { ok: true, gmail_id: j.id as string };
+}
+
+/**
+ * Busca mensajes en Gmail según query (formato Gmail search).
+ * Ejemplo: `from:cand@email.com OR to:cand@email.com newer_than:90d`
+ * Devuelve array de message IDs (cada uno se puede pedir en detalle con getGmailMessageMetadata).
+ */
+export async function searchGmailMessages(
+  query: string,
+  maxResults = 10
+): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
+  const valid = await getValidAccessToken();
+  if (!valid) return { ok: false, error: "Gmail no conectado" };
+
+  const params = new URLSearchParams({
+    q: query,
+    maxResults: String(maxResults),
+  });
+
+  const r = await fetch(`${GMAIL_LIST_URL}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${valid.access_token}` },
+  });
+
+  if (!r.ok) {
+    const txt = await r.text();
+    return { ok: false, error: `Gmail search failed: ${r.status} ${txt.slice(0, 200)}` };
+  }
+
+  const j = await r.json();
+  const ids: string[] = (j.messages || []).map((m: any) => m.id);
+  return { ok: true, ids };
+}
+
+/**
+ * Pide metadata de un mensaje específico (From, To, Subject, Date, snippet).
+ * Sin body para minimizar privacy footprint.
+ */
+export async function getGmailMessageMetadata(
+  messageId: string
+): Promise<{ ok: true; data: GmailMessageMeta } | { ok: false; error: string }> {
+  const valid = await getValidAccessToken();
+  if (!valid) return { ok: false, error: "Gmail no conectado" };
+
+  const params = new URLSearchParams({
+    format: "metadata",
+    metadataHeaders: "From",
+  });
+  params.append("metadataHeaders", "To");
+  params.append("metadataHeaders", "Subject");
+  params.append("metadataHeaders", "Date");
+
+  const r = await fetch(`${GMAIL_LIST_URL}/${messageId}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${valid.access_token}` },
+  });
+
+  if (!r.ok) {
+    const txt = await r.text();
+    return { ok: false, error: `Gmail get failed: ${r.status} ${txt.slice(0, 200)}` };
+  }
+
+  const j = await r.json();
+  const headers = (j.payload?.headers || []) as Array<{ name: string; value: string }>;
+  const headerByName = (n: string) => headers.find(h => h.name.toLowerCase() === n.toLowerCase())?.value || "";
+
+  return {
+    ok: true,
+    data: {
+      id: j.id,
+      thread_id: j.threadId,
+      from: headerByName("From"),
+      to: headerByName("To"),
+      subject: headerByName("Subject"),
+      date: headerByName("Date"),
+      internal_date: j.internalDate ? Number(j.internalDate) : null,
+      snippet: (j.snippet || "").slice(0, 200),
+      label_ids: j.labelIds || [],
+    },
+  };
+}
+
+export type GmailMessageMeta = {
+  id: string;
+  thread_id: string;
+  from: string;
+  to: string;
+  subject: string;
+  date: string;
+  internal_date: number | null;
+  snippet: string;
+  label_ids: string[];
+};
+
+/**
+ * Convenience: dado un email del candidato, devuelve los últimos N intercambios
+ * (enviados o recibidos). Cada item con metadata y snippet.
+ */
+export async function getCandidateGmailHistory(
+  candidateEmail: string,
+  maxResults = 5,
+  daysBack = 180
+): Promise<{ ok: true; messages: GmailMessageMeta[] } | { ok: false; error: string }> {
+  const safe = candidateEmail.replace(/["']/g, "");
+  const query = `(from:${safe} OR to:${safe}) newer_than:${daysBack}d`;
+  const search = await searchGmailMessages(query, maxResults);
+  if (!search.ok) return search;
+
+  const messages: GmailMessageMeta[] = [];
+  for (const id of search.ids) {
+    const meta = await getGmailMessageMetadata(id);
+    if (meta.ok) messages.push(meta.data);
+  }
+  // Ordenar por fecha (más reciente primero)
+  messages.sort((a, b) => (b.internal_date || 0) - (a.internal_date || 0));
+  return { ok: true, messages };
 }

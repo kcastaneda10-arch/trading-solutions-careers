@@ -93,6 +93,7 @@ export default function HRAdminPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [referralsOpen, setReferralsOpen] = useState(false);
   const [referralsPending, setReferralsPending] = useState(0);
+  const [gmailAuditOpen, setGmailAuditOpen] = useState(false);
 
   // Poll referrals pendientes cada 60s
   useEffect(() => {
@@ -178,6 +179,15 @@ export default function HRAdminPage() {
               <Download className="w-3.5 h-3.5" style={{ transform: 'rotate(180deg)' }} />
               <span>Importar</span>
             </button>
+            {/* Gmail audit */}
+            <button
+              onClick={() => setGmailAuditOpen(true)}
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              title="Auditar Gmail vs ATS"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Auditar Gmail</span>
+            </button>
             {/* Agendar entrevista — pill negra estilo TS con borde blanco */}
             <button
               onClick={() => setScheduleOpen(true)}
@@ -261,6 +271,7 @@ export default function HRAdminPage() {
           .then(r => r.json())
           .then(j => setReferralsPending(j.total || 0));
       }} />}
+      {gmailAuditOpen && <GmailAuditModal onClose={() => setGmailAuditOpen(false)} />}
     </div>
   );
 }
@@ -6596,6 +6607,339 @@ function ReferralKV({ k, v }: { k: string; v: React.ReactNode }) {
     <div className="grid grid-cols-[80px_1fr] gap-2 text-xs items-baseline">
       <span className="text-gray-500">{k}</span>
       <span className="text-gray-900 truncate">{v}</span>
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Gmail Audit Modal — cruza ATS stage vs último email      */
+/* ======================================================== */
+type GmailAuditFinding = {
+  candidate_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  vacancy_title: string | null;
+  ats_stage: string;
+  ats_status: string;
+  last_message_date: string | null;
+  last_message_direction: 'from_candidate' | 'to_candidate' | null;
+  last_message_subject: string;
+  last_message_snippet: string;
+  total_messages: number;
+  signal: 'response_pending' | 'stage_mismatch' | 'rejected_but_active' | 'never_sent' | 'no_findings';
+  suggested_action: string;
+  severity: 'high' | 'medium' | 'low' | 'none';
+};
+
+type GmailAuditResult = {
+  success: boolean;
+  gmail_connected: boolean;
+  gmail_email?: string;
+  total_processed?: number;
+  total_findings?: number;
+  breakdown_by_severity?: { high: number; medium: number; low: number };
+  findings?: GmailAuditFinding[];
+  error?: string;
+};
+
+const STAGE_TRANSITION_MAP: Record<string, string> = {
+  'Mover a "prefiltro_revision"': 'prefiltro_revision',
+  'Mover stage a "prefiltro_enviado".': 'prefiltro_enviado',
+  'Mover a "assessment_invitado".': 'assessment_invitado',
+};
+
+function GmailAuditModal({ onClose }: { onClose: () => void }) {
+  const [phase, setPhase] = useState<'idle' | 'running' | 'done' | 'not_connected' | 'error'>('idle');
+  const [result, setResult] = useState<GmailAuditResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'high' | 'medium'>('all');
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+
+  // Auto-check status on mount
+  useEffect(() => {
+    fetch('/api/admin/audit-gmail', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (!j.gmail_connected) setPhase('not_connected');
+      })
+      .catch(() => {});
+  }, []);
+
+  const runAudit = async () => {
+    setPhase('running');
+    setError(null);
+    try {
+      const r = await fetch('/api/admin/audit-gmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ only_active: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        if (j.gmail_connected === false) {
+          setPhase('not_connected');
+        } else {
+          setError(j.error || 'Error');
+          setPhase('error');
+        }
+        return;
+      }
+      setResult(j);
+      setPhase('done');
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+      setPhase('error');
+    }
+  };
+
+  const applyAction = async (finding: GmailAuditFinding) => {
+    // Buscar la transición sugerida en el mapa
+    const newStage = Object.entries(STAGE_TRANSITION_MAP).find(([key]) =>
+      finding.suggested_action.includes(key.replace(/^Mover (?:stage )?a /, '').replace(/[".]/g, ''))
+    )?.[1];
+
+    if (!newStage) return;
+
+    setApplyingId(finding.candidate_id);
+    try {
+      const r = await fetch(`/api/headhunting/candidates/${finding.candidate_id}/stage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: newStage, create_rejection_draft: false }),
+      });
+      if (r.ok) {
+        setAppliedIds(prev => new Set([...Array.from(prev), finding.candidate_id]));
+      }
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const findings = result?.findings || [];
+  const visible = filter === 'all'
+    ? findings
+    : findings.filter(f => f.severity === filter);
+
+  const sevColor: Record<string, { bg: string; text: string; dot: string; ring: string }> = {
+    high: { bg: 'bg-red-50', text: 'text-red-800', dot: 'bg-red-500', ring: 'ring-red-200' },
+    medium: { bg: 'bg-amber-50', text: 'text-amber-800', dot: 'bg-amber-500', ring: 'ring-amber-200' },
+    low: { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400', ring: 'ring-gray-200' },
+    none: { bg: 'bg-gray-50', text: 'text-gray-500', dot: 'bg-gray-300', ring: 'ring-gray-100' },
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[5vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-black text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] font-semibold opacity-70">Audit cruzado</div>
+              <div className="text-base font-bold leading-tight">
+                Gmail · ATS
+                {result?.gmail_email && <span className="text-[11px] opacity-60 font-normal ml-2">{result.gmail_email}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {phase === 'done' && (
+              <button
+                onClick={runAudit}
+                className="bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3 h-3" /> Re-auditar
+              </button>
+            )}
+            <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none px-2">×</button>
+          </div>
+        </div>
+
+        <div className="p-5 max-h-[75vh] overflow-y-auto">
+          {/* PHASE: not connected */}
+          {phase === 'not_connected' && (
+            <div className="text-center py-10">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-bold mb-1">Gmail no conectado con permiso de lectura</h3>
+              <p className="text-sm text-gray-600 max-w-md mx-auto mb-4">
+                Para auditar el cruce con tu inbox necesitamos el scope <code className="bg-gray-100 px-1 rounded text-xs">gmail.readonly</code> (solo metadata: From, To, Subject, Date · NO leemos cuerpos de emails).
+              </p>
+              <a
+                href="/api/google/auth"
+                className="inline-flex items-center gap-2 bg-black hover:bg-gray-800 text-white font-semibold px-5 py-2.5 rounded-full text-sm"
+              >
+                <Mail className="w-4 h-4" />
+                Re-autorizar Gmail con readonly
+                <ArrowRight className="w-4 h-4" />
+              </a>
+              <p className="text-[11px] text-gray-400 mt-3">
+                Después de autorizar, vuelve a abrir este modal.
+              </p>
+            </div>
+          )}
+
+          {/* PHASE: idle (connected, ready to run) */}
+          {phase === 'idle' && (
+            <div className="text-center py-10">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-blue-100 flex items-center justify-center">
+                <Mail className="w-7 h-7 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-bold mb-1">Auditar Gmail vs ATS</h3>
+              <p className="text-sm text-gray-600 max-w-md mx-auto mb-4">
+                Cruza tus emails recientes con cada candidato del ATS. Detecta gaps como: candidato respondió pero stage no avanzó, ATS dice rechazado pero hay correspondencia activa, etc.
+              </p>
+              <button
+                onClick={runAudit}
+                className="inline-flex items-center gap-2 bg-black hover:bg-gray-800 text-white font-semibold px-5 py-2.5 rounded-full text-sm"
+              >
+                <Sparkles className="w-4 h-4" />
+                Correr audit ahora
+              </button>
+              <p className="text-[11px] text-gray-400 mt-3">
+                Tarda ~30s para 50 candidatos · solo mira metadata, no lee bodies.
+              </p>
+            </div>
+          )}
+
+          {/* PHASE: running */}
+          {phase === 'running' && (
+            <div className="text-center py-12">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
+                <Hourglass className="w-7 h-7 text-purple-600" />
+              </div>
+              <h3 className="text-base font-bold">Cruzando ATS con tu Gmail…</h3>
+              <p className="text-xs text-gray-500 mt-1">~30s · revisando últimos 180 días por candidato</p>
+            </div>
+          )}
+
+          {/* PHASE: error */}
+          {phase === 'error' && error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 my-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-red-900 text-sm">Error</div>
+                  <div className="text-xs text-red-800 mt-1">{error}</div>
+                  <button onClick={runAudit} className="mt-2 text-xs font-semibold text-red-700 hover:underline">Reintentar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PHASE: done */}
+          {phase === 'done' && result && (
+            <>
+              {/* Summary stats */}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <Stat label="Procesados" value={result.total_processed || 0} />
+                <Stat label="High" value={result.breakdown_by_severity?.high || 0} color="red" />
+                <Stat label="Medium" value={result.breakdown_by_severity?.medium || 0} color="amber" />
+                <Stat label="Low" value={result.breakdown_by_severity?.low || 0} color="gray" />
+              </div>
+
+              {findings.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <h3 className="text-base font-bold text-emerald-900">Todo en orden</h3>
+                  <p className="text-xs text-gray-500 mt-1">Sin discrepancias entre ATS y Gmail · {result.total_processed} candidatos procesados</p>
+                </div>
+              ) : (
+                <>
+                  {/* Filters */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button onClick={() => setFilter('all')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}>
+                      Todos ({findings.length})
+                    </button>
+                    <button onClick={() => setFilter('high')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'high' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700'}`}>
+                      High ({result.breakdown_by_severity?.high || 0})
+                    </button>
+                    <button onClick={() => setFilter('medium')} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'medium' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700'}`}>
+                      Medium ({result.breakdown_by_severity?.medium || 0})
+                    </button>
+                  </div>
+
+                  {/* Findings list */}
+                  <div className="space-y-2">
+                    {visible.map(f => {
+                      const c = sevColor[f.severity] || sevColor.none;
+                      const applied = appliedIds.has(f.candidate_id);
+                      const canApply = Object.keys(STAGE_TRANSITION_MAP).some(key =>
+                        f.suggested_action.includes(key.replace(/^Mover (?:stage )?a /, '').replace(/[".]/g, ''))
+                      );
+                      return (
+                        <div key={f.candidate_id} className={`border ${c.ring} ring-1 ${c.bg} rounded-lg p-3`}>
+                          <div className="flex items-start gap-3">
+                            <Avatar name={f.candidate_name} size={32} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-bold text-gray-900 truncate">{f.candidate_name}</span>
+                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider ${c.text}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                                  {f.severity}
+                                </span>
+                                <span className="text-[10px] text-gray-500">{f.vacancy_title || 'Sin vacante'}</span>
+                              </div>
+                              <div className="text-[11px] text-gray-600 mt-1">
+                                <strong>ATS:</strong> stage <code className="bg-gray-100 px-1 rounded">{f.ats_stage}</code>
+                                {' · '}
+                                <strong>Gmail:</strong> último mensaje <strong className={f.last_message_direction === 'from_candidate' ? 'text-emerald-700' : 'text-blue-700'}>
+                                  {f.last_message_direction === 'from_candidate' ? 'recibido' : 'enviado'}
+                                </strong> · {f.last_message_date && new Date(f.last_message_date).toLocaleDateString('es-CO')}
+                              </div>
+                              <div className="text-[11px] text-gray-700 italic mt-1 bg-white/70 px-2 py-1 rounded">
+                                "{f.last_message_subject}" → {f.last_message_snippet.slice(0, 120)}…
+                              </div>
+                              <div className={`text-xs font-semibold ${c.text} mt-2 flex items-center gap-2 flex-wrap`}>
+                                <ArrowRight className="w-3 h-3" />
+                                <span>{f.suggested_action}</span>
+                                {canApply && !applied && (
+                                  <button
+                                    onClick={() => applyAction(f)}
+                                    disabled={applyingId === f.candidate_id}
+                                    className="ml-auto bg-black hover:bg-gray-800 text-white text-[10px] font-bold px-3 py-1 rounded-full disabled:opacity-50"
+                                  >
+                                    {applyingId === f.candidate_id ? '…' : 'Aplicar'}
+                                  </button>
+                                )}
+                                {applied && (
+                                  <span className="ml-auto text-[10px] text-emerald-700 font-bold inline-flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Aplicado
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, color = 'gray' }: { label: string; value: number; color?: 'gray' | 'red' | 'amber' }) {
+  const map = {
+    gray: 'bg-gray-50 text-gray-900',
+    red: 'bg-red-50 text-red-900',
+    amber: 'bg-amber-50 text-amber-900',
+  };
+  return (
+    <div className={`${map[color]} rounded-lg p-3`}>
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">{label}</div>
+      <div className="text-2xl font-extrabold tabular-nums mt-1">{value}</div>
     </div>
   );
 }
