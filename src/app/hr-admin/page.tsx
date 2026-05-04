@@ -78,11 +78,37 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "agentes", label: "Agentes IA", icon: Bot },
 ];
 
+const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "onboarding", "cvbank", "agentes"];
+
+function getInitialTab(): Tab {
+  if (typeof window === 'undefined') return 'dashboard';
+  const hash = window.location.hash.replace('#', '') as Tab;
+  return VALID_TABS.includes(hash) ? hash : 'dashboard';
+}
+
 export default function HRAdminPage() {
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTabState] = useState<Tab>(getInitialTab);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  // setTab que persiste en URL hash — sobrevive refresh y permite share-link
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `#${next}`);
+    }
+  }, []);
+
+  // Sync con cambios externos del hash (back/forward del browser, etc.)
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace('#', '') as Tab;
+      if (VALID_TABS.includes(h) && h !== tab) setTabState(h);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [tab]);
 
   // Global Cmd+K / Ctrl+K shortcut to open search
   useEffect(() => {
@@ -1380,6 +1406,9 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
       {/* Vacancies overview — abiertas vs cerradas */}
       <VacanciesOverview />
 
+      {/* Funnel por vacante — drop-off por fase, dónde se quedan */}
+      <FunnelByVacancy />
+
       {/* Analytics deep — funnel conversion + sources + time per stage */}
       <AnalyticsDeep />
     </>
@@ -1420,10 +1449,17 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    fetch('/api/dashboard/today', { cache: 'no-store' })
+    let alive = true;
+    const fetchData = () => fetch('/api/dashboard/today', { cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { setData(j); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(j => { if (alive) { setData(j); setLoading(false); } })
+      .catch(() => { if (alive) setLoading(false); });
+    fetchData();
+    // Auto-refresh cada 30s — solo cuando la pestaña está activa
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
   }, []);
 
   if (loading) {
@@ -1697,10 +1733,16 @@ function DashboardHero() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/dashboard/overview', { cache: 'no-store' })
+    let alive = true;
+    const fetchData = () => fetch('/api/dashboard/overview', { cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { setData(j); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(j => { if (alive) { setData(j); setLoading(false); } })
+      .catch(() => { if (alive) setLoading(false); });
+    fetchData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
   }, []);
 
   if (loading) return (
@@ -1931,10 +1973,16 @@ function VacanciesOverview() {
   const [researchVac, setResearchVac] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
-    fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
+    let alive = true;
+    const fetchData = () => fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { setVacs(j.vacancies || []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(j => { if (alive) { setVacs(j.vacancies || []); setLoading(false); } })
+      .catch(() => { if (alive) setLoading(false); });
+    fetchData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
   }, []);
 
   if (loading) return <div className="mt-5 text-sm text-gray-400">Cargando vacantes…</div>;
@@ -6183,6 +6231,219 @@ function FormField({ label, children, full }: { label: string; children: React.R
     <div className={full ? 'col-span-2' : ''}>
       <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">{label}</label>
       {children}
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Funnel por vacante · drop-off por fase                    */
+/* ======================================================== */
+type FunnelByVacancyData = {
+  vacancies: {
+    vacancy_id: string;
+    title: string;
+    area: string;
+    role_level: string;
+    status: 'abierta' | 'cerrada';
+    totals: { total: number; active: number; rejected: number; hired: number };
+    funnel: { stage: string; label: string; count: number; conv_pct: number | null; lost_from_prev: number }[];
+    top_dropoffs: { from: string; to: string; lost: number; lost_pct: number; conv_pct: number }[];
+  }[];
+};
+
+function FunnelByVacancy() {
+  const [data, setData] = useState<FunnelByVacancyData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'open' | 'all'>('open');
+
+  useEffect(() => {
+    let alive = true;
+    const fetchData = () => fetch('/api/dashboard/funnel-by-vacancy', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { if (alive) { setData(j); setLoading(false); } })
+      .catch(() => { if (alive) setLoading(false); });
+    fetchData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, []);
+
+  if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando funnel por vacante…</div>;
+  if (!data || !data.vacancies.length) return null;
+
+  const visible = filter === 'open'
+    ? data.vacancies.filter(v => v.status === 'abierta')
+    : data.vacancies;
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-end justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">Funnel por vacante</h2>
+          <p className="text-xs text-gray-500">Dónde se están quedando los candidatos en cada vacante · drop-off por fase</p>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => setFilter('open')}
+            className={`text-[11px] font-semibold px-3 py-1 rounded-full transition-colors ${
+              filter === 'open' ? 'bg-black text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+            }`}
+          >
+            Abiertas ({data.vacancies.filter(v => v.status === 'abierta').length})
+          </button>
+          <button
+            onClick={() => setFilter('all')}
+            className={`text-[11px] font-semibold px-3 py-1 rounded-full transition-colors ${
+              filter === 'all' ? 'bg-black text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+            }`}
+          >
+            Todas ({data.vacancies.length})
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {visible.map(v => (
+          <FunnelVacancyCard
+            key={v.vacancy_id}
+            vacancy={v}
+            expanded={expandedId === v.vacancy_id}
+            onToggle={() => setExpandedId(expandedId === v.vacancy_id ? null : v.vacancy_id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FunnelVacancyCard({
+  vacancy,
+  expanded,
+  onToggle,
+}: {
+  vacancy: FunnelByVacancyData['vacancies'][0];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const maxCount = Math.max(...vacancy.funnel.map(s => s.count), 1);
+  const visibleStages = expanded ? vacancy.funnel : vacancy.funnel.slice(0, 5);
+  const conversionTotal = vacancy.totals.total > 0
+    ? Math.round((vacancy.totals.hired / vacancy.totals.total) * 100 * 10) / 10
+    : 0;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-gray-900 truncate">{vacancy.title}</span>
+            <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
+              vacancy.status === 'abierta' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              {vacancy.status}
+            </span>
+          </div>
+          <div className="text-[10px] text-gray-500 mt-0.5">
+            {vacancy.area || '—'} · {vacancy.role_level === 'c_suite' ? 'C-Suite' : vacancy.role_level}
+          </div>
+        </div>
+      </div>
+
+      {/* Totals */}
+      <div className="grid grid-cols-4 gap-1.5 mb-3 text-[10px]">
+        <div className="bg-gray-50 rounded px-2 py-1.5 text-center">
+          <div className="text-gray-500 uppercase font-bold text-[9px]">Total</div>
+          <div className="text-base font-extrabold text-gray-900 tabular-nums">{vacancy.totals.total}</div>
+        </div>
+        <div className="bg-blue-50 rounded px-2 py-1.5 text-center">
+          <div className="text-blue-700 uppercase font-bold text-[9px]">Activos</div>
+          <div className="text-base font-extrabold text-blue-900 tabular-nums">{vacancy.totals.active}</div>
+        </div>
+        <div className="bg-emerald-50 rounded px-2 py-1.5 text-center">
+          <div className="text-emerald-700 uppercase font-bold text-[9px]">Hired</div>
+          <div className="text-base font-extrabold text-emerald-900 tabular-nums">{vacancy.totals.hired}</div>
+        </div>
+        <div className="bg-red-50 rounded px-2 py-1.5 text-center">
+          <div className="text-red-700 uppercase font-bold text-[9px]">Rechazados</div>
+          <div className="text-base font-extrabold text-red-900 tabular-nums">{vacancy.totals.rejected}</div>
+        </div>
+      </div>
+
+      {/* Funnel bars */}
+      <div className="space-y-1 mb-3">
+        {visibleStages.map((s, i) => {
+          const pct = (s.count / maxCount) * 100;
+          const convColor =
+            s.conv_pct === null ? 'text-gray-300'
+            : s.conv_pct >= 80 ? 'text-emerald-600'
+            : s.conv_pct >= 50 ? 'text-amber-600'
+            : s.conv_pct >= 25 ? 'text-orange-600'
+            : 'text-red-500';
+          return (
+            <div key={s.stage} className="grid items-center gap-2" style={{ gridTemplateColumns: '110px 1fr 38px 32px' }}>
+              <span className="text-[10px] text-gray-700 truncate">{s.label}</span>
+              <div className="h-4 bg-gray-100 rounded overflow-hidden relative">
+                <div
+                  className="h-full bg-gray-800 rounded"
+                  style={{ width: `${Math.max(pct, s.count > 0 ? 4 : 0)}%` }}
+                />
+                {s.lost_from_prev > 0 && i > 0 && (
+                  <span className="absolute right-1 top-0 bottom-0 flex items-center text-[9px] text-red-600 font-semibold">
+                    -{s.lost_from_prev}
+                  </span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold text-right tabular-nums ${convColor}`}>
+                {s.conv_pct !== null ? `${s.conv_pct}%` : '—'}
+              </span>
+              <span className="text-[10px] font-bold text-gray-900 text-right tabular-nums">{s.count}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {!expanded && vacancy.funnel.length > 5 && (
+        <button onClick={onToggle} className="text-[10px] font-semibold text-gray-600 hover:text-black mb-2">
+          Ver +{vacancy.funnel.length - 5} stages → {vacancy.funnel.slice(5).map(s => s.label).join(' · ')}
+        </button>
+      )}
+      {expanded && (
+        <button onClick={onToggle} className="text-[10px] font-semibold text-gray-600 hover:text-black mb-2">
+          Ver menos ↑
+        </button>
+      )}
+
+      {/* Drop-offs críticos */}
+      {vacancy.top_dropoffs.length > 0 && (
+        <div className="border-t border-gray-100 pt-2 mt-2">
+          <div className="text-[9px] uppercase tracking-wider font-bold text-red-700 mb-1.5 flex items-center gap-1">
+            <AlertOctagon className="w-3 h-3" />
+            <span>Donde más se quedan</span>
+          </div>
+          <div className="space-y-1">
+            {vacancy.top_dropoffs.map((d, i) => (
+              <div key={i} className="text-[10px] bg-red-50 rounded px-2 py-1 flex items-center gap-2">
+                <span className="text-red-700 font-mono font-bold tabular-nums">-{d.lost_pct}%</span>
+                <span className="text-gray-700 truncate flex-1">
+                  <strong>{d.from}</strong> → {d.to}
+                </span>
+                <span className="text-red-600 font-semibold">({d.lost})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Conversión total */}
+      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px]">
+        <span className="text-gray-500">Conversión total → contratado</span>
+        <span className={`font-bold tabular-nums ${conversionTotal >= 5 ? 'text-emerald-600' : conversionTotal >= 2 ? 'text-amber-600' : 'text-gray-400'}`}>
+          {conversionTotal}%
+        </span>
+      </div>
     </div>
   );
 }
