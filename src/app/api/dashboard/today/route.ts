@@ -10,7 +10,7 @@
  *   - stale_vacancies: vacantes abiertas sin movimiento en >7d (velocity_7d = 0)
  *   - quick_wins: vacantes con candidato en oferta (cierre inminente)
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
@@ -36,13 +36,18 @@ const DECISION_STAGES = [
   'oferta',                 // esperando respuesta
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const vacancyFilter = url.searchParams.get('vacancy_id');
+
     // Vacancies + milestones + targets
-    const { data: vacs } = await supabaseAdmin
+    let vacQuery = supabaseAdmin
       .from("ht_vacancies")
       .select("id, title, area, role_level, vacancy_type, status")
       .eq("client_id", TS_CLIENT_ID);
+    if (vacancyFilter) vacQuery = vacQuery.eq('id', vacancyFilter);
+    const { data: vacs } = await vacQuery;
 
     const { data: milestones } = await supabaseAdmin.from("ht_vacancy_milestones").select("*");
     const milestoneByVac: Record<string, any> = {};
@@ -64,10 +69,12 @@ export async function GET() {
     };
 
     // Candidatos
-    const { data: cands } = await supabaseAdmin
+    let candQuery = supabaseAdmin
       .from("ht_candidates")
       .select("id, name, email, vacancy_id, stage, status, updated_at, created_at")
       .not("email", "ilike", "%@tradingsolutions.com");
+    if (vacancyFilter) candQuery = candQuery.eq('vacancy_id', vacancyFilter);
+    const { data: cands } = await candQuery;
 
     const vacById: Record<string, any> = {};
     (vacs || []).forEach((v: any) => { vacById[v.id] = v; });

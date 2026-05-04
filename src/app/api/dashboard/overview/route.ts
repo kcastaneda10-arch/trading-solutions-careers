@@ -5,7 +5,7 @@
  * targets configurados en ts_targets. Diseñado para ser consumido en vivo —
  * todos los cálculos hechos server-side para no exponer logic.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
@@ -14,8 +14,11 @@ function daysBetween(from: string | Date, to: string | Date): number {
   return Math.floor((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const vacancyFilter = url.searchParams.get('vacancy_id');
+
     const today = new Date();
     const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -37,10 +40,12 @@ export async function GET() {
     };
 
     // Vacancies + role_level + vacancy_type
-    const { data: vacs } = await supabaseAdmin
+    let vacQuery = supabaseAdmin
       .from("ht_vacancies")
       .select("id, title, role_level, vacancy_type, status")
       .eq("client_id", TS_CLIENT_ID);
+    if (vacancyFilter) vacQuery = vacQuery.eq('id', vacancyFilter);
+    const { data: vacs } = await vacQuery;
 
     // Milestones
     const { data: milestones } = await supabaseAdmin.from("ht_vacancy_milestones").select("*");
@@ -48,10 +53,12 @@ export async function GET() {
     (milestones || []).forEach((m: any) => { milestoneByVac[m.vacancy_id] = m; });
 
     // Candidates
-    const { data: cands } = await supabaseAdmin
+    let candQuery = supabaseAdmin
       .from("ht_candidates")
       .select("id, vacancy_id, stage, status, updated_at, created_at")
       .not("email", "ilike", "%@tradingsolutions.com");
+    if (vacancyFilter) candQuery = candQuery.eq('vacancy_id', vacancyFilter);
+    const { data: cands } = await candQuery;
 
     // ─── KPI 1: Hires this quarter & this month ───
     let hiresQuarter = 0, hiresMonth = 0, hiresAllTime = 0;

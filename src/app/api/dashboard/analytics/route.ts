@@ -9,7 +9,7 @@
  *   - vacancy_comparison: TTF + conversion rate por vacante (cerradas)
  *   - quality_scores: avg Elevare por vacante para cerradas
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
@@ -57,25 +57,32 @@ function stageRank(s: string | null): number {
   return i === -1 ? -1 : i;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const vacancyFilter = url.searchParams.get('vacancy_id');
+
     const today = new Date();
 
     // Vacancies + milestones
-    const { data: vacs } = await supabaseAdmin
+    let vacQuery = supabaseAdmin
       .from("ht_vacancies")
       .select("id, title, area, role_level, status")
       .eq("client_id", TS_CLIENT_ID);
+    if (vacancyFilter) vacQuery = vacQuery.eq('id', vacancyFilter);
+    const { data: vacs } = await vacQuery;
 
     const { data: milestones } = await supabaseAdmin.from("ht_vacancy_milestones").select("*");
     const milestoneByVac: Record<string, any> = {};
     (milestones || []).forEach((m: any) => { milestoneByVac[m.vacancy_id] = m; });
 
     // Candidates (excluding internos)
-    const { data: cands } = await supabaseAdmin
+    let candQuery = supabaseAdmin
       .from("ht_candidates")
       .select("id, vacancy_id, stage, status, updated_at, created_at")
       .not("email", "ilike", "%@tradingsolutions.com");
+    if (vacancyFilter) candQuery = candQuery.eq('vacancy_id', vacancyFilter);
+    const { data: cands } = await candQuery;
 
     // ─── Funnel conversion: cuántos llegaron a cada stage ───
     // Un candidato "llegó al stage X" si su rank actual >= rank(X) o si fue rechazado en/después

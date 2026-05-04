@@ -91,6 +91,21 @@ export default function HRAdminPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [referralsOpen, setReferralsOpen] = useState(false);
+  const [referralsPending, setReferralsPending] = useState(0);
+
+  // Poll referrals pendientes cada 60s
+  useEffect(() => {
+    const fetchPending = () => fetch('/api/referrals?status=received', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setReferralsPending(j.total || 0))
+      .catch(() => {});
+    fetchPending();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchPending();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // setTab que persiste en URL hash — sobrevive refresh y permite share-link
   const setTab = useCallback((next: Tab) => {
@@ -172,9 +187,17 @@ export default function HRAdminPage() {
               <Calendar className="w-3.5 h-3.5" />
               <span>Agendar</span>
             </button>
-            <button className="text-white/60 hover:text-white relative p-1.5">
+            <button
+              onClick={() => setReferralsOpen(true)}
+              className="text-white/60 hover:text-white relative p-1.5"
+              title={referralsPending > 0 ? `${referralsPending} hojas de vida pendientes de revisar` : 'Sin notificaciones nuevas'}
+            >
               <Bell className="w-[18px] h-[18px]" />
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500" />
+              {referralsPending > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-black tabular-nums">
+                  {referralsPending > 99 ? '99+' : referralsPending}
+                </span>
+              ) : null}
             </button>
             <div className="flex items-center gap-2 pl-2 ml-1 border-l border-white/10">
               <Avatar name="Kelly Castañeda" size={28} />
@@ -232,6 +255,12 @@ export default function HRAdminPage() {
       {searchOpen && <CandidateSearchModal onClose={() => setSearchOpen(false)} onJumpFunnel={() => { setTab('funnel'); setSearchOpen(false); }} />}
       {scheduleOpen && <ScheduleInterviewModal onClose={() => setScheduleOpen(false)} />}
       {importOpen && <CandidatesImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); setTab('funnel'); }} />}
+      {referralsOpen && <ReferralsModal onClose={() => setReferralsOpen(false)} onChange={() => {
+        // Refresh count after action
+        fetch('/api/referrals?status=received', { cache: 'no-store' })
+          .then(r => r.json())
+          .then(j => setReferralsPending(j.total || 0));
+      }} />}
     </div>
   );
 }
@@ -969,7 +998,7 @@ type DashboardStats = {
   htRejected: number;
 };
 
-type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string };
+type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string; ht_vacancy_id?: string };
 
 // Extrae score del why_ts cuando la columna `score` aún no está poblada
 function extractScoreFromText(why?: string | null): number | null {
@@ -1035,7 +1064,25 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
         type AssessmentToken = { status: string; score?: number | null; candidate_email?: string };
 
         const vacsRaw = (Array.isArray(vacR) ? vacR : vacR.data ?? []) as Vacancy[];
-        setVacanciesList(vacsRaw.map((v) => ({ id: v.id, title: v.title, status: v.status, linkedin_url: v.linkedin_url })));
+
+        // Cruce con ht_vacancies para obtener UUID por título — necesario para
+        // filtrar los componentes nuevos del Dashboard (que usan UUID).
+        let htMap: Record<string, string> = {};
+        try {
+          const htRes = await fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' });
+          const htJ = await htRes.json();
+          (htJ.vacancies || []).forEach((hv: any) => {
+            htMap[(hv.title || '').toLowerCase().trim()] = hv.vacancy_id;
+          });
+        } catch {}
+
+        setVacanciesList(vacsRaw.map((v) => ({
+          id: v.id,
+          title: v.title,
+          status: v.status,
+          linkedin_url: v.linkedin_url,
+          ht_vacancy_id: htMap[(v.title || '').toLowerCase().trim()],
+        })));
 
         const apps = (appR.applications ?? appR.data ?? []) as Application[];
         const appsAll = (appAllR.applications ?? appAllR.data ?? []) as Application[];
@@ -1142,6 +1189,10 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
   const s = stats;
 
   const filterIsAll = selectedVacancyId === 'all';
+  // UUID de ht_vacancies (para los componentes nuevos del Dashboard)
+  const selectedVacancyUuid: string | 'all' = filterIsAll
+    ? 'all'
+    : (vacanciesList.find(v => v.id === selectedVacancyId)?.ht_vacancy_id || 'all');
   const selectedVacancyTitle = filterIsAll
     ? 'Todas las vacantes'
     : vacanciesList.find((v) => v.id === selectedVacancyId)?.title ?? '—';
@@ -1217,10 +1268,14 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
       />
 
       {/* ═════ TODAY'S FOCUS · qué requiere acción HOY ═════ */}
-      <TodayFocus onJumpToVacancy={() => setTab("vacantes")} onJumpToFunnel={() => setTab("funnel")} />
+      <TodayFocus
+        vacancyFilter={selectedVacancyUuid}
+        onJumpToVacancy={() => setTab("vacantes")}
+        onJumpToFunnel={() => setTab("funnel")}
+      />
 
       {/* ═════ OVERVIEW · Big Picture · Hero KPIs vs Targets ═════ */}
-      <DashboardHero />
+      <DashboardHero vacancyFilter={selectedVacancyUuid} />
 
       <div className="grid grid-cols-5 gap-3 mb-4">
         <KPI
@@ -1404,13 +1459,13 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
       </div>
 
       {/* Vacancies overview — abiertas vs cerradas */}
-      <VacanciesOverview />
+      <VacanciesOverview vacancyFilter={selectedVacancyUuid} />
 
       {/* Funnel por vacante — drop-off por fase, dónde se quedan */}
-      <FunnelByVacancy />
+      <FunnelByVacancy vacancyFilter={selectedVacancyUuid} />
 
       {/* Analytics deep — funnel conversion + sources + time per stage */}
-      <AnalyticsDeep />
+      <AnalyticsDeep vacancyFilter={selectedVacancyUuid} />
     </>
   );
 }
@@ -1443,24 +1498,27 @@ type TodayFocusData = {
   todays_interviews?: { id: string; candidate_id: string; candidate_name: string; vacancy_id: string; vacancy_title: string; interview_type: string; scheduled_at: string; duration_min: number; meeting_url: string | null; location: string | null; status: string }[];
 };
 
-function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
+function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: { vacancyFilter?: string; onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
   const [data, setData] = useState<TodayFocusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    const fetchData = () => fetch('/api/dashboard/today', { cache: 'no-store' })
+    const url = vacancyFilter && vacancyFilter !== 'all'
+      ? `/api/dashboard/today?vacancy_id=${vacancyFilter}`
+      : '/api/dashboard/today';
+    const fetchData = () => fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => { if (alive) { setData(j); setLoading(false); } })
       .catch(() => { if (alive) setLoading(false); });
+    setLoading(true);
     fetchData();
-    // Auto-refresh cada 30s — solo cuando la pestaña está activa
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, []);
+  }, [vacancyFilter]);
 
   if (loading) {
     return (
@@ -1728,22 +1786,26 @@ function FocusList({
   );
 }
 
-function DashboardHero() {
+function DashboardHero({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<HeroData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    const fetchData = () => fetch('/api/dashboard/overview', { cache: 'no-store' })
+    const url = vacancyFilter && vacancyFilter !== 'all'
+      ? `/api/dashboard/overview?vacancy_id=${vacancyFilter}`
+      : '/api/dashboard/overview';
+    const fetchData = () => fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => { if (alive) { setData(j); setLoading(false); } })
       .catch(() => { if (alive) setLoading(false); });
+    setLoading(true);
     fetchData();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, []);
+  }, [vacancyFilter]);
 
   if (loading) return (
     <div className="mb-5 h-[180px] rounded-2xl bg-gradient-to-br from-gray-50 to-white border border-gray-200 flex items-center justify-center text-sm text-gray-400">
@@ -1967,23 +2029,33 @@ type VacancyOverview = {
   hired: { id: string; name: string; email: string } | null;
 };
 
-function VacanciesOverview() {
+function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [vacs, setVacs] = useState<VacancyOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [researchVac, setResearchVac] = useState<{ id: string; title: string } | null>(null);
+  const [rediscoverVac, setRediscoverVac] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
     const fetchData = () => fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { if (alive) { setVacs(j.vacancies || []); setLoading(false); } })
+      .then(j => {
+        if (!alive) return;
+        const all = j.vacancies || [];
+        const filtered = vacancyFilter && vacancyFilter !== 'all'
+          ? all.filter((v: VacancyOverview) => v.vacancy_id === vacancyFilter)
+          : all;
+        setVacs(filtered);
+        setLoading(false);
+      })
       .catch(() => { if (alive) setLoading(false); });
+    setLoading(true);
     fetchData();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, []);
+  }, [vacancyFilter]);
 
   if (loading) return <div className="mt-5 text-sm text-gray-400">Cargando vacantes…</div>;
 
@@ -2028,6 +2100,7 @@ function VacanciesOverview() {
                 key={v.vacancy_id}
                 v={v}
                 onResearch={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
+                onRediscover={() => setRediscoverVac({ id: v.vacancy_id, title: v.title })}
               />
             ))}
           </div>
@@ -2092,11 +2165,18 @@ function VacanciesOverview() {
           onClose={() => setResearchVac(null)}
         />
       )}
+      {rediscoverVac && (
+        <CVBankRediscoveryModal
+          vacancyId={rediscoverVac.id}
+          vacancyTitle={rediscoverVac.title}
+          onClose={() => setRediscoverVac(null)}
+        />
+      )}
     </div>
   );
 }
 
-function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: () => void }) {
+function OpenVacancyCard({ v, onResearch, onRediscover }: { v: VacancyOverview; onResearch: () => void; onRediscover?: () => void }) {
   const m = v.milestones;
   const hasLinkedIn = !!m.linkedin_active_date;
   const healthColor = v.health.score === 'green' ? '#10B981' : v.health.score === 'yellow' ? '#F59E0B' : '#EF4444';
@@ -2257,16 +2337,295 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
         <span className="text-red-600">Rechazados: <strong>{v.metrics.rechazados}</strong></span>
       </div>
 
-      {/* Market Research CTA — estilo TS minimal black */}
-      <button
-        onClick={onResearch}
-        className="mt-2 w-full bg-black hover:bg-gray-800 text-white text-[11px] font-semibold py-2 rounded-full flex items-center justify-center gap-1.5 transition-colors"
-        title="Generar/ver estudio de mercado por IA"
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        Estudio de mercado IA
-      </button>
+      {/* CTAs estilo TS minimal */}
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        <button
+          onClick={onResearch}
+          className="bg-black hover:bg-gray-800 text-white text-[10px] font-semibold py-2 rounded-full flex items-center justify-center gap-1.5 transition-colors"
+          title="Generar/ver estudio de mercado por IA"
+        >
+          <Sparkles className="w-3 h-3" />
+          <span>Mercado IA</span>
+        </button>
+        {onRediscover && (
+          <button
+            onClick={onRediscover}
+            className="bg-white hover:bg-gray-50 text-black border border-gray-300 hover:border-black text-[10px] font-semibold py-2 rounded-full flex items-center justify-center gap-1.5 transition-colors"
+            title="Buscar matches en el CV Bank (rechazados de otras vacantes)"
+          >
+            <Search className="w-3 h-3" />
+            <span>Buscar en banco</span>
+          </button>
+        )}
       </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CV Bank Rediscovery Modal · matches AI desde el banco ─────────
+type CVBankMatch = {
+  id: string;
+  candidate_id: string;
+  match_score: number | null;
+  match_reasoning: string | null;
+  match_strengths: string[] | null;
+  match_concerns: string[] | null;
+  recommendation: 'strong' | 'possible' | 'weak' | 'no' | null;
+  computed_at: string;
+  candidate: {
+    id: string;
+    name: string;
+    email: string;
+    current_job_role: string | null;
+    current_company: string | null;
+    headline: string | null;
+    location: string | null;
+    salary_aspiration_cop: number | null;
+    english_level: string | null;
+    stage: string;
+  } | null;
+};
+
+function CVBankRediscoveryModal({
+  vacancyId,
+  vacancyTitle,
+  onClose,
+}: {
+  vacancyId: string;
+  vacancyTitle: string;
+  onClose: () => void;
+}) {
+  const [matches, setMatches] = useState<CVBankMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'strong' | 'possible'>('all');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/headhunting/vacancies/${vacancyId}/rediscover-cv`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setMatches(j.matches || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [vacancyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runRediscover = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/headhunting/vacancies/${vacancyId}/rediscover-cv`, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) {
+        setError(j.error || 'Error');
+      } else {
+        load();
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const visible = filter === 'all'
+    ? matches
+    : matches.filter(m => m.recommendation === filter);
+
+  const counts = {
+    strong: matches.filter(m => m.recommendation === 'strong').length,
+    possible: matches.filter(m => m.recommendation === 'possible').length,
+    weak: matches.filter(m => m.recommendation === 'weak').length,
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-black text-white px-5 py-3 rounded-t-xl flex items-center justify-between z-10">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4" />
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] font-semibold opacity-70">Rediscovery · CV Bank</div>
+              <div className="text-base font-bold leading-tight">{vacancyTitle}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runRediscover}
+              disabled={running}
+              className="bg-white/15 hover:bg-white/25 disabled:opacity-50 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5"
+            >
+              {running ? (
+                <><Hourglass className="w-3 h-3" /> Buscando…</>
+              ) : matches.length > 0 ? (
+                <><RefreshCw className="w-3 h-3" /> Re-correr</>
+              ) : (
+                <><Sparkles className="w-3 h-3" /> Buscar matches</>
+              )}
+            </button>
+            <button onClick={onClose} className="text-white/70 hover:text-white text-2xl px-2 leading-none">×</button>
+          </div>
+        </div>
+
+        <div className="p-5">
+          {loading && <div className="text-center text-sm text-gray-400 py-12">Cargando…</div>}
+
+          {!loading && matches.length === 0 && !running && (
+            <div className="text-center py-12">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                <Search className="w-6 h-6 text-gray-400" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">Sin búsqueda aún</h3>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+                Click "Buscar matches" → el AI cruzará el banco de candidatos rechazados/contratados de otras vacantes con los requisitos de <strong>{vacancyTitle}</strong> y devolverá los mejores fits.
+              </p>
+              <button
+                onClick={runRediscover}
+                disabled={running}
+                className="bg-black hover:bg-gray-800 text-white font-semibold px-5 py-2.5 rounded-full text-sm inline-flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                Buscar matches en CV Bank
+              </button>
+            </div>
+          )}
+
+          {running && matches.length === 0 && (
+            <div className="text-center py-12">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
+                <Brain className="w-7 h-7 text-purple-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Claude está cruzando el banco…</h3>
+              <p className="text-xs text-gray-500 mt-1">~30-60s · evaluando candidatos del pool vs requisitos del rol</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800 mb-3">{error}</div>
+          )}
+
+          {!loading && matches.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}
+                >
+                  Todos ({matches.length})
+                </button>
+                <button
+                  onClick={() => setFilter('strong')}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'strong' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700'}`}
+                >
+                  Strong ({counts.strong})
+                </button>
+                <button
+                  onClick={() => setFilter('possible')}
+                  className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'possible' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700'}`}
+                >
+                  Possible ({counts.possible})
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                {visible.map(m => (
+                  <RediscoveryMatchRow key={m.id} match={m} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RediscoveryMatchRow({ match }: { match: CVBankMatch }) {
+  const [expanded, setExpanded] = useState(false);
+  const c = match.candidate;
+  if (!c) return null;
+
+  const recoColor =
+    match.recommendation === 'strong' ? { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'STRONG' }
+    : match.recommendation === 'possible' ? { bg: 'bg-amber-100', text: 'text-amber-800', label: 'POSSIBLE' }
+    : match.recommendation === 'weak' ? { bg: 'bg-gray-100', text: 'text-gray-700', label: 'WEAK' }
+    : { bg: 'bg-red-100', text: 'text-red-700', label: 'NO' };
+
+  const scoreColor =
+    (match.match_score || 0) >= 80 ? 'text-emerald-700'
+    : (match.match_score || 0) >= 60 ? 'text-amber-700'
+    : 'text-gray-500';
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-3 flex items-center justify-between gap-3 text-left"
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Avatar name={c.name} size={32} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-gray-900 truncate">{c.name}</span>
+              <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${recoColor.bg} ${recoColor.text}`}>
+                {recoColor.label}
+              </span>
+            </div>
+            <div className="text-[11px] text-gray-500 truncate">
+              {c.current_job_role || '—'}{c.current_company ? ` · ${c.current_company}` : ''}
+              {c.location && ` · ${c.location}`}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-right">
+            <div className={`text-2xl font-extrabold tabular-nums ${scoreColor}`}>{match.match_score}</div>
+            <div className="text-[9px] uppercase tracking-wider font-bold text-gray-400">match</div>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 pt-0 border-t border-gray-100 mt-1">
+          {match.match_reasoning && (
+            <p className="text-xs text-gray-700 italic bg-gray-50 rounded p-2 mt-2">"{match.match_reasoning}"</p>
+          )}
+          <div className="grid grid-cols-2 gap-3 mt-3 text-[11px]">
+            {match.match_strengths && match.match_strengths.length > 0 && (
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-emerald-700 mb-1">Fortalezas</div>
+                <ul className="space-y-0.5 list-disc list-inside text-gray-700">
+                  {match.match_strengths.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+            )}
+            {match.match_concerns && match.match_concerns.length > 0 && (
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-red-700 mb-1">Concerns</div>
+                <ul className="space-y-0.5 list-disc list-inside text-gray-700">
+                  {match.match_concerns.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100 text-[10px] text-gray-500 flex-wrap">
+            <a href={`mailto:${c.email}`} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+              <Mail className="w-3 h-3" /> {c.email}
+            </a>
+            {c.salary_aspiration_cop && (
+              <span>· salario aspirado: <strong>COP {c.salary_aspiration_cop.toLocaleString('es-CO')}</strong></span>
+            )}
+            {c.english_level && <span>· inglés: <strong>{c.english_level}</strong></span>}
+            <span>· anteriormente en stage: <strong>{c.stage}</strong></span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5966,6 +6325,282 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
 }
 
 /* ======================================================== */
+/* Referrals Modal — hojas de vida recomendadas pendientes  */
+/* ======================================================== */
+type Referral = {
+  id: string;
+  candidate_name: string;
+  candidate_email: string | null;
+  candidate_phone: string | null;
+  candidate_role: string | null;
+  candidate_location: string | null;
+  cv_url: string | null;
+  cv_filename: string | null;
+  linkedin_url: string | null;
+  referrer_name: string;
+  referrer_email: string | null;
+  referrer_relationship: string | null;
+  notes: string | null;
+  recommended_for_role: string | null;
+  status: string;
+  created_at: string;
+};
+
+function ReferralsModal({ onClose, onChange }: { onClose: () => void; onChange: () => void }) {
+  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'received' | 'reviewed' | 'all'>('received');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const url = filter === 'all' ? '/api/referrals' : `/api/referrals?status=${filter}`;
+    fetch(url, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setReferrals(j.referrals || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateStatus = async (id: string, status: string) => {
+    await fetch(`/api/referrals/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, reviewed_by: 'Kelly Castañeda' }),
+    });
+    load();
+    onChange();
+  };
+
+  const active = referrals.find(r => r.id === activeId);
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[6vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="bg-black text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4" />
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] font-semibold opacity-70">Hojas de vida recomendadas</div>
+              <div className="text-base font-bold leading-tight">Inbox de referrals</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-2xl leading-none px-2">×</button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-gray-200 flex items-center gap-2">
+          <button
+            onClick={() => setFilter('received')}
+            className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'received' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}
+          >
+            Pendientes
+          </button>
+          <button
+            onClick={() => setFilter('reviewed')}
+            className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'reviewed' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}
+          >
+            Revisadas
+          </button>
+          <button
+            onClick={() => setFilter('all')}
+            className={`text-[11px] font-semibold px-3 py-1 rounded-full ${filter === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'}`}
+          >
+            Todas
+          </button>
+          <a
+            href="/recomendar-hoja-de-vida"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto text-[11px] text-gray-500 hover:text-black inline-flex items-center gap-1"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Ver link público
+          </a>
+        </div>
+
+        <div className="p-5 max-h-[65vh] overflow-y-auto">
+          {loading && <div className="text-center text-gray-400 text-sm py-12">Cargando…</div>}
+
+          {!loading && referrals.length === 0 && (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                <Bell className="w-6 h-6 text-gray-400" />
+              </div>
+              <div className="text-sm font-bold text-gray-900">Sin {filter === 'received' ? 'pendientes' : filter === 'reviewed' ? 'revisadas' : 'recomendaciones'}</div>
+              <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                Comparte el link público <code className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">/recomendar-hoja-de-vida</code> para que la gente recomiende talento sin saturarte de WhatsApp.
+              </p>
+            </div>
+          )}
+
+          {!loading && referrals.length > 0 && !active && (
+            <div className="space-y-2">
+              {referrals.map(r => (
+                <div
+                  key={r.id}
+                  className="bg-white border border-gray-200 hover:border-black rounded-lg transition-colors"
+                >
+                  <button
+                    onClick={() => setActiveId(r.id)}
+                    className="w-full p-3 flex items-center gap-3 text-left"
+                  >
+                    <Avatar name={r.candidate_name} size={36} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-gray-900 truncate">{r.candidate_name}</span>
+                        <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
+                          r.status === 'received' ? 'bg-amber-100 text-amber-800' :
+                          r.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                          r.status === 'imported_to_cvbank' ? 'bg-emerald-100 text-emerald-800' :
+                          r.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-500 truncate mt-0.5">
+                        {r.candidate_role || '—'}
+                        {r.candidate_location && ` · ${r.candidate_location}`}
+                      </div>
+                      <div className="text-[10px] text-gray-400 truncate mt-0.5">
+                        Recomendado por <strong className="text-gray-600">{r.referrer_name}</strong>
+                        {r.referrer_relationship && ` · ${r.referrer_relationship.replace('-', ' ')}`}
+                        {' · '}{new Date(r.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loading && active && (
+            <ReferralDetail
+              referral={active}
+              onBack={() => setActiveId(null)}
+              onAction={(status) => { updateStatus(active.id, status); setActiveId(null); }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReferralDetail({ referral, onBack, onAction }: { referral: Referral; onBack: () => void; onAction: (s: string) => void }) {
+  return (
+    <div>
+      <button onClick={onBack} className="text-xs font-semibold text-gray-500 hover:text-black mb-3 inline-flex items-center gap-1">
+        ← Volver al listado
+      </button>
+
+      <div className="flex items-start gap-3 mb-4">
+        <Avatar name={referral.candidate_name} size={48} />
+        <div className="flex-1">
+          <h3 className="text-lg font-bold tracking-tight">{referral.candidate_name}</h3>
+          <p className="text-xs text-gray-500">
+            {referral.candidate_role || 'Sin cargo especificado'}
+            {referral.candidate_location && ` · ${referral.candidate_location}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <ReferralSection label="CONTACTO">
+          {referral.candidate_email && <ReferralKV k="Email" v={<a href={`mailto:${referral.candidate_email}`} className="text-blue-600 hover:underline">{referral.candidate_email}</a>} />}
+          {referral.candidate_phone && <ReferralKV k="Teléfono" v={<a href={`tel:${referral.candidate_phone}`} className="text-blue-600 hover:underline">{referral.candidate_phone}</a>} />}
+          {referral.linkedin_url && <ReferralKV k="LinkedIn" v={<a href={referral.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">Ver perfil</a>} />}
+          {referral.cv_url && (
+            <ReferralKV k="CV" v={
+              <a href={referral.cv_url} download={referral.cv_filename || 'cv.pdf'} className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                {referral.cv_filename || 'Descargar'}
+              </a>
+            } />
+          )}
+        </ReferralSection>
+        <ReferralSection label="QUIÉN LO RECOMIENDA">
+          <ReferralKV k="Nombre" v={referral.referrer_name} />
+          {referral.referrer_email && <ReferralKV k="Email" v={<a href={`mailto:${referral.referrer_email}`} className="text-blue-600 hover:underline">{referral.referrer_email}</a>} />}
+          {referral.referrer_relationship && <ReferralKV k="Relación" v={referral.referrer_relationship.replace('-', ' ')} />}
+          {referral.recommended_for_role && <ReferralKV k="Sugerido para" v={referral.recommended_for_role} />}
+        </ReferralSection>
+      </div>
+
+      {referral.notes && (
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">¿Por qué la recomienda?</div>
+          <p className="text-sm text-gray-800 italic leading-relaxed">"{referral.notes}"</p>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-gray-100">
+        {referral.status === 'received' && (
+          <>
+            <button
+              onClick={() => onAction('reviewed')}
+              className="text-xs font-semibold px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Marcar revisado
+            </button>
+            <button
+              onClick={() => onAction('imported_to_cvbank')}
+              className="text-xs font-semibold px-4 py-2 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center gap-1.5"
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Importar al CV Bank
+            </button>
+          </>
+        )}
+        {(referral.status === 'received' || referral.status === 'reviewed') && (
+          <button
+            onClick={() => onAction('contacted')}
+            className="text-xs font-semibold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 inline-flex items-center gap-1.5"
+          >
+            <Send className="w-3.5 h-3.5" /> Marcar contactado
+          </button>
+        )}
+        <button
+          onClick={() => onAction('rejected')}
+          className="text-xs font-semibold px-4 py-2 rounded-full border border-red-300 text-red-700 hover:bg-red-50 inline-flex items-center gap-1.5 ml-auto"
+        >
+          <XCircle className="w-3.5 h-3.5" /> Rechazar
+        </button>
+        <button
+          onClick={() => onAction('archived')}
+          className="text-xs font-semibold px-4 py-2 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50"
+        >
+          Archivar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReferralSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-500 mb-2 pb-1.5 border-b border-gray-100">{label}</div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function ReferralKV({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[80px_1fr] gap-2 text-xs items-baseline">
+      <span className="text-gray-500">{k}</span>
+      <span className="text-gray-900 truncate">{v}</span>
+    </div>
+  );
+}
+
+/* ======================================================== */
 /* Schedule Interview Modal — Google Calendar integration    */
 /* ======================================================== */
 function ScheduleInterviewModal({ onClose }: { onClose: () => void }) {
@@ -6251,7 +6886,7 @@ type FunnelByVacancyData = {
   }[];
 };
 
-function FunnelByVacancy() {
+function FunnelByVacancy({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<FunnelByVacancyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -6261,14 +6896,23 @@ function FunnelByVacancy() {
     let alive = true;
     const fetchData = () => fetch('/api/dashboard/funnel-by-vacancy', { cache: 'no-store' })
       .then(r => r.json())
-      .then(j => { if (alive) { setData(j); setLoading(false); } })
+      .then(j => {
+        if (!alive) return;
+        // Filtrar client-side por vacancyFilter (solo retornar la vacante seleccionada)
+        if (vacancyFilter && vacancyFilter !== 'all') {
+          j.vacancies = (j.vacancies || []).filter((v: any) => v.vacancy_id === vacancyFilter);
+        }
+        setData(j);
+        setLoading(false);
+      })
       .catch(() => { if (alive) setLoading(false); });
+    setLoading(true);
     fetchData();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, []);
+  }, [vacancyFilter]);
 
   if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando funnel por vacante…</div>;
   if (!data || !data.vacancies.length) return null;
@@ -6462,17 +7106,21 @@ type AnalyticsData = {
   avg_elevare_score: number | null;
 };
 
-function AnalyticsDeep() {
+function AnalyticsDeep({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    fetch('/api/dashboard/analytics', { cache: 'no-store' })
+    const url = vacancyFilter && vacancyFilter !== 'all'
+      ? `/api/dashboard/analytics?vacancy_id=${vacancyFilter}`
+      : '/api/dashboard/analytics';
+    setLoading(true);
+    fetch(url, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => { setData(j); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [vacancyFilter]);
 
   if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando analytics…</div>;
   if (!data) return null;
