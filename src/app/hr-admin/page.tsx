@@ -1525,12 +1525,20 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
 
+  const fetchUrl = vacancyFilter && vacancyFilter !== 'all'
+    ? `/api/dashboard/today?vacancy_id=${vacancyFilter}`
+    : '/api/dashboard/today';
+
+  const refresh = useCallback(() => {
+    fetch(fetchUrl, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { setData(j); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [fetchUrl]);
+
   useEffect(() => {
     let alive = true;
-    const url = vacancyFilter && vacancyFilter !== 'all'
-      ? `/api/dashboard/today?vacancy_id=${vacancyFilter}`
-      : '/api/dashboard/today';
-    const fetchData = () => fetch(url, { cache: 'no-store' })
+    const fetchData = () => fetch(fetchUrl, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => { if (alive) { setData(j); setLoading(false); } })
       .catch(() => { if (alive) setLoading(false); });
@@ -1540,7 +1548,47 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
       if (document.visibilityState === 'visible') fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, [vacancyFilter]);
+  }, [vacancyFilter, fetchUrl]);
+
+  // Quick action handlers
+  const NEXT_STAGE_BY_CURRENT: Record<string, string> = {
+    aplico: 'prefiltro_enviado',
+    prefiltro_pasado: 'assessment_invitado',
+    prefiltro_revision: 'assessment_invitado',
+    assessment_completado: 'recruiter_interview',
+    entrevista_ia: 'recruiter_interview',
+    bateria_psicometrica: 'recruiter_interview',
+    recruiter_interview: 'cwo_interview',
+    cwo_interview: 'touring',
+    touring: 'terna',
+    terna: 'oferta',
+    oferta: 'contratado',
+  };
+
+  const rejectCandidate = async (id: string) => {
+    await fetch(`/api/headhunting/candidates/${id}/stage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: 'rechazado', create_rejection_draft: false }),
+    });
+  };
+
+  const advanceCandidate = async (id: string) => {
+    // Find current stage from data
+    const candidate = [
+      ...(data?.aging || []),
+      ...(data?.pending_decisions || []),
+      ...(data?.quick_wins || []),
+    ].find((c: any) => c.candidate_id === id);
+    const currentStage = (candidate as any)?.stage || 'aplico';
+    const nextStage = NEXT_STAGE_BY_CURRENT[currentStage];
+    if (!nextStage) return;
+    await fetch(`/api/headhunting/candidates/${id}/stage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: nextStage }),
+    });
+  };
 
   if (loading) {
     return (
@@ -1656,7 +1704,11 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                 title="Quick wins · cierres inminentes"
                 Icon={Trophy}
                 tone="emerald"
+                onReject={rejectCandidate}
+                onAdvance={advanceCandidate}
+                onRefresh={refresh}
                 items={data.quick_wins.slice(0, 5).map(c => ({
+                  candidate_id: c.candidate_id,
                   primary: c.name,
                   secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
                   meta: `${c.days_in_stage}d en stage`,
@@ -1671,7 +1723,11 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                 title="Decisiones pendientes"
                 Icon={Hand}
                 tone="blue"
+                onReject={rejectCandidate}
+                onAdvance={advanceCandidate}
+                onRefresh={refresh}
                 items={data.pending_decisions.slice(0, 5).map(c => ({
+                  candidate_id: c.candidate_id,
                   primary: c.name,
                   secondary: c.action,
                   meta: `${stageLabelShort(c.stage)} · ${c.days_in_stage}d`,
@@ -1686,7 +1742,11 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                 title="Candidatos aging (>5d sin avance)"
                 Icon={Clock}
                 tone="amber"
+                onReject={rejectCandidate}
+                onAdvance={advanceCandidate}
+                onRefresh={refresh}
                 items={data.aging.slice(0, 5).map(c => ({
+                  candidate_id: c.candidate_id,
                   primary: c.name,
                   secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
                   meta: `${c.days_since_update}d sin moverse`,
@@ -1732,6 +1792,108 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
   );
 }
 
+function FocusRow({
+  item,
+  onReject,
+  onAdvance,
+  onRefresh,
+}: {
+  item: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; onClick?: () => void };
+  onReject?: (id: string) => Promise<void>;
+  onAdvance?: (id: string) => Promise<void>;
+  onRefresh?: () => void;
+}) {
+  const [busy, setBusy] = useState<'reject' | 'advance' | null>(null);
+  const [done, setDone] = useState<'rejected' | 'advanced' | null>(null);
+
+  const doReject = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!item.candidate_id || !onReject || busy) return;
+    setBusy('reject');
+    try {
+      await onReject(item.candidate_id);
+      setDone('rejected');
+      setTimeout(() => onRefresh?.(), 600);
+    } catch {
+      setBusy(null);
+    }
+  };
+
+  const doAdvance = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!item.candidate_id || !onAdvance || busy) return;
+    setBusy('advance');
+    try {
+      await onAdvance(item.candidate_id);
+      setDone('advanced');
+      setTimeout(() => onRefresh?.(), 600);
+    } catch {
+      setBusy(null);
+    }
+  };
+
+  if (done === 'rejected') {
+    return (
+      <div className="bg-red-500/15 ring-1 ring-red-400/30 rounded px-2.5 py-1.5 text-xs text-red-200">
+        ✗ <strong>{item.primary}</strong> · rechazado
+      </div>
+    );
+  }
+  if (done === 'advanced') {
+    return (
+      <div className="bg-emerald-500/15 ring-1 ring-emerald-400/30 rounded px-2.5 py-1.5 text-xs text-emerald-200">
+        ✓ <strong>{item.primary}</strong> · avanzado
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors group">
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={item.onClick} className="flex-1 min-w-0 text-left">
+          <div className="font-semibold text-white truncate flex items-center gap-1.5">
+            {item.severity === 'high' && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" title="Alta severidad" />
+            )}
+            {item.primary}
+          </div>
+          <div className="text-[10px] text-white/55 truncate">{item.secondary}</div>
+        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {item.candidate_id && onAdvance && (
+            <button
+              onClick={doAdvance}
+              disabled={!!busy}
+              title="Avanzar al siguiente stage"
+              className="w-6 h-6 rounded-full bg-emerald-500/15 hover:bg-emerald-500/30 ring-1 ring-emerald-400/30 text-emerald-300 hover:text-emerald-200 inline-flex items-center justify-center disabled:opacity-30"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+            </button>
+          )}
+          {item.candidate_id && onReject && (
+            <button
+              onClick={doReject}
+              disabled={!!busy}
+              title="Rechazar"
+              className="w-6 h-6 rounded-full bg-red-500/15 hover:bg-red-500/30 ring-1 ring-red-400/30 text-red-300 hover:text-red-200 inline-flex items-center justify-center disabled:opacity-30"
+            >
+              <XCircle className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            onClick={item.onClick}
+            className="text-[10px] text-white/45 group-hover:text-white/80 inline-flex items-center gap-1 ml-1"
+            title="Ver en Funnel"
+          >
+            <span className="hidden md:inline">{item.meta}</span>
+            <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CountPill({ Icon, label, count, color, active }: { Icon: React.ComponentType<{ className?: string }>; label: string; count: number; color: string; active: boolean }) {
   const colorMap: Record<string, { bg: string; text: string; ring: string; dot: string }> = {
     amber:   { bg: 'bg-amber-500/15',   text: 'text-amber-200',   ring: 'ring-amber-400/30',   dot: 'bg-amber-400' },
@@ -1758,11 +1920,17 @@ function FocusList({
   Icon,
   tone,
   items,
+  onReject,
+  onAdvance,
+  onRefresh,
 }: {
   title: string;
   Icon: React.ComponentType<{ className?: string }>;
   tone: 'amber' | 'blue' | 'red' | 'gray' | 'emerald';
-  items: { primary: string; secondary: string; meta: string; severity?: 'high'; onClick?: () => void }[];
+  items: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; onClick?: () => void }[];
+  onReject?: (id: string) => Promise<void>;
+  onAdvance?: (id: string) => Promise<void>;
+  onRefresh?: () => void;
 }) {
   const toneMap: Record<string, { border: string; iconColor: string }> = {
     amber:   { border: 'border-amber-400/25 bg-amber-500/[0.04]',   iconColor: 'text-amber-300' },
@@ -1781,27 +1949,13 @@ function FocusList({
       </div>
       <div className="space-y-1.5">
         {items.map((it, i) => (
-          <button
+          <FocusRow
             key={i}
-            onClick={it.onClick}
-            className="w-full text-left bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors group"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-white truncate flex items-center gap-1.5">
-                  {it.severity === 'high' && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" title="Alta severidad" />
-                  )}
-                  {it.primary}
-                </div>
-                <div className="text-[10px] text-white/55 truncate">{it.secondary}</div>
-              </div>
-              <div className="text-[10px] text-white/45 flex-shrink-0 group-hover:text-white/80 inline-flex items-center gap-1">
-                {it.meta}
-                <ChevronRight className="w-3 h-3" />
-              </div>
-            </div>
-          </button>
+            item={it}
+            onReject={onReject}
+            onAdvance={onAdvance}
+            onRefresh={onRefresh}
+          />
         ))}
       </div>
     </div>
