@@ -184,6 +184,98 @@ export default function HRAdminPage() {
 }
 
 /* ======================================================== */
+/* TS Brand Photography · imágenes oficiales del sitio       */
+/* ======================================================== */
+const TS_CDN = "https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f";
+const TS_IMG = {
+  hero:     `${TS_CDN}/691645b652c1e9091b25f59c_FotosWeb_TradingSolutions-14_4_11zon.webp`,
+  maritime: `${TS_CDN}/691645abb6a2f3012e0b0519_FotosWeb_TradingSolutions-03_3_11zon.webp`,
+  ground:   `${TS_CDN}/691645c4a1db281b44d16870_FotosWeb_TradingSolutions-21_1_11zon.webp`,
+  air:      `${TS_CDN}/691645c3a704c8e66d7ea58d_FotosWeb_TradingSolutions-22_2_11zon.webp`,
+  customs:  `${TS_CDN}/69320da1e28142ec4e691a93_fotos%20web-02_2_11zon.jpg`,
+  contact:  `${TS_CDN}/691645c4966a94469071afe6_FotosWeb_TradingSolutions-26_6_11zon.webp`,
+  logistics:`${TS_CDN}/69320dac9e1712e14ed79713_fotos%20web-03_1_11zon.jpg`,
+};
+
+// Mapeo área → imagen TS
+function tsImageForArea(area?: string | null): string {
+  const a = (area || '').toLowerCase();
+  if (a.includes('maritim') || a.includes('mar')) return TS_IMG.maritime;
+  if (a.includes('air') || a.includes('aereo') || a.includes('aéreo')) return TS_IMG.air;
+  if (a.includes('ground') || a.includes('terrestre')) return TS_IMG.ground;
+  if (a.includes('customs') || a.includes('aduana')) return TS_IMG.customs;
+  if (a.includes('pricing') || a.includes('finance') || a.includes('account')) return TS_IMG.logistics;
+  if (a.includes('sales') || a.includes('comercial')) return TS_IMG.contact;
+  return TS_IMG.hero;
+}
+
+/**
+ * Hero banner estilo página oficial TS.
+ * Imagen full-width con overlay negro y typography display estilo "Boutique freight forwarder."
+ */
+function TSHeroBanner({ image = TS_IMG.hero, title = "Talent that moves the world", subtitle = "Where vision meets execution." }: { image?: string; title?: string; subtitle?: string }) {
+  return (
+    <div className="relative -mx-6 -mt-5 mb-5 overflow-hidden" style={{ height: 200 }}>
+      {/* Imagen de fondo */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage: `url(${image})`,
+          transform: 'scale(1.05)',
+        }}
+      />
+      {/* Overlay degradado negro */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(135deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.45) 50%, rgba(0,0,0,0.65) 100%)',
+        }}
+      />
+      {/* Línea horizontal estilo TS site */}
+      <div className="absolute inset-0 flex items-center px-8">
+        <div className="max-w-[1440px] w-full mx-auto">
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-white font-display font-bold text-4xl md:text-5xl tracking-[-0.03em] leading-[0.95]">
+              {title}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3 mt-2">
+            <div className="h-[1px] w-10 bg-white/40" />
+            <p className="text-white/80 text-sm font-medium tracking-tight">{subtitle}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Section banner compacto — imagen TS de 100px con título superpuesto, para encabezar tabs/secciones.
+ */
+function TSSectionBanner({ image, title, subtitle, icon }: { image: string; title: string; subtitle?: string; icon?: string }) {
+  return (
+    <div className="relative -mx-6 mb-4 overflow-hidden" style={{ height: 120 }}>
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${image})` }}
+      />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 100%)' }} />
+      <div className="absolute inset-0 flex items-center px-8">
+        <div className="max-w-[1440px] w-full mx-auto">
+          <div className="flex items-center gap-3">
+            {icon && <span className="text-3xl">{icon}</span>}
+            <div>
+              <h2 className="text-white font-display font-bold text-2xl tracking-[-0.02em] leading-tight">{title}</h2>
+              {subtitle && <p className="text-white/70 text-xs font-medium mt-0.5">{subtitle}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================== */
 /* Avatar · iniciales con paleta TS-aligned                 */
 /* ======================================================== */
 const AVATAR_PALETTE: Array<[string, string]> = [
@@ -932,6 +1024,9 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
 
   return (
     <>
+      {/* TS Hero Banner — fotografía corporativa estilo página oficial */}
+      <TSHeroBanner />
+
       <PageHead
         title="Dashboard · Talent Acquisition"
         desc={
@@ -1797,24 +1892,40 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
   const totalActivos = v.metrics.activos || 1;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow relative overflow-hidden">
-      {/* Top accent bar - color del health */}
-      <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ background: healthColor }} />
+    <div className="bg-white border border-gray-200 rounded-xl hover:shadow-lg transition-shadow relative overflow-hidden">
+      {/* Photo strip TS · 50px de altura, área-themed */}
+      <div className="relative h-[60px] overflow-hidden">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${tsImageForArea(v.area)})`, transform: 'scale(1.05)' }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.55) 100%)` }}
+        />
+        {/* Top accent bar - color del health */}
+        <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ background: healthColor }} />
+        {/* Area name superpuesta */}
+        <div className="absolute bottom-1.5 left-3 right-3 flex items-end justify-between text-white">
+          <span className="text-[10px] uppercase tracking-[1.5px] font-bold opacity-80">{v.area || '—'}</span>
+          <span className="text-base flex-shrink-0" title={v.health.reason}>{healthEmoji}</span>
+        </div>
+      </div>
+
+      <div className="p-4 pt-3">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-gray-900 leading-tight truncate">{v.title}</div>
+          <div className="text-sm font-bold text-gray-900 leading-tight truncate tracking-tight">{v.title}</div>
           <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 flex-wrap">
-            <span>{v.area}</span>
-            <span className="text-gray-300">·</span>
             <span className="uppercase font-semibold">{v.role_level === 'c_suite' ? 'C-Suite' : v.role_level}</span>
             <span className="text-gray-300">·</span>
             <span
               className={`uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${
                 v.vacancy_type === 'reemplazo'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'bg-blue-100 text-blue-700'
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-100 text-gray-800'
               }`}
               title="RYS Corporate Standard"
             >
@@ -1822,7 +1933,6 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
             </span>
           </div>
         </div>
-        <span className="text-base flex-shrink-0" title={v.health.reason}>{healthEmoji}</span>
       </div>
 
       {/* Days vs target progress */}
@@ -1917,15 +2027,16 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
         <span className="text-red-600">Rechazados: <strong>{v.metrics.rechazados}</strong></span>
       </div>
 
-      {/* Market Research CTA */}
+      {/* Market Research CTA — estilo TS minimal black */}
       <button
         onClick={onResearch}
-        className="mt-2 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-[11px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+        className="mt-2 w-full bg-black hover:bg-gray-800 text-white text-[11px] font-semibold py-2 rounded-full flex items-center justify-center gap-1.5 transition-colors"
         title="Generar/ver estudio de mercado por IA"
       >
         <Sparkles className="w-3.5 h-3.5" />
         Estudio de mercado IA
       </button>
+      </div>
     </div>
   );
 }
@@ -6557,11 +6668,14 @@ function OnboardingTab() {
 
   return (
     <div>
-      <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight">Onboarding</h1>
-          <p className="text-xs text-gray-500">Plan 30/60/90 para nuevos hires · integrado con People file</p>
-        </div>
+      <TSSectionBanner
+        image={TS_IMG.contact}
+        title="Onboarding"
+        subtitle="Plan 30/60/90 para nuevos hires · integrado con People file"
+        icon="🎉"
+      />
+
+      <div className="mb-4 flex items-end justify-end gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           {peopleStats && (
             <div className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-[11px]">
@@ -6609,10 +6723,18 @@ function OnboardingTab() {
       {loading && <div className="text-sm text-gray-400">Cargando…</div>}
 
       {!loading && items.length === 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
-          <div className="text-4xl mb-3">🎉</div>
-          <div className="text-base font-bold text-gray-900">Sin onboardings activos</div>
-          <p className="text-xs text-gray-500 mt-1">Cuando un candidato pase a "contratado" en el funnel, aparecerá aquí automáticamente con su plan 30/60/90.</p>
+        <div className="relative bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-15 bg-cover bg-center"
+            style={{ backgroundImage: `url(${TS_IMG.contact})` }}
+          />
+          <div className="relative p-12 text-center">
+            <div className="text-4xl mb-3">🎉</div>
+            <div className="text-lg font-bold tracking-tight text-gray-900">Sin onboardings activos</div>
+            <p className="text-sm text-gray-600 mt-2 max-w-md mx-auto">
+              Cuando un candidato pase a "contratado" en el funnel, aparecerá aquí automáticamente con su plan 30/60/90.
+            </p>
+          </div>
         </div>
       )}
 
