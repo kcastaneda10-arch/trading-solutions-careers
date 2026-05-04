@@ -952,16 +952,7 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
           )}
         </>
       ) : interview && interview.status === "completed" && interview.conversation_id && interview.ai_score == null ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-xs text-amber-900">
-          ✓ Entrevista completada · scoring AI pendiente.
-          {interview.audio_url && (
-            <div className="mt-2">
-              <p className="text-[10px] uppercase font-bold text-amber-700 mb-1">🎧 Audio disponible</p>
-              <audio src={interview.audio_url} controls className="w-full" preload="none" />
-            </div>
-          )}
-          <p className="mt-2 text-[11px] text-amber-700">Para correr el scoring AI: <code className="bg-amber-100 px-1 rounded">fetch('/api/admin/rescore-ai-interviews', {`{method:'POST'}`}).then(r=&gt;r.json()).then(console.log)</code></p>
-        </div>
+        <PendingScoringPanel interview={interview} onScored={() => load()} />
       ) : interview && interview.status === "in_progress" ? (
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 text-xs text-blue-900">
           ⏳ Candidato en entrevista — esperando que termine. Iniciada: {new Date(interview.started_at).toLocaleString("es-CO")}
@@ -1000,6 +991,67 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
       </div>
       {feedback && (<div className="mt-2 text-xs text-gray-600 italic">{feedback}</div>)}
     </Section>
+  );
+}
+
+// ─── Botón inline para correr scoring AI de UNA entrevista pendiente ─
+function PendingScoringPanel({ interview, onScored }: { interview: any; onScored: () => void }) {
+  const [running, setRunning] = React.useState(false);
+  const [result, setResult] = React.useState<{ ok: boolean; message: string; score?: number } | null>(null);
+
+  const runScoring = async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const r = await fetch('/api/admin/rescore-ai-interviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_ids: [interview.id] }),
+      });
+      const j = await r.json();
+      const myResult = j.results?.find((x: any) => x.interview_id === interview.id);
+      if (myResult?.success) {
+        setResult({ ok: true, message: `Score: ${myResult.score}/100`, score: myResult.score });
+        // Refrescar la data del panel
+        setTimeout(() => onScored(), 800);
+      } else {
+        setResult({ ok: false, message: myResult?.error || j.error || 'Error desconocido' });
+      }
+    } catch (e: any) {
+      setResult({ ok: false, message: e?.message || 'Error de red' });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-xs text-amber-900">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="font-bold">✓ Entrevista completada</div>
+          <div className="text-[11px] text-amber-700 mt-0.5">conversation_id ya capturado · falta correr scoring AI (~1 min)</div>
+        </div>
+      </div>
+      {interview.audio_url && (
+        <div className="mb-3">
+          <p className="text-[10px] uppercase font-bold text-amber-700 mb-1">🎧 Audio disponible</p>
+          <audio src={interview.audio_url} controls className="w-full" preload="none" />
+        </div>
+      )}
+      {result ? (
+        <div className={`mt-2 p-2 rounded text-[11px] font-semibold ${result.ok ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
+          {result.ok ? `✅ Scoring completado · ${result.message} · refrescando…` : `❌ ${result.message}`}
+        </div>
+      ) : (
+        <button
+          onClick={runScoring}
+          disabled={running}
+          className="w-full bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full flex items-center justify-center gap-1.5"
+        >
+          {running ? '⏳ Corriendo 3 agentes Claude (~1 min)…' : '🤖 Correr scoring AI ahora'}
+        </button>
+      )}
+    </div>
   );
 }
 
