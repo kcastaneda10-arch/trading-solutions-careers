@@ -29,6 +29,9 @@ const MODEL = "claude-sonnet-4-20250514";
 
 const MARKET_RESEARCH_PROMPT = `Eres un consultor experto en mercado laboral de logística internacional / freight forwarding en Colombia y LATAM. Conoces a fondo: compensación, tiempos de reclutamiento, talent pool, sourcing, beneficios típicos.
 
+⚠️ INSTRUCCIÓN CRÍTICA SOBRE COMPENSACIÓN:
+NO seas conservador. Reporta lo que el mercado REALMENTE pide HOY (2026), no lo que la empresa quisiera pagar. Si el mercado pide más, dilo. La data de aspiraciones reales (cuando esté disponible) es ground truth — úsala como ancla, no la ignores. El base_monthly_max debe reflejar lo que están pidiendo los TOP 25% de candidatos serios para esta posición, NO el promedio.
+
 VACANTE:
 - Título: {vacancy_title}
 - Área: {vacancy_area}
@@ -39,6 +42,8 @@ VACANTE:
 TARGETS DE LA EMPRESA:
 - Time-to-fill target: {target_days} días
 - Top performers internos perfil promedio: alto IQ (117), alta Conscientiousness (78), bajo Neuroticism (30), inglés B2+
+
+{real_data_block}
 
 Genera un estudio de mercado COMPLETO. Devuelve SOLO un JSON estricto sin texto extra:
 
@@ -125,13 +130,17 @@ Genera un estudio de mercado COMPLETO. Devuelve SOLO un JSON estricto sin texto 
 
 REGLAS:
 - Sé ESPECÍFICO con números (rango salarial real Colombia 2026, no genérico)
-- Para Pricing Junior entry: rango típico Barranquilla 2.5-4.5M COP base
-- Para Pricing Senior / Lead: 5-9M COP
-- Para C-Suite / Director: 12-25M+ COP
-- Inglés B2+ premium 15-25% sobre base
-- Industria logística freight forwarding tiene oferta limitada vs demanda → favorable al candidato
+- Bandas SALARIALES Colombia 2026 actualizadas con data real de aspiraciones LinkedIn (úsalas como mínimo, ajusta hacia arriba si la data inyectada lo justifica):
+  · Entry Operativo (Pricing Junior, Customer Doc): 2.5-4.5M COP base
+  · Lead técnico (Pricing Sr, Sales Lead): 5-12M COP base (NO uses 5-9M, está obsoleto)
+  · Lead People/HR (Talent Acq Lead, HR Lead): 6-15M COP base (perfiles MBA piden 14-18M)
+  · Director / Manager: 10-22M COP base
+  · C-Suite (CFO, COO, CWO): 18-40M+ COP base, frecuentemente con equity
+- Inglés B2+ premium 15-25% sobre base · Inglés C1/Nativo premium 25-40%
+- Industria logística freight forwarding tiene oferta limitada vs demanda → mercado favorable al candidato → presionando salarios al alza
 - Universidades clave Barranquilla: Universidad del Norte, Universidad del Atlántico, Universidad Tecnológica de Bolívar (Cartagena)
 - LinkedIn search strings deben ser usables literalmente en LinkedIn Recruiter
+- Si tenés data inyectada de aspiraciones reales → tu base_monthly_max DEBE estar entre el P75 y MAX (excluyendo outliers obvios). Tu base_monthly_median DEBE estar cerca de la mediana real.
 - NO inventes data falsa: si no estás seguro, dilo en notes
 - Output: SOLO el JSON, sin texto adicional ni markdown`;
 
@@ -187,12 +196,59 @@ export async function POST(
       : (vacancy.vacancy_type === 'reemplazo' ? 35 : 50);
     const targetDays = targetRow?.target_days_to_fill || fallback;
 
+    // ── Pull real applicant data para esta vacante (ground truth para la IA) ──
+    const { data: candsForVac } = await supabaseAdmin
+      .from("ht_candidates")
+      .select("name, notes")
+      .eq("vacancy_id", vacancyId)
+      .not("email", "ilike", "%@tradingsolutions.com");
+
+    const salaries: number[] = [];
+    (candsForVac || []).forEach((c: any) => {
+      const m = String(c.notes || '').match(/Aspiración salarial:\s*COP\s+([\d.]+)/);
+      if (m) {
+        const n = Number(m[1].replace(/\./g, ''));
+        // Filtrar outliers obvios (typos): <500K o >100M
+        if (n >= 500_000 && n <= 100_000_000) salaries.push(n);
+      }
+    });
+
+    let realDataBlock = "";
+    if (salaries.length >= 5) {
+      salaries.sort((a, b) => a - b);
+      const min = salaries[0];
+      const max = salaries[salaries.length - 1];
+      const p25 = salaries[Math.floor(salaries.length * 0.25)];
+      const p50 = salaries[Math.floor(salaries.length * 0.5)];
+      const p75 = salaries[Math.floor(salaries.length * 0.75)];
+      const avg = Math.round(salaries.reduce((a, b) => a + b, 0) / salaries.length);
+      const fmt = (n: number) => `COP ${n.toLocaleString('es-CO')}`;
+      realDataBlock = `
+🎯 DATA REAL DE ASPIRACIONES SALARIALES (${salaries.length} candidatos que YA aplicaron a ESTA vacante via LinkedIn 2026):
+- MIN: ${fmt(min)}
+- P25: ${fmt(p25)}
+- MEDIANA: ${fmt(p50)}
+- P75: ${fmt(p75)}
+- MAX: ${fmt(max)}
+- PROMEDIO: ${fmt(avg)}
+
+USAR ESTA DATA COMO ANCLA OBLIGATORIA:
+- Tu base_monthly_min DEBE estar entre el MIN y P25 (no inventes algo más bajo)
+- Tu base_monthly_median DEBE estar cerca de la MEDIANA real (±10%)
+- Tu base_monthly_max DEBE estar entre el P75 y MAX (excluyendo outliers únicos)
+- Si la data dice algo distinto a las bandas hardcoded en las reglas, GANA la data real
+`;
+    } else {
+      realDataBlock = `(Sin data suficiente de aspiraciones reales para esta vacante — usá las bandas hardcoded de las REGLAS abajo.)`;
+    }
+
     const prompt = MARKET_RESEARCH_PROMPT
       .replace("{vacancy_title}", vacancy.title)
       .replace("{vacancy_area}", vacancy.area || "—")
       .replace("{role_level}", vacancy.role_level || "entry")
       .replace("{target_days}", String(targetDays))
-      .replace("{target_days}", String(targetDays));
+      .replace("{target_days}", String(targetDays))
+      .replace("{real_data_block}", realDataBlock);
 
     const aiResult = await getAnthropic().messages.create({
       model: MODEL,
