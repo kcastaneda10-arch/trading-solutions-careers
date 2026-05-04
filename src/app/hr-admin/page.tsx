@@ -55,6 +55,7 @@ export default function HRAdminPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [searchOpen, setSearchOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Global Cmd+K / Ctrl+K shortcut to open search
   useEffect(() => {
@@ -72,48 +73,59 @@ export default function HRAdminPage() {
 
   return (
     <div className="min-h-screen font-sans" style={{ background: "#EBEBEB" }}>
-      {/* Top bar */}
-      <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-[1440px] mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-white font-bold text-[13px] tracking-[2px]">
-            <span className="w-7 h-7 rounded-md bg-white text-black flex items-center justify-center font-extrabold text-[13px]">
-              TS
-            </span>
-            <span>TRADING SOLUTIONS</span>
-            <span className="text-[12px] font-medium text-white/60 tracking-normal ml-1">· HR Admin</span>
-            <span className="ml-1 text-[10px] font-bold tracking-[1.5px] uppercase text-white/50 bg-white/10 px-2 py-0.5 rounded-full">
-              Enabler
-            </span>
+      {/* Top bar — estilo TS minimalista negro */}
+      <header className="sticky top-0 z-50 bg-black border-b border-white/5">
+        <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-white">
+            {/* Logo TS oficial */}
+            <img
+              src="https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/6913594489519813fe9e620e_logo%20web-03.png"
+              alt="Trading Solutions"
+              className="h-8 w-auto"
+            />
+            <div className="flex items-center gap-2 ml-2 pl-3 border-l border-white/15">
+              <span className="text-[11px] font-medium text-white/60 tracking-[0.04em] uppercase">HR Admin</span>
+              <span className="text-[9px] font-bold tracking-[1.5px] uppercase text-white/50 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-sm">
+                Enabler
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Buscador global */}
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 bg-white/10 hover:bg-white/15 text-white/70 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+              className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/[0.12] text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors"
               title="Buscar candidatos (Cmd+K)"
             >
               <Search className="w-3.5 h-3.5" />
-              <span>Buscar candidatos</span>
-              <kbd className="text-[9px] font-mono bg-white/10 border border-white/20 rounded px-1 py-0.5 ml-1">⌘K</kbd>
+              <span>Buscar</span>
+              <kbd className="text-[9px] font-mono bg-white/10 border border-white/15 rounded px-1 py-0.5 ml-1">⌘K</kbd>
             </button>
-            {/* Agendar entrevista */}
+            {/* Importar */}
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              title="Importar candidatos desde Excel"
+            >
+              <Download className="w-3.5 h-3.5" style={{ transform: 'rotate(180deg)' }} />
+              <span>Importar</span>
+            </button>
+            {/* Agendar entrevista — pill negra estilo TS con borde blanco */}
             <button
               onClick={() => setScheduleOpen(true)}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
+              className="flex items-center gap-1.5 bg-white text-black hover:bg-white/90 text-[12px] font-semibold px-3.5 py-1.5 rounded-full transition-colors"
               title="Agendar entrevista"
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>Agendar</span>
             </button>
-            <button className="text-white/70 hover:text-white relative p-1.5">
+            <button className="text-white/60 hover:text-white relative p-1.5">
               <Bell className="w-[18px] h-[18px]" />
               <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500" />
             </button>
-            <div className="flex items-center gap-2 bg-white/10 pl-1 pr-3 py-1 rounded-full text-white text-xs font-medium">
-              <span className="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center text-[11px] font-bold">
-                KC
-              </span>
-              Kelly Castañeda
+            <div className="flex items-center gap-2 pl-2 ml-1 border-l border-white/10">
+              <Avatar name="Kelly Castañeda" size={28} />
+              <span className="text-white text-[12px] font-medium hidden sm:inline">Kelly Castañeda</span>
             </div>
             <button
               onClick={async () => {
@@ -124,10 +136,9 @@ export default function HRAdminPage() {
                 }
               }}
               title="Cerrar sesión"
-              className="flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded-full hover:bg-white/10 transition-colors"
+              className="flex items-center gap-1.5 text-white/60 hover:text-white text-[12px] font-medium px-2.5 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
             >
               <LogOut className="w-[14px] h-[14px]" />
-              Salir
             </button>
           </div>
         </div>
@@ -167,6 +178,439 @@ export default function HRAdminPage() {
 
       {searchOpen && <CandidateSearchModal onClose={() => setSearchOpen(false)} onJumpFunnel={() => { setTab('funnel'); setSearchOpen(false); }} />}
       {scheduleOpen && <ScheduleInterviewModal onClose={() => setScheduleOpen(false)} />}
+      {importOpen && <CandidatesImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); setTab('funnel'); }} />}
+    </div>
+  );
+}
+
+/* ======================================================== */
+/* Avatar · iniciales con paleta TS-aligned                 */
+/* ======================================================== */
+const AVATAR_PALETTE: Array<[string, string]> = [
+  ['#0A0A0A', '#FFFFFF'], // negro · texto blanco
+  ['#1F2937', '#FFFFFF'], // slate
+  ['#374151', '#FFFFFF'],
+  ['#4B5563', '#FFFFFF'],
+  ['#6B7280', '#FFFFFF'],
+  ['#111827', '#FFFFFF'],
+  ['#18181B', '#FFFFFF'],
+  ['#27272A', '#FFFFFF'],
+];
+
+function initialsFor(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function colorForName(name: string): [string, string] {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function Avatar({ name, size = 32, className = '' }: { name: string; size?: number; className?: string }) {
+  const initials = initialsFor(name);
+  const [bg, fg] = colorForName(name);
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full font-bold flex-shrink-0 select-none ${className}`}
+      style={{
+        width: size,
+        height: size,
+        background: bg,
+        color: fg,
+        fontSize: Math.max(10, Math.round(size * 0.38)),
+        letterSpacing: '-0.02em',
+      }}
+      title={name}
+    >
+      {initials}
+    </span>
+  );
+}
+
+/* ======================================================== */
+/* Candidates Import Modal · LinkedIn Recruiter / Excel     */
+/* ======================================================== */
+type LinkedInImportRow = {
+  name: string;
+  email: string;
+  phone?: string;
+  location?: string;
+  headline?: string;
+  current_role?: string;
+  current_company?: string;
+  role_start?: string;
+  education?: string;
+  institution?: string;
+  linkedin_url?: string;
+  applied_at?: string;
+  job_title?: string;
+  salary_question?: string;
+};
+
+type ImportRowResult = {
+  index: number;
+  name: string;
+  email: string;
+  action: 'inserted' | 'existing' | 'error';
+  reason?: string;
+  vacancy_title?: string;
+  existing_stage?: string;
+  existing_vacancy_title?: string;
+  new_vacancy_title?: string;
+  same_vacancy?: boolean;
+};
+
+function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep] = useState<'upload'|'preview'|'submitting'|'done'>('upload');
+  const [files, setFiles] = useState<File[]>([]);
+  const [parsed, setParsed] = useState<LinkedInImportRow[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<{ to_insert: number; existing: number; errors: number; results: ImportRowResult[] } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [finalResult, setFinalResult] = useState<{ inserted: number; existing: number; errors: number } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setParsing(true);
+    setParseError(null);
+    setFiles(Array.from(fileList));
+
+    try {
+      // Cargar SheetJS dinámicamente (bundleado vía package.json)
+      const XLSX = await import('xlsx');
+      const all: LinkedInImportRow[] = [];
+
+      for (const file of Array.from(fileList)) {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets['Solicitudes de empleo'] || wb.Sheets[wb.SheetNames[0]];
+        if (!sheet) continue;
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        rows.forEach(r => {
+          const name = `${(r['Nombre'] || '').toString().trim()} ${(r['Apellidos'] || '').toString().trim()}`.trim();
+          const email = (r['Dirección de email'] || '').toString().toLowerCase().trim();
+          if (!name && !email) return;
+          all.push({
+            name,
+            email,
+            phone: r['Teléfono'] || undefined,
+            location: r['Ubicación general'] || undefined,
+            headline: r['Titular'] || undefined,
+            current_role: r['Cargo actual'] || undefined,
+            current_company: r['Empresa actual'] || undefined,
+            role_start: r['Fecha de inicio en el puesto actual'] ? String(r['Fecha de inicio en el puesto actual']) : undefined,
+            education: r['Titulación'] || undefined,
+            institution: r['Institución educativa'] || undefined,
+            linkedin_url: r['URL del perfil'] || undefined,
+            applied_at: r['Fecha de la solicitud'] ? String(r['Fecha de la solicitud']) : undefined,
+            job_title: r['Cargo laboral'] || undefined,
+            salary_question: r['Preguntas de preselección'] || undefined,
+          });
+        });
+      }
+
+      // Dedupe by email keeping latest applied_at
+      const byEmail: Record<string, LinkedInImportRow> = {};
+      all.forEach(r => {
+        if (!r.email) return;
+        const prev = byEmail[r.email];
+        if (!prev || (r.applied_at || '') > (prev.applied_at || '')) byEmail[r.email] = r;
+      });
+      setParsed(Object.values(byEmail));
+    } catch (e: any) {
+      setParseError(e?.message || 'Error parseando Excel');
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const runDryRun = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const r = await fetch('/api/headhunting/candidates/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: parsed, dry_run: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSubmitError(j.error || 'Error en validación');
+      } else {
+        setDryRunResult(j);
+        setStep('preview');
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message || 'Error de red');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const runImport = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    setStep('submitting');
+    try {
+      const r = await fetch('/api/headhunting/candidates/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: parsed, dry_run: false }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSubmitError(j.error || 'Error en import');
+        setStep('preview');
+      } else {
+        setFinalResult({ inserted: j.inserted, existing: j.existing, errors: j.errors });
+        setStep('done');
+      }
+    } catch (e: any) {
+      setSubmitError(e?.message || 'Error de red');
+      setStep('preview');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Group preview by action
+  const grouped = useMemo(() => {
+    if (!dryRunResult) return null;
+    return {
+      inserted: dryRunResult.results.filter(r => r.action === 'inserted'),
+      existing: dryRunResult.results.filter(r => r.action === 'existing'),
+      errors: dryRunResult.results.filter(r => r.action === 'error'),
+    };
+  }, [dryRunResult]);
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[5vh] px-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-4 overflow-hidden font-sans"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header TS-style: minimal black */}
+        <div className="bg-black text-white px-6 py-4 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[2px] font-medium opacity-60">Importar candidatos</div>
+            <div className="text-lg font-bold tracking-[-0.01em] leading-tight">
+              {step === 'upload' && 'Subí los Excel de LinkedIn Recruiter'}
+              {step === 'preview' && 'Revisá el cruce antes de importar'}
+              {step === 'submitting' && 'Importando…'}
+              {step === 'done' && 'Listo'}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white text-2xl leading-none px-2">×</button>
+        </div>
+
+        {step === 'upload' && (
+          <div className="p-6">
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
+              <div className="font-bold text-gray-900 mb-1">Formato esperado</div>
+              <p className="text-gray-700 leading-relaxed text-xs">
+                Excel exportados desde <strong>LinkedIn Recruiter → Reportes de candidatos</strong>. Hoja "Solicitudes de empleo".
+                Podés cargar varios archivos al mismo tiempo. Se hace cruce automático por email contra los candidatos que ya tenés en el ATS.
+              </p>
+            </div>
+
+            <label className="block">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                multiple
+                onChange={e => handleFiles(e.target.files)}
+                className="hidden"
+                id="xlsx-input"
+              />
+              <div
+                onClick={() => document.getElementById('xlsx-input')?.click()}
+                className="border-2 border-dashed border-gray-300 hover:border-black rounded-xl p-10 text-center cursor-pointer transition-colors"
+              >
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm font-bold text-gray-900">Click para elegir Excel(s)</div>
+                <div className="text-[11px] text-gray-500 mt-1">.xlsx · multi-archivo · sin límite de filas</div>
+              </div>
+            </label>
+
+            {parsing && <div className="mt-3 text-xs text-gray-500">Parseando…</div>}
+            {parseError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{parseError}</div>}
+
+            {files.length > 0 && (
+              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Archivos cargados</div>
+                {files.map((f, i) => (
+                  <div key={i} className="text-xs text-gray-800 flex justify-between">
+                    <span>📎 {f.name}</span>
+                    <span className="text-gray-500">{(f.size / 1024).toFixed(0)} KB</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {parsed.length > 0 && (
+              <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs">
+                <div className="font-bold text-emerald-800">✓ {parsed.length} candidatos únicos parseados (deduplicados por email)</div>
+                <div className="text-emerald-700 mt-1">
+                  {Array.from(new Set(parsed.map(p => p.job_title).filter(Boolean))).join(' · ')}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+              <button onClick={onClose} className="text-xs font-bold text-gray-500 px-4 py-2.5">Cancelar</button>
+              <button
+                onClick={runDryRun}
+                disabled={parsed.length === 0 || submitting}
+                className="bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white text-xs font-bold px-5 py-2.5 rounded-full"
+              >
+                {submitting ? 'Validando…' : `Cruzar ${parsed.length} con el ATS →`}
+              </button>
+            </div>
+            {submitError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{submitError}</div>}
+          </div>
+        )}
+
+        {step === 'preview' && grouped && dryRunResult && (
+          <div className="p-6">
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700">Nuevos a insertar</div>
+                <div className="text-3xl font-extrabold text-emerald-900 mt-1">{grouped.inserted.length}</div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Ya estaban (skip)</div>
+                <div className="text-3xl font-extrabold text-amber-900 mt-1">{grouped.existing.length}</div>
+              </div>
+              <div className={`${grouped.errors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'} border rounded-xl p-3 text-center`}>
+                <div className={`text-[10px] uppercase tracking-wider font-bold ${grouped.errors.length > 0 ? 'text-red-700' : 'text-gray-500'}`}>Errores</div>
+                <div className={`text-3xl font-extrabold mt-1 ${grouped.errors.length > 0 ? 'text-red-900' : 'text-gray-400'}`}>{grouped.errors.length}</div>
+              </div>
+            </div>
+
+            {/* Inserted preview */}
+            {grouped.inserted.length > 0 && (
+              <div className="border border-emerald-200 rounded-xl overflow-hidden mb-3">
+                <div className="bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">✓ Se insertarán ({grouped.inserted.length})</div>
+                <div className="max-h-[20vh] overflow-y-auto divide-y divide-gray-100">
+                  {grouped.inserted.slice(0, 50).map(r => (
+                    <div key={r.index} className="px-3 py-2 flex items-center gap-3 text-xs">
+                      <Avatar name={r.name} size={26} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold truncate">{r.name}</div>
+                        <div className="text-gray-500 truncate">{r.email}</div>
+                      </div>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded font-bold">{r.vacancy_title}</span>
+                    </div>
+                  ))}
+                  {grouped.inserted.length > 50 && (
+                    <div className="px-3 py-2 text-[11px] text-gray-500 text-center">+{grouped.inserted.length - 50} más…</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Existing preview */}
+            {grouped.existing.length > 0 && (
+              <div className="border border-amber-200 rounded-xl overflow-hidden mb-3">
+                <div className="bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">⚠ Ya estaban en el ATS, no se tocan ({grouped.existing.length})</div>
+                <div className="max-h-[20vh] overflow-y-auto divide-y divide-gray-100">
+                  {grouped.existing.slice(0, 30).map(r => (
+                    <div key={r.index} className="px-3 py-2 flex items-center gap-3 text-xs">
+                      <Avatar name={r.name} size={26} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold truncate">{r.name}</div>
+                        <div className="text-gray-500 truncate">{r.email} · stage: <strong>{r.existing_stage}</strong></div>
+                      </div>
+                      {r.same_vacancy ? (
+                        <span className="bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded font-bold">Misma vacante</span>
+                      ) : (
+                        <span className="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded font-bold" title={`En ATS: ${r.existing_vacancy_title}, Nueva: ${r.new_vacancy_title}`}>
+                          Otra vacante
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {grouped.existing.length > 30 && (
+                    <div className="px-3 py-2 text-[11px] text-gray-500 text-center">+{grouped.existing.length - 30} más…</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Errors preview */}
+            {grouped.errors.length > 0 && (
+              <div className="border border-red-200 rounded-xl overflow-hidden mb-3">
+                <div className="bg-red-50 px-3 py-2 text-xs font-bold text-red-800">✗ Errores ({grouped.errors.length})</div>
+                <div className="max-h-[15vh] overflow-y-auto divide-y divide-gray-100">
+                  {grouped.errors.map(r => (
+                    <div key={r.index} className="px-3 py-2 text-xs">
+                      <div className="font-bold">{r.name || '—'} · {r.email || '(sin email)'}</div>
+                      <div className="text-red-700 text-[11px]">{r.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+              <button onClick={() => setStep('upload')} className="text-xs font-bold text-gray-500 px-4 py-2.5">← Volver</button>
+              <button
+                onClick={runImport}
+                disabled={submitting || grouped.inserted.length === 0}
+                className="bg-black hover:bg-gray-800 disabled:bg-gray-300 text-white text-xs font-bold px-5 py-2.5 rounded-full"
+              >
+                Importar {grouped.inserted.length} nuevos →
+              </button>
+            </div>
+            {submitError && <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mt-3">{submitError}</div>}
+          </div>
+        )}
+
+        {step === 'submitting' && (
+          <div className="p-12 text-center">
+            <div className="text-5xl mb-3 animate-pulse">📥</div>
+            <div className="text-base font-bold">Importando {parsed.length} candidatos…</div>
+            <div className="text-xs text-gray-500 mt-1">No cierres esta ventana</div>
+          </div>
+        )}
+
+        {step === 'done' && finalResult && (
+          <div className="p-8 text-center">
+            <div className="text-5xl mb-3">🎉</div>
+            <h3 className="text-2xl font-bold tracking-tight mb-2">Cruce completo</h3>
+            <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mb-4">
+              <div className="bg-emerald-50 rounded-xl p-3">
+                <div className="text-3xl font-extrabold text-emerald-700">{finalResult.inserted}</div>
+                <div className="text-[10px] uppercase font-bold text-emerald-600">Nuevos</div>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3">
+                <div className="text-3xl font-extrabold text-amber-700">{finalResult.existing}</div>
+                <div className="text-[10px] uppercase font-bold text-amber-600">Ya estaban</div>
+              </div>
+              <div className={`${finalResult.errors > 0 ? 'bg-red-50' : 'bg-gray-50'} rounded-xl p-3`}>
+                <div className={`text-3xl font-extrabold ${finalResult.errors > 0 ? 'text-red-700' : 'text-gray-400'}`}>{finalResult.errors}</div>
+                <div className="text-[10px] uppercase font-bold text-gray-500">Errores</div>
+              </div>
+            </div>
+            <button
+              onClick={onDone}
+              className="bg-black hover:bg-gray-800 text-white font-semibold px-6 py-3 rounded-full text-sm"
+            >
+              Ver Funnel →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -5116,10 +5560,11 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
               onMouseEnter={() => setSelectedIdx(i)}
               onClick={() => { onJumpFunnel(); }}
               className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors ${
-                i === selectedIdx ? 'bg-purple-50 border-l-2 border-l-purple-500' : 'hover:bg-gray-50 border-l-2 border-l-transparent'
+                i === selectedIdx ? 'bg-gray-50 border-l-2 border-l-black' : 'hover:bg-gray-50 border-l-2 border-l-transparent'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
+                <Avatar name={c.name} size={32} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-gray-900">{c.name}</span>
