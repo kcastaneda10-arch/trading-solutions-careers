@@ -683,6 +683,11 @@ export default function AssessmentPage() {
       }
 
       // Save all remaining responses as final (ruta normal con token real)
+      // ⚠️ NO incluir time_spent_seconds aquí — los saves durante navegación
+      // (handleNext) ya guardaron el tiempo correcto por escenario. Si lo
+      // pasáramos acá lo SOBREESCRIBIMOS con el tiempo total del test, que
+      // es lo que rompía el agente auditor (todos los escenarios mostraban
+      // el mismo ~3175s).
       if (assessmentData) {
         for (const scenario of assessmentData.scenarios) {
           const resp = responses[scenario.id];
@@ -695,7 +700,7 @@ export default function AssessmentPage() {
                 scenario_id: scenario.id,
                 response_text: resp.text,
                 response_data: resp.data,
-                time_spent_seconds: Math.round((Date.now() - startTime) / 1000),
+                // time_spent_seconds: OMITIDO a propósito — preserva el valor por-escenario
                 is_final: true,
                 tab_switch_count: tabSwitchCount,
                 tab_switch_events: tabSwitchEventsRef.current,

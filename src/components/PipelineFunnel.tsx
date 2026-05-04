@@ -55,9 +55,8 @@ const STAGES: Array<{ id: string; label: string; emoji: string; color: string }>
   { id: "assessment_invitado",    label: "Elevare invitado",      emoji: "📨", color: "#8B5CF6" },
   { id: "assessment_en_progreso", label: "Elevare en progreso",   emoji: "⏳", color: "#A855F7" },
   { id: "assessment_completado",  label: "Elevare completado",    emoji: "🎯", color: "#7C3AED" },
-  // Stages legacy/opcionales — Entrevista IA pausada 2026-05; bateria adicional solo si RYS Phase 3 lo requiere
-  { id: "entrevista_ia",          label: "Entrevista IA · pausa", emoji: "⏸️",  color: "#9CA3AF" },
-  { id: "bateria_psicometrica",   label: "Batería extra (opcional)", emoji: "📋", color: "#D946EF" },
+  { id: "entrevista_ia",          label: "Entrevista IA",         emoji: "🎥", color: "#EC4899" },
+  { id: "bateria_psicometrica",   label: "Batería Psicométrica",  emoji: "📋", color: "#D946EF" },
   { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
   { id: "cwo_interview",          label: "CWO + Hiring",          emoji: "👔", color: "#DB2777" },
   { id: "touring",                label: "Prueba Touring",        emoji: "🏢", color: "#BE185D" },

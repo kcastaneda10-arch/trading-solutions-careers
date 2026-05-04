@@ -56,7 +56,16 @@ Analiza los datos buscando estos indicadores de trampa o baja confiabilidad:
 5. **Inconsistencia entre escenarios de control**: respuestas contradictorias en "Control de consistencia"
 6. **Asistencia externa**: respuestas inusualmente elaboradas vs perfil del candidato
 
-REGLA CRÍTICA: Si proctoring_data dice 'no_proctoring_data_available', tu integrity_score base debe ser 80 (no 100), y solo penalizar por evidencia REAL en los patrones de respuesta. NO inventes red flags de proctoring que no puedes verificar.
+REGLA CRÍTICA DE BASELINE:
+- Si proctoring_data.camera_enabled = true Y total_tab_switches < 3 Y total_camera_snapshots > 30 → BASE 90 (proctoring sólido). Solo bajá si hay evidencia FUERTE de patrones sospechosos.
+- Si proctoring_data dice 'no_proctoring_data_available' → BASE 80 (ausencia de data ≠ evidencia de trampa).
+- Si proctoring_data.camera_enabled = false explícitamente → BASE 60 (sospecha legítima pero no descalificante por sí sola).
+- Si total_tab_switches > 10 → BASE 50 (bajada significativa).
+
+NO inventes red flags. NO penalices por:
+- "Tiempos uniformes" si el promedio total / N es razonable (60-300s/escenario)
+- "Cámara apagada" si no hay dato explícito
+- Patrones triviales que no suman a >medium severity
 
 OUTPUT (JSON estricto, sin texto extra):
 {
@@ -72,16 +81,51 @@ OUTPUT (JSON estricto, sin texto extra):
 
 Sé estricto pero justo. Un cambio de pestaña ocasional NO es trampa. La cámara apagada por sí sola NO descalifica. Busca PATRONES, no eventos aislados.`;
 
-function buildResponsePatterns(responses: any[], scenarios: any[]): string {
-  return responses
-    .map((r) => {
+/**
+ * Detecta si los time_spent_seconds están guardados como TIEMPO ACUMULADO
+ * (delta desde inicio del test) en vez de por-escenario, y los normaliza.
+ *
+ * Heurística: si todos los valores son >300s y la diferencia entre min y max
+ * es <500s (es decir, todos son grandes y similares), están claramente acumulados.
+ */
+function normalizeResponseTimes(responses: any[]): { perScenario: number[]; wasCumulative: boolean } {
+  const raw = responses.map(r => Number(r.time_spent_seconds) || 0);
+  if (raw.length === 0) return { perScenario: [], wasCumulative: false };
+
+  const min = Math.min(...raw);
+  const max = Math.max(...raw);
+  const allLarge = raw.every(v => v > 300);
+  const compressed = (max - min) < 500;
+
+  if (allLarge && compressed && raw.length >= 3) {
+    // Cumulative — convertir a deltas. Ordenar ascendente y diff sucesivos.
+    const sorted = [...raw].sort((a, b) => a - b);
+    const deltas: number[] = [sorted[0] / Math.min(raw.length, 5)]; // estimación primer escenario
+    for (let i = 1; i < sorted.length; i++) {
+      deltas.push(Math.max(1, sorted[i] - sorted[i - 1]));
+    }
+    return { perScenario: deltas, wasCumulative: true };
+  }
+
+  return { perScenario: raw, wasCumulative: false };
+}
+
+function buildResponsePatterns(responses: any[], scenarios: any[]): { text: string; wasCumulative: boolean; avgTime: number } {
+  const { perScenario, wasCumulative } = normalizeResponseTimes(responses);
+  const avgTime = perScenario.length > 0
+    ? Math.round(perScenario.reduce((a, b) => a + b, 0) / perScenario.length)
+    : 0;
+  const text = responses
+    .map((r, idx) => {
       const sc = scenarios.find((s) => s.id === r.scenario_id);
       const opt = (r.response_data?.selected_option ?? -1) + 1;
       const len = (r.response_text || "").length;
       const label = sc?.competency_label || sc?.id || "—";
-      return `- "${label}" · ${r.time_spent_seconds}s · opción ${opt > 0 ? opt : "?"} · ${len} chars`;
+      const t = perScenario[idx] ?? 0;
+      return `- "${label}" · ${t}s${wasCumulative ? ' (estimado)' : ''} · opción ${opt > 0 ? opt : "?"} · ${len} chars`;
     })
     .join("\n");
+  return { text, wasCumulative, avgTime };
 }
 
 function buildControlScenarios(responses: any[], scenarios: any[]): string {
@@ -184,12 +228,17 @@ export async function POST(
       total_time_seconds: result.total_time_seconds || 0,
     };
 
+    const patternsResult = buildResponsePatterns(responses || [], scenarios || []);
+    const timingNote = patternsResult.wasCumulative
+      ? `\n⚠️ NOTA TÉCNICA SOBRE TIMING: Los valores de tiempo originales venían acumulados (bug del runner) y han sido normalizados a deltas. NO penalices "tiempos uniformes" basándote en estos números — son una reconstrucción aproximada. Tiempo promedio reconstruido: ${patternsResult.avgTime}s por escenario.`
+      : '';
+
     const prompt = AUDIT_PROMPT.replace(
       "{candidate_summary}",
       JSON.stringify(candidateSummary, null, 2)
     )
       .replace("{proctoring_data}", JSON.stringify(proctoringSummary, null, 2))
-      .replace("{response_patterns}", buildResponsePatterns(responses || [], scenarios || []))
+      .replace("{response_patterns}", patternsResult.text + timingNote)
       .replace("{control_scenarios}", buildControlScenarios(responses || [], scenarios || []));
 
     const aiResult = await getAnthropic().messages.create({

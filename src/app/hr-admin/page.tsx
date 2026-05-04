@@ -2636,7 +2636,7 @@ function stageLabelShort(s: string): string {
   const map: Record<string, string> = {
     aplico: 'Aplicó', prefiltro_enviado: 'Pref. enviado', prefiltro_pasado: 'Pref. ✓',
     prefiltro_revision: 'Pref. ⚠️', assessment_invitado: 'Elev. inv', assessment_en_progreso: 'Elev. prog',
-    assessment_completado: 'Elev. ✓', entrevista_ia: 'IA ⏸', bateria_psicometrica: 'Batería extra',
+    assessment_completado: 'Elev. ✓', entrevista_ia: 'IA', bateria_psicometrica: 'Batería',
     recruiter_interview: 'Recr.', cwo_interview: 'CWO', touring: 'Touring', terna: 'Terna', oferta: 'Oferta',
     contratado: 'Contratado', rechazado: 'Rechazado',
   };

@@ -72,9 +72,11 @@ export async function GET(
     const responseHeaders = new Headers({
       "Content-Type": r.headers.get("Content-Type") || "audio/mpeg",
       "Accept-Ranges": "bytes",
-      // Cache 1h client + 5min CDN
-      "Cache-Control": "private, max-age=3600, stale-while-revalidate=86400",
+      // Cache 24h público (audio inmutable por conversation_id) — el browser y CDN cachean
+      "Cache-Control": "public, max-age=86400, immutable",
       "Content-Disposition": `inline; filename="entrevista-${conversationId}.mp3"`,
+      // CORS por si el audio se carga desde otro origen
+      "Access-Control-Allow-Origin": "*",
     });
 
     // Propagar Content-Length / Content-Range si vienen

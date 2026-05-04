@@ -41,15 +41,20 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (existing) {
-      // Update existing response
+      // Update existing response — solo actualizar time_spent_seconds si viene
+      // explícitamente. Si no viene, preservar el valor que ya tenía el row
+      // (evita sobreescribir el tiempo correcto por-escenario con cero/total).
+      const updates: Record<string, unknown> = {
+        response_text: response_text || '',
+        response_data: Object.keys(enrichedData).length > 0 ? enrichedData : null,
+        is_final: is_final || false,
+      };
+      if (time_spent_seconds !== undefined && time_spent_seconds !== null) {
+        updates.time_spent_seconds = time_spent_seconds;
+      }
       const { error } = await supabaseAdmin
         .from('ht_responses')
-        .update({
-          response_text: response_text || '',
-          response_data: Object.keys(enrichedData).length > 0 ? enrichedData : null,
-          time_spent_seconds: time_spent_seconds || 0,
-          is_final: is_final || false,
-        })
+        .update(updates)
         .eq('id', existing.id);
 
       if (error) {
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest) {
           scenario_id,
           response_text: response_text || '',
           response_data: Object.keys(enrichedData).length > 0 ? enrichedData : null,
-          time_spent_seconds: time_spent_seconds || 0,
+          time_spent_seconds: time_spent_seconds ?? 0,
           is_final: is_final || false,
         });
 
