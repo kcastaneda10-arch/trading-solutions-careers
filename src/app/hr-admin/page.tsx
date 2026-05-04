@@ -55,6 +55,7 @@ import {
   Eye,
   RefreshCw,
   ArrowRight,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
@@ -95,6 +96,7 @@ export default function HRAdminPage() {
   const [referralsPending, setReferralsPending] = useState(0);
   const [gmailAuditOpen, setGmailAuditOpen] = useState(false);
   const [decisionsOpen, setDecisionsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Poll referrals pendientes cada 60s
   useEffect(() => {
@@ -208,6 +210,13 @@ export default function HRAdminPage() {
               <span>Agendar</span>
             </button>
             <button
+              onClick={() => setSettingsOpen(true)}
+              className="text-white/60 hover:text-white p-1.5"
+              title="Settings · metas del dashboard"
+            >
+              <SettingsIcon className="w-[18px] h-[18px]" />
+            </button>
+            <button
               onClick={() => setReferralsOpen(true)}
               className="text-white/60 hover:text-white relative p-1.5"
               title={referralsPending > 0 ? `${referralsPending} hojas de vida pendientes de revisar` : 'Sin notificaciones nuevas'}
@@ -283,6 +292,7 @@ export default function HRAdminPage() {
       }} />}
       {gmailAuditOpen && <GmailAuditModal onClose={() => setGmailAuditOpen(false)} />}
       {decisionsOpen && <DecisionNudgesModal onClose={() => setDecisionsOpen(false)} />}
+      {settingsOpen && <DashboardSettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
@@ -1499,6 +1509,12 @@ type HeroData = {
   vacancies: { open: number; avg_days_open: number; closed_count: number };
   pipeline: { active: number; aging: number; in_late_stages: number; forecast_hires_30d: number };
   nps: number | null;
+  targets?: {
+    hires_quarter: number;
+    hires_month: number;
+    nps: number;
+    pipeline_aging_days: number;
+  };
 };
 
 // ─── Today's Focus · qué requiere acción HOY ────────────────────────
@@ -1523,32 +1539,37 @@ type TodayFocusData = {
 function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: { vacancyFilter?: string; onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
   const [data, setData] = useState<TodayFocusData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
   const fetchUrl = vacancyFilter && vacancyFilter !== 'all'
     ? `/api/dashboard/today?vacancy_id=${vacancyFilter}`
     : '/api/dashboard/today';
 
-  const refresh = useCallback(() => {
-    fetch(fetchUrl, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => { setData(j); setLoading(false); })
-      .catch(() => setLoading(false));
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch(fetchUrl, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
   }, [fetchUrl]);
 
   useEffect(() => {
     let alive = true;
-    const fetchData = () => fetch(fetchUrl, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => { if (alive) { setData(j); setLoading(false); } })
-      .catch(() => { if (alive) setLoading(false); });
     setLoading(true);
-    fetchData();
+    const run = async () => { if (alive) await refresh(); };
+    run();
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData();
+      if (document.visibilityState === 'visible' && alive) refresh();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, [vacancyFilter, fetchUrl]);
+  }, [refresh]);
 
   // Quick action handlers
   const NEXT_STAGE_BY_CURRENT: Record<string, string> = {
@@ -1593,6 +1614,23 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
   if (loading) {
     return (
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-4 mb-4 text-white text-sm">Cargando focus de hoy…</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <AlertOctagon className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <div className="text-xs text-red-800">
+            <div className="font-bold">Today's Focus no disponible</div>
+            <div className="text-red-700/90">{error}</div>
+          </div>
+        </div>
+        <button onClick={() => { setLoading(true); refresh(); }} className="text-xs font-bold text-red-800 underline whitespace-nowrap">
+          Reintentar
+        </button>
+      </div>
     );
   }
 
@@ -1848,8 +1886,8 @@ function FocusRow({
   }
 
   return (
-    <div className="bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors group">
-      <div className="flex items-center justify-between gap-2">
+    <div className="bg-white/[0.04] hover:bg-white/[0.08] rounded-lg px-3 py-2 text-xs transition-colors group">
+      <div className="flex items-center justify-between gap-3">
         <button onClick={item.onClick} className="flex-1 min-w-0 text-left">
           <div className="font-semibold text-white truncate flex items-center gap-1.5">
             {item.severity === 'high' && (
@@ -1858,16 +1896,25 @@ function FocusRow({
             {item.primary}
           </div>
           <div className="text-[10px] text-white/55 truncate">{item.secondary}</div>
+          <div className="text-[9px] text-white/35 mt-0.5">{item.meta}</div>
         </button>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {item.candidate_id && onAdvance && (
             <button
               onClick={doAdvance}
               disabled={!!busy}
               title="Avanzar al siguiente stage"
-              className="w-6 h-6 rounded-full bg-emerald-500/15 hover:bg-emerald-500/30 ring-1 ring-emerald-400/30 text-emerald-300 hover:text-emerald-200 inline-flex items-center justify-center disabled:opacity-30"
+              type="button"
+              className="px-2.5 py-1.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 ring-1 ring-emerald-400/40 text-emerald-200 hover:text-white inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px]"
             >
-              <CheckCircle2 className="w-3 h-3" />
+              {busy === 'advance' ? (
+                <span className="animate-pulse">…</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Avanzar</span>
+                </>
+              )}
             </button>
           )}
           {item.candidate_id && onReject && (
@@ -1875,19 +1922,19 @@ function FocusRow({
               onClick={doReject}
               disabled={!!busy}
               title="Rechazar"
-              className="w-6 h-6 rounded-full bg-red-500/15 hover:bg-red-500/30 ring-1 ring-red-400/30 text-red-300 hover:text-red-200 inline-flex items-center justify-center disabled:opacity-30"
+              type="button"
+              className="px-2.5 py-1.5 rounded-full bg-red-500/20 hover:bg-red-500/40 ring-1 ring-red-400/40 text-red-200 hover:text-white inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px]"
             >
-              <XCircle className="w-3 h-3" />
+              {busy === 'reject' ? (
+                <span className="animate-pulse">…</span>
+              ) : (
+                <>
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Rechazar</span>
+                </>
+              )}
             </button>
           )}
-          <button
-            onClick={item.onClick}
-            className="text-[10px] text-white/45 group-hover:text-white/80 inline-flex items-center gap-1 ml-1"
-            title="Ver en Funnel"
-          >
-            <span className="hidden md:inline">{item.meta}</span>
-            <ChevronRight className="w-3 h-3" />
-          </button>
         </div>
       </div>
     </div>
@@ -1965,32 +2012,56 @@ function FocusList({
 function DashboardHero({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<HeroData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/dashboard/overview?vacancy_id=${vacancyFilter}`
+        : '/api/dashboard/overview';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
+  }, [vacancyFilter]);
 
   useEffect(() => {
     let alive = true;
-    const url = vacancyFilter && vacancyFilter !== 'all'
-      ? `/api/dashboard/overview?vacancy_id=${vacancyFilter}`
-      : '/api/dashboard/overview';
-    const fetchData = () => fetch(url, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => { if (alive) { setData(j); setLoading(false); } })
-      .catch(() => { if (alive) setLoading(false); });
     setLoading(true);
-    fetchData();
+    const run = async () => { if (alive) await fetchData(); };
+    run();
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData();
+      if (document.visibilityState === 'visible' && alive) fetchData();
     }, 30000);
     return () => { alive = false; clearInterval(interval); };
-  }, [vacancyFilter]);
+  }, [fetchData]);
 
   if (loading) return (
     <div className="mb-5 h-[180px] rounded-2xl bg-gradient-to-br from-gray-50 to-white border border-gray-200 flex items-center justify-center text-sm text-gray-400">
       Cargando overview…
     </div>
   );
+  if (error) return (
+    <div className="mb-5 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
+      <div className="text-xs text-red-800">
+        <div className="font-bold">No se pudieron cargar los KPIs</div>
+        <div className="text-red-700/90">{error}</div>
+      </div>
+      <button onClick={() => { setLoading(true); fetchData(); }} className="text-xs font-bold text-red-800 underline">
+        Reintentar
+      </button>
+    </div>
+  );
   if (!data) return null;
 
-  const TARGET_HIRES_QUARTER = 5; // Editable target Q
+  // Target Q viene del endpoint (config en ts_targets), fallback 5
+  const TARGET_HIRES_QUARTER = data.targets?.hires_quarter ?? 5;
   const hiresProgress = Math.min(100, Math.round((data.hires.quarter / TARGET_HIRES_QUARTER) * 100));
 
   const allTtfOk = Object.values(data.time_to_fill).every(t => t.values.length === 0 || t.on_track);
@@ -2208,32 +2279,45 @@ type VacancyOverview = {
 function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [vacs, setVacs] = useState<VacancyOverview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [researchVac, setResearchVac] = useState<{ id: string; title: string } | null>(null);
   const [rediscoverVac, setRediscoverVac] = useState<{ id: string; title: string } | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    const fetchData = () => fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => {
-        if (!alive) return;
-        const all = j.vacancies || [];
-        const filtered = vacancyFilter && vacancyFilter !== 'all'
-          ? all.filter((v: VacancyOverview) => v.vacancy_id === vacancyFilter)
-          : all;
-        setVacs(filtered);
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    setLoading(true);
-    fetchData();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData();
-    }, 30000);
-    return () => { alive = false; clearInterval(interval); };
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/headhunting/vacancies-overview?vacancy_id=${encodeURIComponent(vacancyFilter)}`
+        : '/api/headhunting/vacancies-overview';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setVacs(j.vacancies || []);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
   }, [vacancyFilter]);
 
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const run = async () => { if (alive) await fetchData(); };
+    run();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [fetchData]);
+
   if (loading) return <div className="mt-5 text-sm text-gray-400">Cargando vacantes…</div>;
+  if (error) return (
+    <div className="mt-5 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-center justify-between">
+      <span>No se pudieron cargar las vacantes: {error}</span>
+      <button onClick={() => { setLoading(true); fetchData(); }} className="font-bold underline ml-2">Reintentar</button>
+    </div>
+  );
 
   const abiertas = vacs.filter(v => v.status === 'abierta');
   const cerradas = vacs.filter(v => v.status === 'cerrada');
@@ -6796,6 +6880,209 @@ type PendingDecisionItem = {
   decided_at: string | null;
 };
 
+/* ======================================================== */
+/* Dashboard Settings · metas editables sin redeploy         */
+/* ======================================================== */
+type DashboardConfig = {
+  target_hires_quarter: number;
+  target_hires_month: number;
+  target_nps: number;
+  pipeline_aging_days: number;
+  updated_at: string | null;
+};
+
+function DashboardSettingsModal({ onClose }: { onClose: () => void }) {
+  const [config, setConfig] = useState<DashboardConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // Form state
+  const [hiresQ, setHiresQ] = useState('5');
+  const [hiresM, setHiresM] = useState('2');
+  const [nps, setNps] = useState('70');
+  const [agingDays, setAgingDays] = useState('21');
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch('/api/admin/dashboard-config', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (!alive) return;
+        if (j.error) {
+          setError(j.error);
+        } else {
+          const c: DashboardConfig = j.config;
+          setConfig(c);
+          setHiresQ(String(c.target_hires_quarter));
+          setHiresM(String(c.target_hires_month));
+          setNps(String(c.target_nps));
+          setAgingDays(String(c.pipeline_aging_days));
+        }
+        setLoading(false);
+      })
+      .catch(e => { if (alive) { setError(e?.message || 'Error de red'); setLoading(false); } });
+    return () => { alive = false; };
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSavedAt(null);
+    try {
+      const r = await fetch('/api/admin/dashboard-config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_hires_quarter: parseInt(hiresQ, 10),
+          target_hires_month: parseInt(hiresM, 10),
+          target_nps: parseInt(nps, 10),
+          pipeline_aging_days: parseInt(agingDays, 10),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error guardando');
+      setConfig(j.config);
+      setSavedAt(new Date().toISOString());
+    } catch (e: any) {
+      setError(e?.message || 'Error guardando');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Header negro estilo TS */}
+        <div className="bg-black text-white px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+              <SettingsIcon className="w-4 h-4" strokeWidth={2} />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-white/55">Settings</div>
+              <div className="text-base font-bold tracking-tight">Metas del Dashboard</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white">
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+            <div className="text-sm text-gray-500 py-8 text-center">Cargando configuración…</div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-600 mb-5">
+                Estas metas se usan en el Dashboard para calcular si vas en ritmo. Podés editarlas sin redeploy.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1.5">
+                    Hires por trimestre (Q)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={hiresQ}
+                    onChange={e => setHiresQ(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold tabular-nums"
+                  />
+                  <div className="text-[10px] text-gray-500 mt-1">Meta de contrataciones para el trimestre actual</div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1.5">
+                    Hires por mes
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={hiresM}
+                    onChange={e => setHiresM(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold tabular-nums"
+                  />
+                  <div className="text-[10px] text-gray-500 mt-1">Meta mensual (informativa)</div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1.5">
+                    NPS objetivo
+                  </label>
+                  <input
+                    type="number"
+                    min={-100}
+                    max={100}
+                    value={nps}
+                    onChange={e => setNps(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold tabular-nums"
+                  />
+                  <div className="text-[10px] text-gray-500 mt-1">Score NPS que querés mantener (típico 60–80)</div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1.5">
+                    Pipeline aging — días para considerar candidato "estancado"
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={agingDays}
+                    onChange={e => setAgingDays(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold tabular-nums"
+                  />
+                  <div className="text-[10px] text-gray-500 mt-1">Si un candidato no se mueve en X días, aparece en Today's Focus</div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-4 text-xs text-red-800">
+                  {error}
+                </div>
+              )}
+              {savedAt && !error && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4 text-xs text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Guardado. El dashboard usará estos valores en su próximo refresh (~30s).
+                </div>
+              )}
+              {config?.updated_at && !savedAt && (
+                <div className="text-[10px] text-gray-400 mt-3">
+                  Última actualización: {new Date(config.updated_at).toLocaleString('es-CO')}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-200">
+                <button
+                  onClick={onClose}
+                  className="bg-white text-black border border-gray-300 hover:border-black text-xs font-semibold px-4 py-2 rounded-full"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="bg-black hover:bg-gray-800 disabled:bg-gray-400 text-white text-xs font-semibold px-4 py-2 rounded-full inline-flex items-center gap-1.5"
+                >
+                  {saving ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DecisionNudgesModal({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<PendingDecisionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -7027,14 +7314,23 @@ function NudgeForm({ item, onBack, onSent }: { item: PendingDecisionItem; onBack
           </select>
         </div>
         <div>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Email *</label>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">
+            Email * <span className="text-gray-500 normal-case font-normal">(podés poner varios, separá con coma)</span>
+          </label>
           <input
-            type="email"
+            type="text"
             value={recipientEmail}
             onChange={e => setRecipientEmail(e.target.value)}
-            placeholder="manager@tradingsolutions.com"
+            placeholder="cwo@tradingsolutions.com, sales3@tradingsolutions.com"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
+          {recipientEmail && (() => {
+            const parts = recipientEmail.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+            if (parts.length > 1) {
+              return <div className="text-[10px] text-gray-500 mt-1">Se enviará a {parts.length} destinatarios.</div>;
+            }
+            return null;
+          })()}
         </div>
         <div>
           <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-700 mb-1.5">Nombre (opcional, para personalizar)</label>
@@ -7703,32 +7999,45 @@ type FunnelByVacancyData = {
 function FunnelByVacancy({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<FunnelByVacancyData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'open' | 'all'>('open');
 
-  useEffect(() => {
-    let alive = true;
-    const fetchData = () => fetch('/api/dashboard/funnel-by-vacancy', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => {
-        if (!alive) return;
-        // Filtrar client-side por vacancyFilter (solo retornar la vacante seleccionada)
-        if (vacancyFilter && vacancyFilter !== 'all') {
-          j.vacancies = (j.vacancies || []).filter((v: any) => v.vacancy_id === vacancyFilter);
-        }
-        setData(j);
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    setLoading(true);
-    fetchData();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchData();
-    }, 30000);
-    return () => { alive = false; clearInterval(interval); };
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/dashboard/funnel-by-vacancy?vacancy_id=${encodeURIComponent(vacancyFilter)}`
+        : '/api/dashboard/funnel-by-vacancy';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
   }, [vacancyFilter]);
 
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const run = async () => { if (alive) await fetchData(); };
+    run();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [fetchData]);
+
   if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando funnel por vacante…</div>;
+  if (error) return (
+    <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-center justify-between">
+      <span>No se pudo cargar el funnel: {error}</span>
+      <button onClick={() => { setLoading(true); fetchData(); }} className="font-bold underline ml-2">Reintentar</button>
+    </div>
+  );
   if (!data || !data.vacancies.length) return null;
 
   const visible = filter === 'open'
@@ -7923,20 +8232,45 @@ type AnalyticsData = {
 function AnalyticsDeep({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    const url = vacancyFilter && vacancyFilter !== 'all'
-      ? `/api/dashboard/analytics?vacancy_id=${vacancyFilter}`
-      : '/api/dashboard/analytics';
-    setLoading(true);
-    fetch(url, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(j => { setData(j); setLoading(false); })
-      .catch(() => setLoading(false));
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/dashboard/analytics?vacancy_id=${vacancyFilter}`
+        : '/api/dashboard/analytics';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
   }, [vacancyFilter]);
 
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const run = async () => { if (alive) await fetchData(); };
+    run();
+    // Polling cada 60s (analytics es más pesado, no necesita 30s)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) fetchData();
+    }, 60000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [fetchData]);
+
   if (loading) return <div className="mt-6 text-sm text-gray-400">Cargando analytics…</div>;
+  if (error) return (
+    <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-center justify-between">
+      <span>No se pudieron cargar los analytics: {error}</span>
+      <button onClick={() => { setLoading(true); fetchData(); }} className="font-bold underline ml-2">Reintentar</button>
+    </div>
+  );
   if (!data) return null;
 
   const maxFunnelReached = Math.max(...data.funnel_conversion.map(f => f.reached), 1);

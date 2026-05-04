@@ -178,6 +178,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Faltan candidate_id, recipient_email, recipient_role" }, { status: 400 });
     }
 
+    // Normalize emails: accept space/comma/semicolon-separated input, validate, output as "a, b, c"
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const rawEmails = String(recipient_email)
+      .split(/[\s,;]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const validEmails = rawEmails.filter(e => emailRegex.test(e));
+    const invalidEmails = rawEmails.filter(e => !emailRegex.test(e));
+
+    if (validEmails.length === 0) {
+      return NextResponse.json({
+        error: `No se encontraron emails válidos. Recibido: "${recipient_email}". Separá con coma o espacio.`
+      }, { status: 400 });
+    }
+    if (invalidEmails.length > 0) {
+      return NextResponse.json({
+        error: `Emails inválidos: ${invalidEmails.join(', ')}. Revisá el formato.`
+      }, { status: 400 });
+    }
+
+    const normalizedTo = validEmails.join(', ');
+    const primaryEmail = validEmails[0];
+
     // Get candidate + vacancy
     const { data: cand } = await supabaseAdmin
       .from("ht_candidates")
@@ -209,7 +232,7 @@ export async function POST(req: NextRequest) {
       // @ts-expect-error supabase relation
       vacancy_title: cand.ht_vacancies?.title || 'Vacante',
       interview_type: interview_type || cand.stage || 'entrevista',
-      recipient_name: recipient_name || recipient_email.split('@')[0],
+      recipient_name: recipient_name || primaryEmail.split('@')[0],
       base_url: baseUrl,
       token,
       ai_summary: aiInt?.ai_summary || undefined,
@@ -218,9 +241,9 @@ export async function POST(req: NextRequest) {
 
     const subject = `[Decisión requerida] ${cand.name} — ¿avanza o no?`;
 
-    // Crear draft en Gmail
+    // Crear draft en Gmail (To: comma-separated RFC 822)
     const draftRes = await createDraftViaGmail({
-      to: recipient_email,
+      to: normalizedTo,
       subject,
       html,
       fromName: 'Kelly Castañeda',
@@ -231,7 +254,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: draftRes.error }, { status: 500 });
     }
 
-    // Insertar registro
+    // Insertar registro (recipient_email = todos los emails normalizados)
     const { data: decisionRow, error: insErr } = await supabaseAdmin
       .from("ts_interview_decisions")
       .insert({
@@ -239,7 +262,7 @@ export async function POST(req: NextRequest) {
         vacancy_id: cand.vacancy_id,
         interview_type: interview_type || cand.stage,
         recipient_role,
-        recipient_email,
+        recipient_email: normalizedTo,
         recipient_name: recipient_name || null,
         token,
         channel: 'email',

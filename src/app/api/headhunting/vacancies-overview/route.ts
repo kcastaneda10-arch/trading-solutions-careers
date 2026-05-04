@@ -9,18 +9,24 @@
  *
  * Usado por el Dashboard para la sección "Vacantes".
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const vacancyId = url.searchParams.get('vacancy_id');
+    const filterByVacancy = vacancyId && vacancyId !== 'all';
+
     // 1. Vacancies + their milestones
-    const { data: vacs, error: vErr } = await supabaseAdmin
+    let vacQuery = supabaseAdmin
       .from("ht_vacancies")
       .select("id, title, area, status, role_level, vacancy_type")
       .eq("client_id", TS_CLIENT_ID);
+    if (filterByVacancy) vacQuery = vacQuery.eq("id", vacancyId);
+    const { data: vacs, error: vErr } = await vacQuery;
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
 
     // Targets RYS-aligned: matriz (role_level, vacancy_type)
@@ -40,18 +46,22 @@ export async function GET() {
       );
     };
 
-    const { data: milestones } = await supabaseAdmin
+    let milQuery = supabaseAdmin
       .from("ht_vacancy_milestones")
       .select("*");
+    if (filterByVacancy) milQuery = milQuery.eq("vacancy_id", vacancyId);
+    const { data: milestones } = await milQuery;
 
     const milestoneByVacancy: Record<string, any> = {};
     (milestones || []).forEach((m: any) => { milestoneByVacancy[m.vacancy_id] = m; });
 
     // 2. Candidates per vacancy by stage (incluye updated_at para aging)
-    const { data: cands } = await supabaseAdmin
+    let candQuery = supabaseAdmin
       .from("ht_candidates")
       .select("id, name, vacancy_id, stage, status, email, updated_at, created_at")
       .not("email", "ilike", "%@tradingsolutions.com");
+    if (filterByVacancy) candQuery = candQuery.eq("vacancy_id", vacancyId);
+    const { data: cands } = await candQuery;
 
     function daysSince(dt?: string | null) {
       if (!dt) return 0;

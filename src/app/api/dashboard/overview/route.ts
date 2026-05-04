@@ -23,6 +23,14 @@ export async function GET(req: NextRequest) {
     const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
+    // Dashboard config (singleton, editable sin redeploy)
+    const { data: cfgRow } = await supabaseAdmin
+      .from("ts_dashboard_config")
+      .select("target_hires_quarter, target_hires_month, target_nps, pipeline_aging_days")
+      .eq("id", 1)
+      .maybeSingle();
+    const dashCfg = cfgRow || { target_hires_quarter: 5, target_hires_month: 2, target_nps: 70, pipeline_aging_days: 21 };
+
     // Targets — RYS-aligned matriz (role_level + vacancy_type)
     const { data: targets } = await supabaseAdmin.from("ts_targets").select("*");
     const targetMap: Record<string, number> = {};
@@ -176,6 +184,12 @@ export async function GET(req: NextRequest) {
         forecast_hires_30d: forecastHires30d,
       },
       nps: nps,
+      targets: {
+        hires_quarter: dashCfg.target_hires_quarter,
+        hires_month: dashCfg.target_hires_month,
+        nps: dashCfg.target_nps,
+        pipeline_aging_days: dashCfg.pipeline_aging_days,
+      },
     });
   } catch (err: any) {
     console.error("dashboard overview error:", err);
