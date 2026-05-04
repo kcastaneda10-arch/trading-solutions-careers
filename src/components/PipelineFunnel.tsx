@@ -860,7 +860,7 @@ function AIInterviewBlock({ candidateId }: { candidateId: string }) {
           {interview.audio_url && (
             <div className="mb-3">
               <p className="text-[10px] uppercase font-bold text-gray-500 mb-1">🎧 Audio de la entrevista</p>
-              <audio src={interview.audio_url} controls className="w-full" preload="none" />
+              <audio src={interview.audio_url} controls className="w-full" preload="metadata" />
             </div>
           )}
 
