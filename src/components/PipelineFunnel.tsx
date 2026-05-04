@@ -1,6 +1,36 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import {
+  Inbox, ClipboardList, ClipboardCheck, AlertTriangle, Mail, Hourglass, Target,
+  Video, ListChecks, MessageSquare, UserCheck, Building2, Trophy, Send,
+  CheckCircle2, XCircle, ArrowRight,
+} from "lucide-react";
+
+// Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
+const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  aplico: Inbox,
+  prefiltro_enviado: ClipboardList,
+  prefiltro_pasado: ClipboardCheck,
+  prefiltro_revision: AlertTriangle,
+  assessment_invitado: Mail,
+  assessment_en_progreso: Hourglass,
+  assessment_completado: Target,
+  entrevista_ia: Video,
+  bateria_psicometrica: ListChecks,
+  recruiter_interview: MessageSquare,
+  cwo_interview: UserCheck,
+  touring: Building2,
+  terna: Trophy,
+  oferta: Send,
+  contratado: CheckCircle2,
+  rechazado: XCircle,
+};
+
+export function StageIcon({ stage, className = "w-4 h-4" }: { stage: string; className?: string }) {
+  const Icon = STAGE_ICONS[stage] || Inbox;
+  return <Icon className={className} />;
+}
 
 type Cand = {
   id: string;
@@ -168,9 +198,9 @@ export default function PipelineFunnel() {
                 return (
                   <div key={stage.id} className="w-[260px] flex-shrink-0">
                     <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style={{ background: stage.color, color: "white" }}>
-                      <div className="flex items-center gap-1.5">
-                        <span>{stage.emoji}</span>
-                        <span className="text-xs font-bold uppercase tracking-wide">{stage.label}</span>
+                      <div className="flex items-center gap-2">
+                        <StageIcon stage={stage.id} className="w-4 h-4 opacity-90" />
+                        <span className="text-[11px] font-semibold uppercase tracking-[1.5px]">{stage.label}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         {cands.length > 0 && (
@@ -502,10 +532,11 @@ function BulkActionBar({
           {stageAction && allSameStage && (
             <button
               onClick={() => runBulk("stage_action")}
-              className="text-xs font-bold px-3 py-1.5 rounded-full bg-pink-600 hover:bg-pink-700"
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-600 hover:bg-pink-700 inline-flex items-center gap-1.5"
               title={`${stageAction.label} a los ${n} seleccionados`}
             >
-              {stageAction.emoji} {stageAction.label} ({n})
+              <span>{stageAction.label}</span>
+              <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
             </button>
           )}
           <button
@@ -597,9 +628,10 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
             <button
               onClick={() => moveToStage(nextStage.id, nextStage.label)}
               disabled={busy}
-              className="text-xs font-bold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="text-xs font-semibold px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
-              {nextStage.emoji} {nextStage.label} →
+              <span>{nextStage.label}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
 
@@ -617,12 +649,12 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
             className="text-xs font-semibold px-3 py-2 rounded-full border-2 border-purple-300 text-purple-800 bg-white hover:bg-purple-50 disabled:opacity-50 cursor-pointer"
             title="Mover a cualquier etapa (salta el flujo lineal)"
           >
-            <option value="">📍 Mover a etapa…</option>
+            <option value="">Mover a etapa…</option>
             {STAGES.filter(s => s.id !== currentStage).map(s => (
-              <option key={s.id} value={s.id}>{s.emoji} {s.label}</option>
+              <option key={s.id} value={s.id}>{s.label}</option>
             ))}
             <option disabled>──────────</option>
-            <option value={REJECTED_STAGE.id}>{REJECTED_STAGE.emoji} {REJECTED_STAGE.label}</option>
+            <option value={REJECTED_STAGE.id}>{REJECTED_STAGE.label}</option>
           </select>
 
           {!isTerminal && (

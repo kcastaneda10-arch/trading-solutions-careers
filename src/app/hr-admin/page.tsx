@@ -28,6 +28,33 @@ import {
   LogOut,
   Sparkles,
   ChevronRight,
+  // Corporate icon set — replace emojis
+  Target,
+  Trophy,
+  Hand,
+  AlertOctagon,
+  Moon,
+  AlertTriangle,
+  TrendingUp,
+  Users,
+  Mic,
+  Headphones,
+  BarChart3,
+  Globe,
+  Award,
+  Flag,
+  Inbox,
+  Mail,
+  Send,
+  Hourglass,
+  XCircle,
+  MessageSquare,
+  Building2,
+  UserCheck,
+  PartyPopper,
+  Eye,
+  RefreshCw,
+  ArrowRight,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
@@ -540,7 +567,11 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
             {/* QUICK IMPORT · seed pre-cargado de los Excel del 2026-05-03 */}
             {quickResult ? (
               <div className={`${quickResult.error_count && quickResult.error_count > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'} border rounded-xl p-4 mb-4`}>
-                <div className="text-2xl mb-1">{quickResult.error_count && quickResult.error_count > 0 ? '⚠️' : '✅'}</div>
+                <div className="mb-2">
+                  {quickResult.error_count && quickResult.error_count > 0
+                    ? <AlertTriangle className="w-5 h-5 text-amber-600" />
+                    : <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                </div>
                 <div className={`text-sm font-bold ${quickResult.error_count && quickResult.error_count > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
                   {quickResult.error_count && quickResult.error_count > 0 ? 'Quick import con errores' : 'Quick import completado'}
                 </div>
@@ -579,8 +610,9 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
                 />
                 <div className="relative">
                   <div className="text-[10px] uppercase tracking-[2px] font-semibold opacity-70 mb-1">Quick import</div>
-                  <div className="text-base font-bold tracking-tight mb-1">
-                    📥 {quickPreview.will_insert} aplicaciones de LinkedIn pendientes
+                  <div className="text-base font-bold tracking-tight mb-1 flex items-center gap-2">
+                    <Linkedin className="w-4 h-4" />
+                    <span>{quickPreview.will_insert} aplicaciones de LinkedIn pendientes</span>
                   </div>
                   <div className="text-[11px] opacity-80 mb-2">
                     Pre-cargadas del bulk del 2026-05-03 · {quickPreview.already_existing} ya estaban en el ATS
@@ -1408,11 +1440,13 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
 
   if (noActionNeeded) {
     return (
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 mb-4 flex items-center gap-3">
-        <span className="text-2xl">🎯</span>
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/20 flex items-center justify-center flex-shrink-0">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600" strokeWidth={2} />
+        </div>
         <div>
-          <div className="text-sm font-extrabold text-emerald-900">Today's Focus · Todo bajo control</div>
-          <div className="text-xs text-emerald-700">Sin alertas críticas, candidatos avanzando, vacantes en ritmo. Buen día para sourcing.</div>
+          <div className="text-sm font-bold text-emerald-900 tracking-tight">Today's Focus · Todo bajo control</div>
+          <div className="text-xs text-emerald-700/90">Sin alertas críticas, candidatos avanzando, vacantes en ritmo. Buen día para sourcing.</div>
         </div>
       </div>
     );
@@ -1430,13 +1464,20 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
       <div className="relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">🎯</span>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
+              <Target className="w-4 h-4 text-white/90" strokeWidth={2} />
+            </div>
             <div>
               <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-white/55">Today's Focus</div>
               <div className="text-lg font-bold tracking-[-0.01em] leading-tight font-display">
                 {totalAlerts} acci{totalAlerts !== 1 ? 'ones' : 'ón'} pendiente{totalAlerts !== 1 ? 's' : ''}
-                {data.counts.quick_wins > 0 && <span className="ml-2 text-emerald-300 font-semibold">· {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''} 🏆</span>}
+                {data.counts.quick_wins > 0 && (
+                  <span className="ml-2 text-emerald-300 font-semibold inline-flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5" strokeWidth={2} />
+                    {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1450,39 +1491,40 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
 
         {/* Counter pills */}
         <div className="flex flex-wrap gap-2 mb-3">
-          <CountPill icon="📅" label="Entrevistas hoy" count={interviewsCount} color="blue" active={interviewsCount > 0} />
-          <CountPill icon="⏰" label="Aging" count={data.counts.aging} color="amber" active={data.counts.aging > 0} />
-          <CountPill icon="✋" label="Decisiones" count={data.counts.pending_decisions} color="blue" active={data.counts.pending_decisions > 0} />
-          <CountPill icon="🔴" label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red" active={data.counts.urgent_vacancies > 0} />
-          <CountPill icon="💤" label="Sin movimiento" count={data.counts.stale_vacancies} color="gray" active={data.counts.stale_vacancies > 0} />
-          <CountPill icon="🏆" label="Quick wins" count={data.counts.quick_wins} color="emerald" active={data.counts.quick_wins > 0} />
+          <CountPill Icon={Calendar}     label="Entrevistas hoy"  count={interviewsCount}              color="blue"    active={interviewsCount > 0} />
+          <CountPill Icon={Clock}        label="Aging"             count={data.counts.aging}            color="amber"   active={data.counts.aging > 0} />
+          <CountPill Icon={Hand}         label="Decisiones"        count={data.counts.pending_decisions} color="blue"   active={data.counts.pending_decisions > 0} />
+          <CountPill Icon={AlertOctagon} label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red"     active={data.counts.urgent_vacancies > 0} />
+          <CountPill Icon={Moon}         label="Sin movimiento"    count={data.counts.stale_vacancies}  color="gray"    active={data.counts.stale_vacancies > 0} />
+          <CountPill Icon={Trophy}       label="Quick wins"        count={data.counts.quick_wins}       color="emerald" active={data.counts.quick_wins > 0} />
         </div>
 
         {!collapsed && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* Today's interviews primero — agenda del día */}
             {data.todays_interviews && data.todays_interviews.length > 0 && (
-              <div className="rounded-lg border border-blue-400/30 bg-blue-500/5 p-3 lg:col-span-2">
-                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold text-white/90 mb-2">
-                  <span>📅</span>
+              <div className="rounded-lg border border-blue-400/25 bg-blue-500/[0.04] p-3 lg:col-span-2">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-white/80 mb-2.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-300" />
                   <span>Agenda de hoy · entrevistas programadas</span>
-                  <span className="text-white/40 text-[10px] font-medium">· {data.todays_interviews.length}</span>
+                  <span className="text-white/30 ml-auto font-mono tabular-nums">{data.todays_interviews.length}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
                   {data.todays_interviews.map(it => {
                     const time = new Date(it.scheduled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
                     const typeLabel = it.interview_type.replace('_',' ');
                     return (
-                      <div key={it.id} className="bg-white/5 hover:bg-white/10 rounded px-2.5 py-1.5 text-xs">
+                      <div key={it.id} className="bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors">
                         <div className="flex justify-between items-baseline gap-2">
-                          <span className="text-blue-200 font-bold text-sm">{time}</span>
+                          <span className="text-blue-200 font-bold text-sm tabular-nums">{time}</span>
                           <span className="text-[9px] text-white/50">{it.duration_min}min</span>
                         </div>
                         <div className="font-bold text-white truncate">{it.candidate_name}</div>
                         <div className="text-[10px] text-white/60 truncate capitalize">{typeLabel} · {it.vacancy_title}</div>
                         {it.meeting_url && (
-                          <a href={it.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-300 hover:text-blue-200 underline truncate block mt-0.5">
-                            🔗 Abrir reunión
+                          <a href={it.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-300 hover:text-blue-200 truncate flex items-center gap-1 mt-0.5">
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>Abrir reunión</span>
                           </a>
                         )}
                       </div>
@@ -1496,7 +1538,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
             {data.quick_wins.length > 0 && (
               <FocusList
                 title="Quick wins · cierres inminentes"
-                emoji="🏆"
+                Icon={Trophy}
                 tone="emerald"
                 items={data.quick_wins.slice(0, 5).map(c => ({
                   primary: c.name,
@@ -1511,7 +1553,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
             {data.pending_decisions.length > 0 && (
               <FocusList
                 title="Decisiones pendientes"
-                emoji="✋"
+                Icon={Hand}
                 tone="blue"
                 items={data.pending_decisions.slice(0, 5).map(c => ({
                   primary: c.name,
@@ -1526,7 +1568,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
             {data.aging.length > 0 && (
               <FocusList
                 title="Candidatos aging (>5d sin avance)"
-                emoji="⏰"
+                Icon={Clock}
                 tone="amber"
                 items={data.aging.slice(0, 5).map(c => ({
                   primary: c.name,
@@ -1542,7 +1584,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
             {data.urgent_vacancies.length > 0 && (
               <FocusList
                 title="Vacantes pasadas del target"
-                emoji="🔴"
+                Icon={AlertOctagon}
                 tone="red"
                 items={data.urgent_vacancies.slice(0, 5).map(v => ({
                   primary: v.title,
@@ -1557,7 +1599,7 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
             {data.stale_vacancies.length > 0 && (
               <FocusList
                 title="Sin movimiento >7 días"
-                emoji="💤"
+                Icon={Moon}
                 tone="gray"
                 items={data.stale_vacancies.slice(0, 5).map(v => ({
                   primary: v.title,
@@ -1574,65 +1616,74 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
   );
 }
 
-function CountPill({ icon, label, count, color, active }: { icon: string; label: string; count: number; color: string; active: boolean }) {
-  const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
-    amber: { bg: 'bg-amber-500/20', text: 'text-amber-200', ring: 'ring-amber-400/40' },
-    blue: { bg: 'bg-blue-500/20', text: 'text-blue-200', ring: 'ring-blue-400/40' },
-    red: { bg: 'bg-red-500/20', text: 'text-red-200', ring: 'ring-red-400/40' },
-    gray: { bg: 'bg-white/10', text: 'text-white/70', ring: 'ring-white/20' },
-    emerald: { bg: 'bg-emerald-500/20', text: 'text-emerald-200', ring: 'ring-emerald-400/40' },
+function CountPill({ Icon, label, count, color, active }: { Icon: React.ComponentType<{ className?: string }>; label: string; count: number; color: string; active: boolean }) {
+  const colorMap: Record<string, { bg: string; text: string; ring: string; dot: string }> = {
+    amber:   { bg: 'bg-amber-500/15',   text: 'text-amber-200',   ring: 'ring-amber-400/30',   dot: 'bg-amber-400' },
+    blue:    { bg: 'bg-blue-500/15',    text: 'text-blue-200',    ring: 'ring-blue-400/30',    dot: 'bg-blue-400' },
+    red:     { bg: 'bg-red-500/15',     text: 'text-red-200',     ring: 'ring-red-400/30',     dot: 'bg-red-400' },
+    gray:    { bg: 'bg-white/[0.06]',   text: 'text-white/60',    ring: 'ring-white/15',       dot: 'bg-white/40' },
+    emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-200', ring: 'ring-emerald-400/30', dot: 'bg-emerald-400' },
   };
   const c = colorMap[color] || colorMap.gray;
   return (
-    <div className={`${active ? c.bg : 'bg-white/5'} ${active ? c.text : 'text-white/40'} ${active ? `ring-1 ${c.ring}` : ''} rounded-full px-3 py-1 text-[11px] font-bold flex items-center gap-1.5`}>
-      <span>{icon}</span>
-      <span>{label}:</span>
-      <span className="text-sm font-extrabold">{count}</span>
+    <div className={`${active ? c.bg : 'bg-white/[0.03]'} ${active ? c.text : 'text-white/30'} ${active ? `ring-1 ${c.ring}` : 'ring-1 ring-white/5'} rounded-full pl-2 pr-3 py-1 text-[11px] font-medium flex items-center gap-2 transition-colors`}>
+      <span className="flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5" />
+        <span className="hidden md:inline">{label}</span>
+      </span>
+      <span className={`${active ? c.dot : 'bg-white/10'} h-1 w-1 rounded-full`} />
+      <span className="text-[13px] font-bold tabular-nums">{count}</span>
     </div>
   );
 }
 
 function FocusList({
   title,
-  emoji,
+  Icon,
   tone,
   items,
 }: {
   title: string;
-  emoji: string;
+  Icon: React.ComponentType<{ className?: string }>;
   tone: 'amber' | 'blue' | 'red' | 'gray' | 'emerald';
   items: { primary: string; secondary: string; meta: string; severity?: 'high'; onClick?: () => void }[];
 }) {
-  const toneMap: Record<string, string> = {
-    amber: 'border-amber-400/30 bg-amber-500/5',
-    blue: 'border-blue-400/30 bg-blue-500/5',
-    red: 'border-red-400/30 bg-red-500/5',
-    gray: 'border-white/10 bg-white/5',
-    emerald: 'border-emerald-400/30 bg-emerald-500/5',
+  const toneMap: Record<string, { border: string; iconColor: string }> = {
+    amber:   { border: 'border-amber-400/25 bg-amber-500/[0.04]',   iconColor: 'text-amber-300' },
+    blue:    { border: 'border-blue-400/25 bg-blue-500/[0.04]',     iconColor: 'text-blue-300' },
+    red:     { border: 'border-red-400/25 bg-red-500/[0.04]',       iconColor: 'text-red-300' },
+    gray:    { border: 'border-white/10 bg-white/[0.04]',           iconColor: 'text-white/50' },
+    emerald: { border: 'border-emerald-400/25 bg-emerald-500/[0.04]', iconColor: 'text-emerald-300' },
   };
+  const t = toneMap[tone];
   return (
-    <div className={`rounded-lg border ${toneMap[tone]} p-3`}>
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold text-white/90 mb-2">
-        <span>{emoji}</span>
+    <div className={`rounded-lg border ${t.border} p-3`}>
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-white/80 mb-2.5">
+        <Icon className={`w-3.5 h-3.5 ${t.iconColor}`} />
         <span>{title}</span>
-        <span className="text-white/40 text-[10px] font-medium">· {items.length}</span>
+        <span className="text-white/30 ml-auto font-mono tabular-nums">{items.length}</span>
       </div>
       <div className="space-y-1.5">
         {items.map((it, i) => (
           <button
             key={i}
             onClick={it.onClick}
-            className="w-full text-left bg-white/5 hover:bg-white/10 rounded px-2.5 py-1.5 text-xs transition-colors group"
+            className="w-full text-left bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors group"
           >
             <div className="flex items-baseline justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-white truncate flex items-center gap-1">
-                  {it.severity === 'high' && <span className="text-red-400">🚨</span>}
+                <div className="font-semibold text-white truncate flex items-center gap-1.5">
+                  {it.severity === 'high' && (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" title="Alta severidad" />
+                  )}
                   {it.primary}
                 </div>
-                <div className="text-[10px] text-white/60 truncate">{it.secondary}</div>
+                <div className="text-[10px] text-white/55 truncate">{it.secondary}</div>
               </div>
-              <div className="text-[10px] text-white/50 flex-shrink-0 group-hover:text-white/80">{it.meta} →</div>
+              <div className="text-[10px] text-white/45 flex-shrink-0 group-hover:text-white/80 inline-flex items-center gap-1">
+                {it.meta}
+                <ChevronRight className="w-3 h-3" />
+              </div>
             </div>
           </button>
         ))}
@@ -1670,7 +1721,7 @@ function DashboardHero() {
       <HeroCard
         title="Hires este Q"
         accent="#10B981"
-        icon="🎯"
+        Icon={Target}
       >
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-4xl font-extrabold tracking-tight">{data.hires.quarter}</span>
@@ -1694,7 +1745,7 @@ function DashboardHero() {
       <HeroCard
         title="Time-to-fill"
         accent={allTtfOk ? "#10B981" : "#F59E0B"}
-        icon="⏱️"
+        Icon={Clock}
       >
         <div className="space-y-1.5 mt-1">
           {Object.entries(data.time_to_fill).map(([level, t]) => {
@@ -1716,8 +1767,12 @@ function DashboardHero() {
             );
           })}
         </div>
-        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-          {allTtfOk ? '✅ Dentro de targets' : '⚠️ Algún nivel sobre target'}
+        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+          {allTtfOk ? (
+            <><CheckCircle2 className="w-3 h-3 text-emerald-600" /><span>Dentro de targets</span></>
+          ) : (
+            <><AlertTriangle className="w-3 h-3 text-amber-600" /><span>Algún nivel sobre target</span></>
+          )}
         </div>
       </HeroCard>
 
@@ -1725,7 +1780,7 @@ function DashboardHero() {
       <HeroCard
         title="Vacantes activas"
         accent="#F59E0B"
-        icon="💼"
+        Icon={Briefcase}
       >
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-4xl font-extrabold tracking-tight">{data.vacancies.open}</span>
@@ -1734,8 +1789,9 @@ function DashboardHero() {
         <div className="text-xs text-gray-700">
           Promedio <strong className="text-gray-900">{data.vacancies.avg_days_open} días</strong> abiertas
         </div>
-        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-          🏆 {data.vacancies.closed_count} cerradas en historial
+        <div className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5">
+          <Trophy className="w-3 h-3" />
+          <span>{data.vacancies.closed_count} cerradas en historial</span>
         </div>
       </HeroCard>
 
@@ -1743,7 +1799,7 @@ function DashboardHero() {
       <HeroCard
         title="Pipeline"
         accent="#2C64ED"
-        icon="📊"
+        Icon={BarChart3}
       >
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-4xl font-extrabold tracking-tight">{data.pipeline.active}</span>
@@ -1770,11 +1826,19 @@ function DashboardHero() {
       {data.nps != null && (
         <div className="md:col-span-2 lg:col-span-4 bg-white border border-gray-200 rounded-2xl p-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="text-2xl">{data.nps >= 50 ? '🌟' : data.nps >= 0 ? '👍' : '⚠️'}</div>
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center"
+              style={{
+                background: data.nps >= 50 ? 'rgba(16,185,129,0.10)' : data.nps >= 0 ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)',
+                color: data.nps >= 50 ? '#10B981' : data.nps >= 0 ? '#F59E0B' : '#EF4444',
+              }}
+            >
+              {data.nps >= 50 ? <Award className="w-4 h-4" /> : data.nps >= 0 ? <TrendingUp className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+            </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500">NPS · Experiencia del candidato</div>
+              <div className="text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-500">NPS · Experiencia del candidato</div>
               <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-extrabold ${data.nps >= 50 ? 'text-emerald-600' : data.nps >= 0 ? 'text-amber-600' : 'text-red-600'}`}>{data.nps}</span>
+                <span className={`text-2xl font-bold tracking-tight ${data.nps >= 50 ? 'text-emerald-600' : data.nps >= 0 ? 'text-amber-600' : 'text-red-600'}`}>{data.nps}</span>
                 <span className="text-[10px] text-gray-500">
                   {data.nps >= 70 ? 'Excelente' : data.nps >= 50 ? 'Muy bueno' : data.nps >= 30 ? 'Bueno' : data.nps >= 0 ? 'Aceptable' : 'A mejorar'}
                 </span>
@@ -1788,10 +1852,10 @@ function DashboardHero() {
   );
 }
 
-function HeroCard({ title, accent, icon, children }: {
+function HeroCard({ title, accent, Icon, children }: {
   title: string;
   accent: string;
-  icon: string;
+  Icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
 }) {
   return (
@@ -1800,9 +1864,14 @@ function HeroCard({ title, accent, icon, children }: {
         className="absolute top-0 left-0 right-0 h-[3px]"
         style={{ background: `linear-gradient(90deg, ${accent} 0%, ${accent}33 100%)` }}
       />
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{title}</span>
-        <span className="text-base">{icon}</span>
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-500">{title}</span>
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ background: `${accent}14`, color: accent }}
+        >
+          <Icon className="w-3.5 h-3.5" />
+        </div>
       </div>
       {children}
     </div>
@@ -1950,10 +2019,11 @@ function VacanciesOverview() {
                     <td className="px-3 py-2 text-right">
                       <button
                         onClick={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
-                        className="text-[10px] font-bold text-black hover:underline"
-                        title="Estudio de mercado"
+                        className="text-[10px] font-semibold text-black hover:underline inline-flex items-center gap-1"
+                        title="Estudio de mercado IA"
                       >
-                        🤖 Ver
+                        <Eye className="w-3 h-3" />
+                        <span>Ver</span>
                       </button>
                     </td>
                   </tr>
@@ -1983,7 +2053,6 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
   const hasLinkedIn = !!m.linkedin_active_date;
   const healthColor = v.health.score === 'green' ? '#10B981' : v.health.score === 'yellow' ? '#F59E0B' : '#EF4444';
   const healthBg = v.health.score === 'green' ? '#ECFDF5' : v.health.score === 'yellow' ? '#FFFBEB' : '#FEF2F2';
-  const healthEmoji = v.health.score === 'green' ? '🟢' : v.health.score === 'yellow' ? '🟡' : '🔴';
   const targetPct = v.metrics.target_days > 0
     ? Math.min(100, Math.round(((v.metrics.days_active || 0) / v.metrics.target_days) * 100))
     : 0;
@@ -2008,8 +2077,16 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
         <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ background: healthColor }} />
         {/* Area name superpuesta */}
         <div className="absolute bottom-1.5 left-3 right-3 flex items-end justify-between text-white">
-          <span className="text-[10px] uppercase tracking-[1.5px] font-bold opacity-80">{v.area || '—'}</span>
-          <span className="text-base flex-shrink-0" title={v.health.reason}>{healthEmoji}</span>
+          <span className="text-[10px] uppercase tracking-[1.5px] font-semibold opacity-85">{v.area || '—'}</span>
+          <span
+            className="flex-shrink-0 inline-flex items-center gap-1 bg-black/40 backdrop-blur px-1.5 py-0.5 rounded-full"
+            title={v.health.reason}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: healthColor }} />
+            <span className="text-[9px] font-bold uppercase tracking-wider">
+              {v.health.score === 'green' ? 'On track' : v.health.score === 'yellow' ? 'Atención' : 'Crítico'}
+            </span>
+          </span>
         </div>
       </div>
 
@@ -2107,7 +2184,10 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
       {/* Aging alert */}
       {v.aging_candidates.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3 text-[10px]">
-          <div className="font-bold text-amber-800 mb-0.5">⏰ {v.aging_candidates.length} candidato{v.aging_candidates.length > 1 ? 's' : ''} aging (&gt;5d sin moverse)</div>
+          <div className="font-bold text-amber-800 mb-0.5 flex items-center gap-1.5">
+            <Clock className="w-3 h-3" />
+            <span>{v.aging_candidates.length} candidato{v.aging_candidates.length > 1 ? 's' : ''} aging (&gt;5d sin moverse)</span>
+          </div>
           <div className="text-amber-700 truncate">
             {v.aging_candidates.slice(0, 2).map(a => `${a.name.split(' ')[0]} (${a.days_since_update}d)`).join(', ')}
             {v.aging_candidates.length > 2 && ` +${v.aging_candidates.length - 2} más`}
@@ -2117,8 +2197,9 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
 
       {/* LinkedIn warning */}
       {!hasLinkedIn && (
-        <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2 text-[10px] text-amber-800">
-          ⚠️ LinkedIn aún no activado
+        <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2 text-[10px] text-amber-800 flex items-center gap-1.5">
+          <AlertTriangle className="w-3 h-3" />
+          <span>LinkedIn aún no activado</span>
         </div>
       )}
 
@@ -2287,7 +2368,13 @@ function VacancyMarketResearchModal({
               disabled={generating}
               className="bg-white/20 hover:bg-white/30 disabled:opacity-50 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
             >
-              {generating ? '⏳ Generando…' : (report ? '🔄 Regenerar' : '✨ Generar')}
+              {generating ? (
+                <><Hourglass className="w-3 h-3" /> Generando…</>
+              ) : report ? (
+                <><RefreshCw className="w-3 h-3" /> Regenerar</>
+              ) : (
+                <><Sparkles className="w-3 h-3" /> Generar</>
+              )}
             </button>
             <button
               onClick={onClose}
@@ -2305,7 +2392,9 @@ function VacancyMarketResearchModal({
 
           {!loading && !report && !generating && (
             <div className="text-center py-10">
-              <div className="text-5xl mb-3">🤖</div>
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                <Bot className="w-7 h-7 text-gray-400" />
+              </div>
               <h3 className="text-lg font-bold text-gray-900">Aún no hay estudio</h3>
               <p className="text-sm text-gray-500 mt-1 mb-4">
                 Generaremos un análisis completo: compensación COP, tiempos de reclutamiento,<br />
@@ -2324,7 +2413,9 @@ function VacancyMarketResearchModal({
 
           {generating && (
             <div className="text-center py-12">
-              <div className="text-5xl mb-3 animate-pulse">🧠</div>
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-purple-100 flex items-center justify-center animate-pulse">
+                <Brain className="w-7 h-7 text-purple-600" />
+              </div>
               <h3 className="text-base font-bold text-gray-900">Claude está investigando…</h3>
               <p className="text-xs text-gray-500 mt-1">Analizando mercado de logística internacional Colombia 2026 · ~30s</p>
             </div>
@@ -2346,14 +2437,14 @@ function VacancyMarketResearchModal({
 
               {/* Exec summary */}
               {report.exec_summary && (
-                <Section title="Resumen ejecutivo" icon="📊" color="purple">
+                <Section title="Resumen ejecutivo" Icon={FileText} color="purple">
                   <p className="text-sm text-gray-700 leading-relaxed">{report.exec_summary}</p>
                 </Section>
               )}
 
               {/* Compensación */}
               {report.compensation && (
-                <Section title="Compensación · Mercado Colombia 2026" icon="💰" color="emerald">
+                <Section title="Compensación · Mercado Colombia 2026" Icon={Trophy} color="emerald">
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <SalaryBox label="MIN" amount={fmtCOP(report.compensation.base_monthly_min)} bg="#FEF3C7" />
                     <SalaryBox label="MEDIANA" amount={fmtCOP(report.compensation.base_monthly_median)} bg="#D1FAE5" highlight />
@@ -2381,7 +2472,7 @@ function VacancyMarketResearchModal({
 
               {/* Timeline reclutamiento */}
               {report.recruiting_timeline && (
-                <Section title="Tiempos de reclutamiento" icon="⏱️" color="blue">
+                <Section title="Tiempos de reclutamiento" Icon={Clock} color="blue">
                   <div className="grid grid-cols-2 gap-3 mb-2">
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
                       <div className="text-[10px] uppercase font-bold text-blue-700">Industria</div>
@@ -2398,17 +2489,17 @@ function VacancyMarketResearchModal({
                     <p className="text-xs text-gray-700 mb-2">{report.recruiting_timeline.comparison}</p>
                   )}
                   {report.recruiting_timeline.factors_speeding_up && report.recruiting_timeline.factors_speeding_up.length > 0 && (
-                    <PillRow label="✓ Aceleran" items={report.recruiting_timeline.factors_speeding_up} color="emerald" />
+                    <PillRow label="Aceleran" items={report.recruiting_timeline.factors_speeding_up} color="emerald" />
                   )}
                   {report.recruiting_timeline.factors_slowing_down && report.recruiting_timeline.factors_slowing_down.length > 0 && (
-                    <PillRow label="⚠️ Frenan" items={report.recruiting_timeline.factors_slowing_down} color="red" />
+                    <PillRow label="Frenan" items={report.recruiting_timeline.factors_slowing_down} color="red" />
                   )}
                 </Section>
               )}
 
               {/* Talent landscape */}
               {report.talent_landscape && (
-                <Section title="Talent landscape" icon="🌎" color="indigo">
+                <Section title="Talent landscape" Icon={Globe} color="indigo">
                   <div className="grid grid-cols-3 gap-2 mb-2 text-[11px]">
                     <KV k="Pool" v={report.talent_landscape.pool_size_estimate} />
                     <KV k="Demanda" v={report.talent_landscape.demand_level} />
@@ -2428,7 +2519,7 @@ function VacancyMarketResearchModal({
 
               {/* Skills 2026 */}
               {report.in_demand_skills_2026 && (
-                <Section title="Skills más demandadas 2026" icon="🎯" color="orange">
+                <Section title="Skills más demandadas 2026" Icon={Target} color="orange">
                   {report.in_demand_skills_2026.must_have_technical && (
                     <PillRow label="Técnicas (must-have)" items={report.in_demand_skills_2026.must_have_technical} color="purple" />
                   )}
@@ -2446,7 +2537,7 @@ function VacancyMarketResearchModal({
 
               {/* Sourcing */}
               {report.sourcing_strategy && (
-                <Section title="Sourcing strategy" icon="🔍" color="cyan">
+                <Section title="Sourcing strategy" Icon={Search} color="cyan">
                   {report.sourcing_strategy.linkedin_search_strings && report.sourcing_strategy.linkedin_search_strings.length > 0 && (
                     <div className="mb-3">
                       <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">LinkedIn Recruiter · Search strings</div>
@@ -2487,7 +2578,7 @@ function VacancyMarketResearchModal({
 
               {/* Riesgos del proceso */}
               {report.process_risks && (
-                <Section title="Riesgos del proceso" icon="⚠️" color="red">
+                <Section title="Riesgos del proceso" Icon={AlertTriangle} color="red">
                   <div className="mb-2">
                     <span className="text-[10px] uppercase font-bold text-gray-500">Counter-offer:</span>
                     <span className="ml-2 text-xs font-bold uppercase text-red-700">{report.process_risks.counter_offer_likelihood}</span>
@@ -2499,7 +2590,7 @@ function VacancyMarketResearchModal({
                     <PillRow label="Razones comunes de drop-off" items={report.process_risks.common_dropout_reasons} color="red" />
                   )}
                   {report.process_risks.red_flags_in_candidates && (
-                    <PillRow label="🚩 Red flags" items={report.process_risks.red_flags_in_candidates} color="red" />
+                    <PillRow label="Red flags" items={report.process_risks.red_flags_in_candidates} color="red" />
                   )}
                   {report.process_risks.negotiation_pain_points && (
                     <PillRow label="Puntos de fricción en negociación" items={report.process_risks.negotiation_pain_points} color="amber" />
@@ -2509,12 +2600,12 @@ function VacancyMarketResearchModal({
 
               {/* Recomendaciones tácticas */}
               {report.tactical_recommendations && (
-                <Section title="Recomendaciones tácticas" icon="🎯" color="emerald">
+                <Section title="Recomendaciones tácticas" Icon={Award} color="emerald">
                   {report.tactical_recommendations.ts_value_props_to_highlight && (
                     <PillRow label="Diferenciales TS a destacar" items={report.tactical_recommendations.ts_value_props_to_highlight} color="emerald" />
                   )}
                   {report.tactical_recommendations.what_to_avoid_saying && (
-                    <PillRow label="❌ Evitar decir" items={report.tactical_recommendations.what_to_avoid_saying} color="red" />
+                    <PillRow label="Evitar decir" items={report.tactical_recommendations.what_to_avoid_saying} color="red" />
                   )}
                   {report.tactical_recommendations.interview_focus_areas && (
                     <PillRow label="Áreas a profundizar en entrevista" items={report.tactical_recommendations.interview_focus_areas} color="purple" />
@@ -2535,15 +2626,15 @@ function VacancyMarketResearchModal({
 
               {/* Competitive intel */}
               {report.competitive_intelligence && (
-                <Section title="Competitive intelligence" icon="🔬" color="purple">
+                <Section title="Competitive intelligence" Icon={BarChart3} color="purple">
                   {report.competitive_intelligence.typical_offer_packages && (
                     <p className="text-xs text-gray-700 mb-2"><strong>Paquetes típicos competencia:</strong> {report.competitive_intelligence.typical_offer_packages}</p>
                   )}
                   {report.competitive_intelligence.ts_advantages && (
-                    <PillRow label="✓ Ventajas TS" items={report.competitive_intelligence.ts_advantages} color="emerald" />
+                    <PillRow label="Ventajas TS" items={report.competitive_intelligence.ts_advantages} color="emerald" />
                   )}
                   {report.competitive_intelligence.ts_disadvantages && (
-                    <PillRow label="⚠️ Desventajas TS" items={report.competitive_intelligence.ts_disadvantages} color="amber" />
+                    <PillRow label="Desventajas TS" items={report.competitive_intelligence.ts_disadvantages} color="amber" />
                   )}
                   {report.competitive_intelligence.differentiators_to_communicate && (
                     <PillRow label="Diferenciadores a comunicar" items={report.competitive_intelligence.differentiators_to_communicate} color="purple" />
@@ -2558,20 +2649,21 @@ function VacancyMarketResearchModal({
   );
 }
 
-function Section({ title, icon, color, children }: { title: string; icon: string; color: string; children: React.ReactNode }) {
-  const colorMap: Record<string, string> = {
-    purple: 'border-purple-200 bg-purple-50/30',
-    emerald: 'border-emerald-200 bg-emerald-50/30',
-    blue: 'border-blue-200 bg-blue-50/30',
-    indigo: 'border-indigo-200 bg-indigo-50/30',
-    orange: 'border-orange-200 bg-orange-50/30',
-    cyan: 'border-cyan-200 bg-cyan-50/30',
-    red: 'border-red-200 bg-red-50/30',
+function Section({ title, Icon, color, children }: { title: string; Icon: React.ComponentType<{ className?: string }>; color: string; children: React.ReactNode }) {
+  const colorMap: Record<string, { bg: string; iconColor: string }> = {
+    purple:  { bg: 'border-purple-200 bg-purple-50/30',   iconColor: 'text-purple-600' },
+    emerald: { bg: 'border-emerald-200 bg-emerald-50/30', iconColor: 'text-emerald-600' },
+    blue:    { bg: 'border-blue-200 bg-blue-50/30',       iconColor: 'text-blue-600' },
+    indigo:  { bg: 'border-indigo-200 bg-indigo-50/30',   iconColor: 'text-indigo-600' },
+    orange:  { bg: 'border-orange-200 bg-orange-50/30',   iconColor: 'text-orange-600' },
+    cyan:    { bg: 'border-cyan-200 bg-cyan-50/30',       iconColor: 'text-cyan-600' },
+    red:     { bg: 'border-red-200 bg-red-50/30',         iconColor: 'text-red-600' },
   };
+  const c = colorMap[color] || { bg: 'border-gray-200 bg-gray-50/30', iconColor: 'text-gray-600' };
   return (
-    <div className={`border rounded-lg p-3 ${colorMap[color] || 'border-gray-200 bg-gray-50/30'}`}>
-      <h4 className="text-[11px] uppercase tracking-wider font-extrabold text-gray-700 mb-2 flex items-center gap-1.5">
-        <span>{icon}</span>
+    <div className={`border rounded-lg p-3 ${c.bg}`}>
+      <h4 className="text-[11px] uppercase tracking-[1.5px] font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
+        <Icon className={`w-3.5 h-3.5 ${c.iconColor}`} />
         <span>{title}</span>
       </h4>
       {children}
@@ -2635,7 +2727,7 @@ function fmtDate(iso?: string | null): string {
 function stageLabelShort(s: string): string {
   const map: Record<string, string> = {
     aplico: 'Aplicó', prefiltro_enviado: 'Pref. enviado', prefiltro_pasado: 'Pref. ✓',
-    prefiltro_revision: 'Pref. ⚠️', assessment_invitado: 'Elev. inv', assessment_en_progreso: 'Elev. prog',
+    prefiltro_revision: 'Pref. (rev)', assessment_invitado: 'Elev. inv', assessment_en_progreso: 'Elev. prog',
     assessment_completado: 'Elev. ✓', entrevista_ia: 'IA', bateria_psicometrica: 'Batería',
     recruiter_interview: 'Recr.', cwo_interview: 'CWO', touring: 'Touring', terna: 'Terna', oferta: 'Oferta',
     contratado: 'Contratado', rechazado: 'Rechazado',
@@ -5757,7 +5849,9 @@ function CandidateSearchModal({ onClose, onJumpFunnel }: { onClose: () => void; 
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
           {!loading && results.length === 0 && (
             <div className="text-center py-12 px-4">
-              <div className="text-3xl mb-2">🔎</div>
+              <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-gray-100 flex items-center justify-center">
+                <Search className="w-5 h-5 text-gray-400" />
+              </div>
               <div className="text-sm font-bold text-gray-700">Sin resultados</div>
               <div className="text-xs text-gray-500 mt-1">
                 {debouncedQ ? `No encontramos candidatos para "${debouncedQ}"` : 'Empezá a escribir para buscar'}
