@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   // Buscar última entrevista IA
   const { data: ai } = await supabaseAdmin
     .from("ht_ai_interviews")
-    .select("id, token, conversation_id, audio_url, status, ai_score, completed_at, created_at")
+    .select("id, token, conversation_id, audio_url, status, ai_score, completed_at, created_at, transcript, agent_id")
     .eq("candidate_id", cand.id)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -72,32 +72,77 @@ export async function GET(req: NextRequest) {
   };
 
   // Probar HEAD a ElevenLabs si hay conversation_id + API key
-  let elevenlabs_check: any = null;
+  let elevenlabs_audio_check: any = null;
+  let elevenlabs_transcript_check: any = null;
   if (ai.conversation_id && process.env.ELEVENLABS_API_KEY) {
+    // Audio HEAD
     try {
       const r = await fetch(
         `https://api.elevenlabs.io/v1/convai/conversations/${ai.conversation_id}/audio`,
         { method: "HEAD", headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
       );
-      elevenlabs_check = {
+      elevenlabs_audio_check = {
         status: r.status,
         ok: r.ok,
         content_type: r.headers.get('content-type'),
         content_length: r.headers.get('content-length'),
+        content_length_kb: r.headers.get('content-length') ? Math.round(Number(r.headers.get('content-length')) / 1024) : null,
       };
     } catch (e: any) {
-      elevenlabs_check = { error: e?.message || String(e) };
+      elevenlabs_audio_check = { error: e?.message || String(e) };
+    }
+
+    // Transcript GET (full conversation metadata)
+    try {
+      const r = await fetch(
+        `https://api.elevenlabs.io/v1/convai/conversations/${ai.conversation_id}`,
+        { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+      );
+      if (r.ok) {
+        const j = await r.json();
+        elevenlabs_transcript_check = {
+          status: r.status,
+          ok: true,
+          conversation_status: j.status || null,
+          turn_count: Array.isArray(j.transcript) ? j.transcript.length : (j.transcript ? 'present' : 'empty'),
+          duration_secs: j.metadata?.call_duration_secs || null,
+          start_time_unix: j.metadata?.start_time_unix_secs || null,
+        };
+      } else {
+        const detail = await r.text().catch(() => '');
+        elevenlabs_transcript_check = {
+          status: r.status,
+          ok: false,
+          detail: detail.slice(0, 200),
+        };
+      }
+    } catch (e: any) {
+      elevenlabs_transcript_check = { error: e?.message || String(e) };
     }
   }
 
-  // Recomendación de fix
-  let recommendation = "OK";
-  if (!ai.conversation_id) recommendation = "Falta conversation_id — refrescar entrevista o reenviar";
-  else if (!ai.audio_url) recommendation = "audio_url null — regenerar desde finalize endpoint";
-  else if (diagnosis.audio_url_kind === 'BAD_localhost') recommendation = "audio_url tiene localhost — regenerar con base_url correcto";
-  else if (elevenlabs_check?.status === 404) recommendation = "ElevenLabs no tiene audio para este conversation_id (puede haber expirado o nunca se grabó)";
-  else if (elevenlabs_check?.status === 401) recommendation = "ELEVENLABS_API_KEY inválida o expirada";
-  else if (elevenlabs_check && !elevenlabs_check.ok) recommendation = `ElevenLabs devuelve ${elevenlabs_check.status}`;
+  // Recomendación de fix más detallada
+  let recommendation = "OK · todo en orden, debería funcionar";
+  if (!ai.conversation_id) {
+    recommendation = "Falta conversation_id — relanzar entrevista (botón Reenviar)";
+  } else if (elevenlabs_audio_check?.status === 401) {
+    recommendation = "ELEVENLABS_API_KEY inválida — revisar variable de entorno en Vercel";
+  } else if (elevenlabs_transcript_check?.ok && elevenlabs_audio_check?.ok) {
+    // ElevenLabs sí tiene todo · el problema es del lado de la app
+    if (!ai.audio_url || diagnosis.audio_url_kind === 'BAD_localhost') {
+      recommendation = "ElevenLabs tiene el audio Y el transcript. Solo falta regenerar audio_url en BD (script: actualizar audio_url al proxy correcto)";
+    } else if (!ai.transcript) {
+      recommendation = "ElevenLabs tiene el transcript pero la BD no lo tiene cacheado. Re-correr scoring debería traerlo. Si sigue fallando, problema de timeout en Vercel.";
+    } else {
+      recommendation = "ElevenLabs y BD tienen todo. El problema puede ser CORS o el frontend cargando mal el audio. Probar en otro browser / incognito.";
+    }
+  } else if (elevenlabs_audio_check?.status === 404 && elevenlabs_transcript_check?.status === 404) {
+    recommendation = "ElevenLabs perdió audio Y transcript. La conversación ya no existe ahí. Hay que reenviar entrevista al candidato.";
+  } else if (elevenlabs_audio_check?.status === 404 && elevenlabs_transcript_check?.ok) {
+    recommendation = "Curioso · ElevenLabs tiene transcript pero NO audio. Puede ser plan que ya no incluye audio storage. El scoring SÍ debería poder correr porque solo necesita transcript.";
+  } else if (elevenlabs_audio_check?.ok && elevenlabs_transcript_check?.status === 404) {
+    recommendation = "Audio existe pero no transcript. Raro. Reintentar fetch del transcript en /finalize.";
+  }
 
   return NextResponse.json({
     candidate: cand,
@@ -109,9 +154,13 @@ export async function GET(req: NextRequest) {
       completed_at: ai.completed_at,
       conversation_id: ai.conversation_id,
       audio_url: ai.audio_url,
+      transcript_in_db: !!ai.transcript,
+      transcript_size_chars: ai.transcript ? JSON.stringify(ai.transcript).length : 0,
+      agent_id: ai.agent_id,
     },
     diagnosis,
-    elevenlabs_check,
+    elevenlabs_audio_check,
+    elevenlabs_transcript_check,
     recommendation,
   });
 }
