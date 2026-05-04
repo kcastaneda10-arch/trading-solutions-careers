@@ -48,20 +48,67 @@ export async function POST(req: NextRequest) {
 
     const existingSet = new Set((existing || []).map((c: any) => (c.email || '').toLowerCase()));
 
-    // 2. Build payloads para los nuevos — INCLUYENDO client_id (NOT NULL en el schema)
+    // 2. Probe schema: chequear qué columnas opcionales existen
+    // Nota: current_role es palabra reservada en Postgres, usamos current_job_role
+    const { error: probeErr } = await supabaseAdmin
+      .from("ht_candidates")
+      .select("notes, headline, current_job_role, linkedin_url, source, salary_aspiration_cop, english_level, location")
+      .limit(1);
+    const hasMetadataCols = !probeErr;
+
+    // Helpers para extraer data de notes
+    const ex = (notes: string, key: string): string | null => {
+      const re = new RegExp(`${key}:\\s*([^·]+?)(?:\\s*·|$)`);
+      const m = notes.match(re);
+      return m ? m[1].trim() : null;
+    };
+    const exSal = (notes: string): number | null => {
+      const m = notes.match(/Aspiración salarial:\s*COP\s+([\d.]+)/);
+      if (!m) return null;
+      const n = Number(m[1].replace(/\./g, ''));
+      return n >= 500_000 && n <= 100_000_000 ? n : null;
+    };
+    const exHeadline = (notes: string): string | null => {
+      const m = notes.match(/Headline:\s*([^·]+?)(?:\s*·\s*Actual:|\s*·\s*Educación:|\s*·\s*LinkedIn:|$)/);
+      return m ? m[1].trim() : null;
+    };
+    const exCurrent = (notes: string): { role: string | null; company: string | null } => {
+      const m = notes.match(/Actual:\s*([^·]+?)\s+en\s+([^·]+?)(?:\s*·|$)/);
+      return m ? { role: m[1].trim(), company: m[2].trim() } : { role: null, company: null };
+    };
+
+    // 3. Build payloads — incluir client_id (NOT NULL) + columnas opcionales solo si existen
     const toInsert = cands
       .filter(c => !existingSet.has(c.email.toLowerCase()))
-      .map(c => ({
-        client_id: TS_CLIENT_ID,
-        name: c.name,
-        email: c.email,
-        phone: c.phone,
-        vacancy_id: c.vacancy_id,
-        stage: 'aplico',
-        status: 'new',
-        notes: c.notes,
-        created_at: c.applied ? `${c.applied}T12:00:00Z` : new Date().toISOString(),
-      }));
+      .map(c => {
+        const linkedin = ex(c.notes, 'LinkedIn');
+        const cur = exCurrent(c.notes);
+        const base: any = {
+          client_id: TS_CLIENT_ID,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          vacancy_id: c.vacancy_id,
+          stage: 'aplico',
+          status: 'new',
+          created_at: c.applied ? `${c.applied}T12:00:00Z` : new Date().toISOString(),
+        };
+        if (hasMetadataCols) {
+          base.notes = c.notes;
+          base.headline = exHeadline(c.notes);
+          base.current_job_role = cur.role;
+          base.current_company = cur.company;
+          base.linkedin_url = linkedin;
+          base.source = 'linkedin';
+          base.salary_aspiration_cop = exSal(c.notes);
+          base.english_level = ex(c.notes, 'Inglés');
+          base.location = ex(c.notes, 'Ubicación');
+        } else {
+          // Sin columnas de metadata, al menos guardamos LinkedIn URL en cv_url
+          base.cv_url = linkedin;
+        }
+        return base;
+      });
 
     if (toInsert.length === 0) {
       return NextResponse.json({
