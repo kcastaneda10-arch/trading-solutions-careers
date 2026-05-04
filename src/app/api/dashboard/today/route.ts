@@ -183,6 +183,39 @@ export async function GET(req: NextRequest) {
       })
       .filter(Boolean);
 
+    // ─── Recent movements (candidatos cuyo stage cambió en últimas 24h) ───
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const recentMovements = (cands || [])
+      .filter((c: any) => {
+        if (!c.updated_at) return false;
+        const updated = new Date(c.updated_at);
+        return updated >= yesterday;
+      })
+      .map((c: any) => {
+        const v = vacById[c.vacancy_id];
+        if (!v) return null;
+        return {
+          candidate_id: c.id,
+          name: c.name,
+          stage: c.stage,
+          status: c.status,
+          updated_at: c.updated_at,
+          hours_ago: Math.floor((today.getTime() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60)),
+          vacancy_id: c.vacancy_id,
+          vacancy_title: v.title,
+          // Categorizar el movimiento para badge visual
+          movement_type:
+            c.stage === 'contratado' ? 'hired'
+            : c.stage === 'rechazado' ? 'rejected'
+            : ['oferta', 'terna', 'touring'].includes(c.stage) ? 'late_stage'
+            : ['recruiter_interview', 'cwo_interview', 'entrevista_ia'].includes(c.stage) ? 'interview'
+            : 'other',
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => new Date(b!.updated_at).getTime() - new Date(a!.updated_at).getTime())
+      .slice(0, 15); // top 15 más recientes
+
     // ─── Today's interviews — entrevistas agendadas para hoy ───
     const todayStart = new Date(today);
     todayStart.setHours(0, 0, 0, 0);
@@ -226,6 +259,7 @@ export async function GET(req: NextRequest) {
         stale_vacancies: staleVacancies.length,
         quick_wins: quickWins.length,
         todays_interviews: todaysInterviews.length,
+        recent_movements: recentMovements.length,
       },
       aging,
       pending_decisions: pendingDecisions,
@@ -233,6 +267,7 @@ export async function GET(req: NextRequest) {
       stale_vacancies: staleVacancies,
       quick_wins: quickWins,
       todays_interviews: todaysInterviews,
+      recent_movements: recentMovements,
     });
   } catch (err: any) {
     console.error("today route error:", err);

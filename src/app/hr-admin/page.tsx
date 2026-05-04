@@ -1527,6 +1527,7 @@ type TodayFocusData = {
     stale_vacancies: number;
     quick_wins: number;
     todays_interviews?: number;
+    recent_movements?: number;
   };
   aging: { candidate_id: string; name: string; email: string; stage: string; days_since_update: number; vacancy_id: string; vacancy_title: string; severity: 'high'|'medium' }[];
   pending_decisions: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string; action: string }[];
@@ -1534,6 +1535,7 @@ type TodayFocusData = {
   stale_vacancies: { vacancy_id: string; title: string; area: string; candidates_count: number }[];
   quick_wins: { candidate_id: string; name: string; stage: string; days_in_stage: number; vacancy_id: string; vacancy_title: string }[];
   todays_interviews?: { id: string; candidate_id: string; candidate_name: string; vacancy_id: string; vacancy_title: string; interview_type: string; scheduled_at: string; duration_min: number; meeting_url: string | null; location: string | null; status: string }[];
+  recent_movements?: { candidate_id: string; name: string; stage: string; status: string; updated_at: string; hours_ago: number; vacancy_id: string; vacancy_title: string; movement_type: 'hired'|'rejected'|'late_stage'|'interview'|'other' }[];
 };
 
 function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: { vacancyFilter?: string; onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
@@ -1654,108 +1656,115 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
     );
   }
 
-  return (
-    <div className="rounded-2xl p-5 mb-4 text-white relative overflow-hidden shadow-sm" style={{ background: '#0A0A0A' }}>
-      {/* Foto TS de fondo sutil */}
-      <div
-        className="absolute inset-0 opacity-[0.18] bg-cover bg-center"
-        style={{ backgroundImage: `url(${TS_IMG.hero})` }}
-      />
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(105deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 100%)' }} />
+  const movementsCount = data.counts.recent_movements || 0;
 
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
-              <Target className="w-4 h-4 text-white/90" strokeWidth={2} />
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-white/55">Today's Focus</div>
-              <div className="text-lg font-bold tracking-[-0.01em] leading-tight font-display">
-                {totalAlerts} acci{totalAlerts !== 1 ? 'ones' : 'ón'} pendiente{totalAlerts !== 1 ? 's' : ''}
-                {data.counts.quick_wins > 0 && (
-                  <span className="ml-2 text-emerald-300 font-semibold inline-flex items-center gap-1">
-                    <Trophy className="w-3.5 h-3.5" strokeWidth={2} />
-                    {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
+  return (
+    <div className="rounded-2xl p-5 mb-4 bg-white border border-gray-200 shadow-sm">
+      {/* Header — limpio, sin foto de fondo */}
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-black/5 ring-1 ring-black/10 flex items-center justify-center">
+            <Target className="w-4 h-4 text-gray-900" strokeWidth={2} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-gray-500">Today's Focus</div>
+            <div className="text-lg font-bold tracking-[-0.01em] leading-tight font-display text-gray-900">
+              {totalAlerts > 0 ? (
+                <>
+                  {totalAlerts} acci{totalAlerts !== 1 ? 'ones' : 'ón'} pendiente{totalAlerts !== 1 ? 's' : ''}
+                </>
+              ) : (
+                <>Día tranquilo · revisá oportunidades</>
+              )}
+              {data.counts.quick_wins > 0 && (
+                <span className="ml-2 text-emerald-700 font-semibold inline-flex items-center gap-1 text-base">
+                  <Trophy className="w-3.5 h-3.5" strokeWidth={2} />
+                  {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
           </div>
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            className="text-white/60 hover:text-white text-xs font-medium"
-          >
-            {collapsed ? 'Expandir ↓' : 'Colapsar ↑'}
-          </button>
         </div>
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="text-gray-500 hover:text-gray-900 text-xs font-medium"
+        >
+          {collapsed ? 'Expandir ↓' : 'Colapsar ↑'}
+        </button>
+      </div>
 
-        {/* Counter pills */}
-        <div className="flex flex-wrap gap-2 mb-3">
-          <CountPill Icon={Calendar}     label="Entrevistas hoy"  count={interviewsCount}              color="blue"    active={interviewsCount > 0} />
-          <CountPill Icon={Clock}        label="Aging"             count={data.counts.aging}            color="amber"   active={data.counts.aging > 0} />
-          <CountPill Icon={Hand}         label="Decisiones"        count={data.counts.pending_decisions} color="blue"   active={data.counts.pending_decisions > 0} />
-          <CountPill Icon={AlertOctagon} label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red"     active={data.counts.urgent_vacancies > 0} />
-          <CountPill Icon={Moon}         label="Sin movimiento"    count={data.counts.stale_vacancies}  color="gray"    active={data.counts.stale_vacancies > 0} />
-          <CountPill Icon={Trophy}       label="Quick wins"        count={data.counts.quick_wins}       color="emerald" active={data.counts.quick_wins > 0} />
-        </div>
+      {/* Counter pills — versión light */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <CountPill Icon={Trophy}       label="Quick wins"        count={data.counts.quick_wins}       color="emerald" active={data.counts.quick_wins > 0} />
+        <CountPill Icon={ArrowUpRight} label="Movimientos 24h"   count={movementsCount}                color="blue"    active={movementsCount > 0} />
+        <CountPill Icon={Calendar}     label="Entrevistas hoy"   count={interviewsCount}              color="blue"    active={interviewsCount > 0} />
+        <CountPill Icon={Hand}         label="Decisiones"        count={data.counts.pending_decisions} color="blue"   active={data.counts.pending_decisions > 0} />
+        <CountPill Icon={Clock}        label="Aging"             count={data.counts.aging}            color="amber"   active={data.counts.aging > 0} />
+        <CountPill Icon={AlertOctagon} label="Vacantes urgentes" count={data.counts.urgent_vacancies} color="red"     active={data.counts.urgent_vacancies > 0} />
+        <CountPill Icon={Moon}         label="Sin movimiento"    count={data.counts.stale_vacancies}  color="gray"    active={data.counts.stale_vacancies > 0} />
+      </div>
 
-        {!collapsed && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {/* Today's interviews primero — agenda del día */}
-            {data.todays_interviews && data.todays_interviews.length > 0 && (
-              <div className="rounded-lg border border-blue-400/25 bg-blue-500/[0.04] p-3 lg:col-span-2">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-white/80 mb-2.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-300" />
-                  <span>Agenda de hoy · entrevistas programadas</span>
-                  <span className="text-white/30 ml-auto font-mono tabular-nums">{data.todays_interviews.length}</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                  {data.todays_interviews.map(it => {
-                    const time = new Date(it.scheduled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
-                    const typeLabel = it.interview_type.replace('_',' ');
-                    return (
-                      <div key={it.id} className="bg-white/[0.04] hover:bg-white/[0.08] rounded px-2.5 py-1.5 text-xs transition-colors">
-                        <div className="flex justify-between items-baseline gap-2">
-                          <span className="text-blue-200 font-bold text-sm tabular-nums">{time}</span>
-                          <span className="text-[9px] text-white/50">{it.duration_min}min</span>
-                        </div>
-                        <div className="font-bold text-white truncate">{it.candidate_name}</div>
-                        <div className="text-[10px] text-white/60 truncate capitalize">{typeLabel} · {it.vacancy_title}</div>
-                        {it.meeting_url && (
-                          <a href={it.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-300 hover:text-blue-200 truncate flex items-center gap-1 mt-0.5">
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            <span>Abrir reunión</span>
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+      {!collapsed && (
+        <div className="space-y-3">
+          {/* SECCIÓN PRIORITARIA · Quick wins arriba */}
+          {data.quick_wins.length > 0 && (
+            <FocusList
+              title="Quick wins · cierres inminentes (acción de mayor ROI)"
+              Icon={Trophy}
+              tone="emerald"
+              onReject={rejectCandidate}
+              onAdvance={advanceCandidate}
+              onRefresh={refresh}
+              items={data.quick_wins.slice(0, 5).map(c => ({
+                candidate_id: c.candidate_id,
+                primary: c.name,
+                secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
+                meta: `${c.days_in_stage}d en stage`,
+                onClick: onJumpToFunnel,
+              }))}
+            />
+          )}
+
+          {/* SECCIÓN NUEVA · Movimientos 24h — qué pasó desde ayer */}
+          {data.recent_movements && data.recent_movements.length > 0 && (
+            <RecentMovementsList movements={data.recent_movements} onJumpToFunnel={onJumpToFunnel} />
+          )}
+
+          {/* Today's interviews · agenda del día */}
+          {data.todays_interviews && data.todays_interviews.length > 0 && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-700 mb-2.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                <span>Agenda de hoy · entrevistas programadas</span>
+                <span className="text-gray-400 ml-auto font-mono tabular-nums">{data.todays_interviews.length}</span>
               </div>
-            )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                {data.todays_interviews.map(it => {
+                  const time = new Date(it.scheduled_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+                  const typeLabel = it.interview_type.replace('_',' ');
+                  return (
+                    <div key={it.id} className="bg-white hover:bg-blue-50 rounded px-2.5 py-1.5 text-xs transition-colors border border-blue-100">
+                      <div className="flex justify-between items-baseline gap-2">
+                        <span className="text-blue-700 font-bold text-sm tabular-nums">{time}</span>
+                        <span className="text-[9px] text-gray-500">{it.duration_min}min</span>
+                      </div>
+                      <div className="font-bold text-gray-900 truncate">{it.candidate_name}</div>
+                      <div className="text-[10px] text-gray-500 truncate capitalize">{typeLabel} · {it.vacancy_title}</div>
+                      {it.meeting_url && (
+                        <a href={it.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-700 hover:text-blue-900 truncate flex items-center gap-1 mt-0.5">
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>Abrir reunión</span>
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-            {/* Quick wins primero — mood positivo */}
-            {data.quick_wins.length > 0 && (
-              <FocusList
-                title="Quick wins · cierres inminentes"
-                Icon={Trophy}
-                tone="emerald"
-                onReject={rejectCandidate}
-                onAdvance={advanceCandidate}
-                onRefresh={refresh}
-                items={data.quick_wins.slice(0, 5).map(c => ({
-                  candidate_id: c.candidate_id,
-                  primary: c.name,
-                  secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
-                  meta: `${c.days_in_stage}d en stage`,
-                  onClick: onJumpToFunnel,
-                }))}
-              />
-            )}
-
-            {/* Pending decisions */}
+          {/* Resto de acciones en grid 2 cols */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {data.pending_decisions.length > 0 && (
               <FocusList
                 title="Decisiones pendientes"
@@ -1774,7 +1783,6 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
               />
             )}
 
-            {/* Aging candidates */}
             {data.aging.length > 0 && (
               <FocusList
                 title="Candidatos aging (>5d sin avance)"
@@ -1794,7 +1802,6 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
               />
             )}
 
-            {/* Urgent vacancies */}
             {data.urgent_vacancies.length > 0 && (
               <FocusList
                 title="Vacantes pasadas del target"
@@ -1809,7 +1816,6 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
               />
             )}
 
-            {/* Stale vacancies */}
             {data.stale_vacancies.length > 0 && (
               <FocusList
                 title="Sin movimiento >7 días"
@@ -1824,7 +1830,59 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
               />
             )}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── RecentMovements · Lo que se movió en las últimas 24h ─── */
+function RecentMovementsList({
+  movements,
+  onJumpToFunnel,
+}: {
+  movements: NonNullable<TodayFocusData['recent_movements']>;
+  onJumpToFunnel: () => void;
+}) {
+  const tone = (mt: string) => {
+    switch (mt) {
+      case 'hired': return { bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-500', text: 'text-emerald-800', label: 'Contratado' };
+      case 'rejected': return { bg: 'bg-gray-50', border: 'border-gray-200', dot: 'bg-gray-400', text: 'text-gray-700', label: 'Rechazado' };
+      case 'late_stage': return { bg: 'bg-blue-50', border: 'border-blue-200', dot: 'bg-blue-500', text: 'text-blue-800', label: 'Avance' };
+      case 'interview': return { bg: 'bg-purple-50', border: 'border-purple-200', dot: 'bg-purple-500', text: 'text-purple-800', label: 'Entrevista' };
+      default: return { bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-500', text: 'text-amber-800', label: 'Movimiento' };
+    }
+  };
+  const fmtAgo = (h: number) => h < 1 ? 'hace minutos' : h === 1 ? 'hace 1h' : `hace ${h}h`;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/40 p-3">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-700 mb-2.5">
+        <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
+        <span>Movimientos en las últimas 24h</span>
+        <span className="text-gray-400 ml-auto font-mono tabular-nums">{movements.length}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
+        {movements.map(m => {
+          const t = tone(m.movement_type);
+          return (
+            <button
+              key={m.candidate_id + m.updated_at}
+              onClick={onJumpToFunnel}
+              className={`text-left ${t.bg} ${t.border} border rounded px-2.5 py-1.5 hover:shadow-sm transition-shadow`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className={`text-[9px] uppercase font-bold tracking-wider ${t.text} flex items-center gap-1`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />
+                  {t.label}
+                </span>
+                <span className="text-[9px] text-gray-500 tabular-nums">{fmtAgo(m.hours_ago)}</span>
+              </div>
+              <div className="font-bold text-gray-900 truncate text-xs">{m.name}</div>
+              <div className="text-[10px] text-gray-500 truncate">{stageLabelShort(m.stage)} · {m.vacancy_title}</div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1872,31 +1930,31 @@ function FocusRow({
 
   if (done === 'rejected') {
     return (
-      <div className="bg-red-500/15 ring-1 ring-red-400/30 rounded px-2.5 py-1.5 text-xs text-red-200">
+      <div className="bg-red-50 ring-1 ring-red-200 rounded px-2.5 py-1.5 text-xs text-red-800">
         ✗ <strong>{item.primary}</strong> · rechazado
       </div>
     );
   }
   if (done === 'advanced') {
     return (
-      <div className="bg-emerald-500/15 ring-1 ring-emerald-400/30 rounded px-2.5 py-1.5 text-xs text-emerald-200">
+      <div className="bg-emerald-50 ring-1 ring-emerald-200 rounded px-2.5 py-1.5 text-xs text-emerald-800">
         ✓ <strong>{item.primary}</strong> · avanzado
       </div>
     );
   }
 
   return (
-    <div className="bg-white/[0.04] hover:bg-white/[0.08] rounded-lg px-3 py-2 text-xs transition-colors group">
+    <div className="bg-white hover:bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs transition-colors group">
       <div className="flex items-center justify-between gap-3">
         <button onClick={item.onClick} className="flex-1 min-w-0 text-left">
-          <div className="font-semibold text-white truncate flex items-center gap-1.5">
+          <div className="font-semibold text-gray-900 truncate flex items-center gap-1.5">
             {item.severity === 'high' && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" title="Alta severidad" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" title="Alta severidad" />
             )}
             {item.primary}
           </div>
-          <div className="text-[10px] text-white/55 truncate">{item.secondary}</div>
-          <div className="text-[9px] text-white/35 mt-0.5">{item.meta}</div>
+          <div className="text-[10px] text-gray-600 truncate">{item.secondary}</div>
+          <div className="text-[9px] text-gray-400 mt-0.5">{item.meta}</div>
         </button>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {item.candidate_id && onAdvance && (
@@ -1905,7 +1963,7 @@ function FocusRow({
               disabled={!!busy}
               title="Avanzar al siguiente stage"
               type="button"
-              className="px-2.5 py-1.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 ring-1 ring-emerald-400/40 text-emerald-200 hover:text-white inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px]"
+              className="px-2.5 py-1.5 rounded-full bg-emerald-100 hover:bg-emerald-200 ring-1 ring-emerald-300 text-emerald-800 inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px] transition-colors"
             >
               {busy === 'advance' ? (
                 <span className="animate-pulse">…</span>
@@ -1923,7 +1981,7 @@ function FocusRow({
               disabled={!!busy}
               title="Rechazar"
               type="button"
-              className="px-2.5 py-1.5 rounded-full bg-red-500/20 hover:bg-red-500/40 ring-1 ring-red-400/40 text-red-200 hover:text-white inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px]"
+              className="px-2.5 py-1.5 rounded-full bg-red-100 hover:bg-red-200 ring-1 ring-red-300 text-red-800 inline-flex items-center justify-center gap-1 disabled:opacity-30 font-bold text-[11px] transition-colors"
             >
               {busy === 'reject' ? (
                 <span className="animate-pulse">…</span>
@@ -1942,21 +2000,22 @@ function FocusRow({
 }
 
 function CountPill({ Icon, label, count, color, active }: { Icon: React.ComponentType<{ className?: string }>; label: string; count: number; color: string; active: boolean }) {
+  // Versión light theme — fondo blanco con accent del color
   const colorMap: Record<string, { bg: string; text: string; ring: string; dot: string }> = {
-    amber:   { bg: 'bg-amber-500/15',   text: 'text-amber-200',   ring: 'ring-amber-400/30',   dot: 'bg-amber-400' },
-    blue:    { bg: 'bg-blue-500/15',    text: 'text-blue-200',    ring: 'ring-blue-400/30',    dot: 'bg-blue-400' },
-    red:     { bg: 'bg-red-500/15',     text: 'text-red-200',     ring: 'ring-red-400/30',     dot: 'bg-red-400' },
-    gray:    { bg: 'bg-white/[0.06]',   text: 'text-white/60',    ring: 'ring-white/15',       dot: 'bg-white/40' },
-    emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-200', ring: 'ring-emerald-400/30', dot: 'bg-emerald-400' },
+    amber:   { bg: 'bg-amber-50',   text: 'text-amber-800',   ring: 'ring-amber-200',   dot: 'bg-amber-500' },
+    blue:    { bg: 'bg-blue-50',    text: 'text-blue-800',    ring: 'ring-blue-200',    dot: 'bg-blue-500' },
+    red:     { bg: 'bg-red-50',     text: 'text-red-800',     ring: 'ring-red-200',     dot: 'bg-red-500' },
+    gray:    { bg: 'bg-gray-50',    text: 'text-gray-700',    ring: 'ring-gray-200',    dot: 'bg-gray-400' },
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-800', ring: 'ring-emerald-200', dot: 'bg-emerald-500' },
   };
   const c = colorMap[color] || colorMap.gray;
   return (
-    <div className={`${active ? c.bg : 'bg-white/[0.03]'} ${active ? c.text : 'text-white/30'} ${active ? `ring-1 ${c.ring}` : 'ring-1 ring-white/5'} rounded-full pl-2 pr-3 py-1 text-[11px] font-medium flex items-center gap-2 transition-colors`}>
+    <div className={`${active ? c.bg : 'bg-white'} ${active ? c.text : 'text-gray-400'} ${active ? `ring-1 ${c.ring}` : 'ring-1 ring-gray-200'} rounded-full pl-2 pr-3 py-1 text-[11px] font-medium flex items-center gap-2 transition-colors`}>
       <span className="flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" />
         <span className="hidden md:inline">{label}</span>
       </span>
-      <span className={`${active ? c.dot : 'bg-white/10'} h-1 w-1 rounded-full`} />
+      <span className={`${active ? c.dot : 'bg-gray-200'} h-1 w-1 rounded-full`} />
       <span className="text-[13px] font-bold tabular-nums">{count}</span>
     </div>
   );
@@ -1979,20 +2038,21 @@ function FocusList({
   onAdvance?: (id: string) => Promise<void>;
   onRefresh?: () => void;
 }) {
-  const toneMap: Record<string, { border: string; iconColor: string }> = {
-    amber:   { border: 'border-amber-400/25 bg-amber-500/[0.04]',   iconColor: 'text-amber-300' },
-    blue:    { border: 'border-blue-400/25 bg-blue-500/[0.04]',     iconColor: 'text-blue-300' },
-    red:     { border: 'border-red-400/25 bg-red-500/[0.04]',       iconColor: 'text-red-300' },
-    gray:    { border: 'border-white/10 bg-white/[0.04]',           iconColor: 'text-white/50' },
-    emerald: { border: 'border-emerald-400/25 bg-emerald-500/[0.04]', iconColor: 'text-emerald-300' },
+  // Light theme · acento sutil del color, fondo casi blanco
+  const toneMap: Record<string, { border: string; iconColor: string; bg: string }> = {
+    amber:   { border: 'border-amber-200',   iconColor: 'text-amber-700',   bg: 'bg-amber-50/40' },
+    blue:    { border: 'border-blue-200',    iconColor: 'text-blue-700',    bg: 'bg-blue-50/40' },
+    red:     { border: 'border-red-200',     iconColor: 'text-red-700',     bg: 'bg-red-50/40' },
+    gray:    { border: 'border-gray-200',    iconColor: 'text-gray-600',    bg: 'bg-gray-50/40' },
+    emerald: { border: 'border-emerald-200', iconColor: 'text-emerald-700', bg: 'bg-emerald-50/40' },
   };
   const t = toneMap[tone];
   return (
-    <div className={`rounded-lg border ${t.border} p-3`}>
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-white/80 mb-2.5">
+    <div className={`rounded-lg border ${t.border} ${t.bg} p-3`}>
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] font-semibold text-gray-700 mb-2.5">
         <Icon className={`w-3.5 h-3.5 ${t.iconColor}`} />
         <span>{title}</span>
-        <span className="text-white/30 ml-auto font-mono tabular-nums">{items.length}</span>
+        <span className="text-gray-400 ml-auto font-mono tabular-nums">{items.length}</span>
       </div>
       <div className="space-y-1.5">
         {items.map((it, i) => (
