@@ -17,6 +17,8 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import seedData from "@/data/linkedin_apps_2026_05_03.json";
 
+const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+
 type SeedRow = {
   name: string;
   email: string;
@@ -46,10 +48,11 @@ export async function POST(req: NextRequest) {
 
     const existingSet = new Set((existing || []).map((c: any) => (c.email || '').toLowerCase()));
 
-    // 2. Build payloads para los nuevos
+    // 2. Build payloads para los nuevos — INCLUYENDO client_id (NOT NULL en el schema)
     const toInsert = cands
       .filter(c => !existingSet.has(c.email.toLowerCase()))
       .map(c => ({
+        client_id: TS_CLIENT_ID,
         name: c.name,
         email: c.email,
         phone: c.phone,
@@ -69,19 +72,35 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Insert en chunks de 25
+    // 3. Insert en chunks de 25 — si chunk falla, intentamos uno por uno y reportamos
     let insertedCount = 0;
-    const errors: string[] = [];
+    const errors: { row?: number; email?: string; message: string }[] = [];
+    const insertedEmails: string[] = [];
+
     for (let i = 0; i < toInsert.length; i += 25) {
       const chunk = toInsert.slice(i, i + 25);
       const { data: ins, error } = await supabaseAdmin
         .from("ht_candidates")
         .insert(chunk)
-        .select('id');
+        .select('id, email');
       if (error) {
-        errors.push(`Chunk ${i / 25}: ${error.message}`);
+        // Fallback: insertar uno por uno para identificar cuál(es) falla(n)
+        for (let j = 0; j < chunk.length; j++) {
+          const single = chunk[j];
+          const { data: oneIns, error: oneErr } = await supabaseAdmin
+            .from("ht_candidates")
+            .insert(single)
+            .select('id, email');
+          if (oneErr) {
+            errors.push({ row: i + j, email: single.email, message: oneErr.message });
+          } else if (oneIns && oneIns[0]) {
+            insertedCount++;
+            insertedEmails.push(oneIns[0].email);
+          }
+        }
       } else {
         insertedCount += ins?.length || 0;
+        (ins || []).forEach((r: any) => insertedEmails.push(r.email));
       }
     }
 
@@ -108,7 +127,9 @@ export async function POST(req: NextRequest) {
       total_processed: cands.length,
       inserted: insertedCount,
       already_existing: cands.length - toInsert.length,
-      errors,
+      attempted: toInsert.length,
+      error_count: errors.length,
+      first_errors: errors.slice(0, 5),
       breakdown,
     });
   } catch (err: any) {

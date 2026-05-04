@@ -374,7 +374,7 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
   // ── Quick import: detecta si el seed pre-cargado tiene apps pendientes ──
   const [quickPreview, setQuickPreview] = useState<{ will_insert: number; already_existing: number; total: number; breakdown: Array<{ vacancy: string; new: number; existed: number }> } | null>(null);
   const [quickRunning, setQuickRunning] = useState(false);
-  const [quickResult, setQuickResult] = useState<{ inserted: number; already_existing: number; breakdown: any[] } | null>(null);
+  const [quickResult, setQuickResult] = useState<{ inserted: number; already_existing: number; breakdown: any[]; error_count?: number; first_errors?: any[]; attempted?: number } | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/seed-linkedin-apps', { cache: 'no-store' })
@@ -388,9 +388,14 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
     try {
       const r = await fetch('/api/admin/seed-linkedin-apps', { method: 'POST' });
       const j = await r.json();
-      if (j.success || j.inserted >= 0) {
-        setQuickResult({ inserted: j.inserted, already_existing: j.already_existing, breakdown: j.breakdown });
-      }
+      setQuickResult({
+        inserted: j.inserted ?? 0,
+        already_existing: j.already_existing ?? 0,
+        breakdown: j.breakdown ?? [],
+        error_count: j.error_count ?? 0,
+        first_errors: j.first_errors ?? [],
+        attempted: j.attempted ?? 0,
+      });
     } finally {
       setQuickRunning(false);
     }
@@ -534,24 +539,37 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
           <div className="p-6">
             {/* QUICK IMPORT · seed pre-cargado de los Excel del 2026-05-03 */}
             {quickResult ? (
-              <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 mb-4">
-                <div className="text-2xl mb-1">✅</div>
-                <div className="text-sm font-bold text-emerald-900">Quick import completado</div>
-                <div className="text-xs text-emerald-800 mt-1">
-                  <strong>{quickResult.inserted}</strong> candidatos nuevos insertados · <strong>{quickResult.already_existing}</strong> ya existían (skip).
+              <div className={`${quickResult.error_count && quickResult.error_count > 0 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'} border rounded-xl p-4 mb-4`}>
+                <div className="text-2xl mb-1">{quickResult.error_count && quickResult.error_count > 0 ? '⚠️' : '✅'}</div>
+                <div className={`text-sm font-bold ${quickResult.error_count && quickResult.error_count > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
+                  {quickResult.error_count && quickResult.error_count > 0 ? 'Quick import con errores' : 'Quick import completado'}
                 </div>
+                <div className={`text-xs mt-1 ${quickResult.error_count && quickResult.error_count > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+                  <strong>{quickResult.inserted}</strong> insertados · <strong>{quickResult.already_existing}</strong> ya existían
+                  {quickResult.error_count && quickResult.error_count > 0 ? <> · <strong className="text-red-700">{quickResult.error_count} errores</strong></> : null}
+                </div>
+                {quickResult.first_errors && quickResult.first_errors.length > 0 && (
+                  <div className="mt-2 bg-red-50 border border-red-200 rounded p-2 text-[11px] text-red-800 font-mono space-y-1">
+                    <div className="font-bold">Primeros errores:</div>
+                    {quickResult.first_errors.map((e: any, i: number) => (
+                      <div key={i}>· {e.email || `row ${e.row}`}: {e.message}</div>
+                    ))}
+                  </div>
+                )}
                 {quickResult.breakdown && quickResult.breakdown.length > 0 && (
                   <div className="mt-2 space-y-0.5">
                     {quickResult.breakdown.map((b: any, i: number) => (
-                      <div key={i} className="text-[11px] text-emerald-800">
+                      <div key={i} className="text-[11px]">
                         · <strong>{b.vacancy}</strong>: {b.new} nuevos {b.existed > 0 ? `(${b.existed} ya estaban)` : ''}
                       </div>
                     ))}
                   </div>
                 )}
-                <button onClick={onDone} className="mt-3 bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-full">
-                  Ver Funnel →
-                </button>
+                {quickResult.inserted > 0 && (
+                  <button onClick={onDone} className="mt-3 bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-full">
+                    Ver Funnel →
+                  </button>
+                )}
               </div>
             ) : quickPreview && quickPreview.will_insert > 0 ? (
               <div className="bg-black text-white rounded-xl p-4 mb-4 relative overflow-hidden">
