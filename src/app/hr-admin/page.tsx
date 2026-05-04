@@ -371,6 +371,31 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
   const [finalResult, setFinalResult] = useState<{ inserted: number; existing: number; errors: number } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // ── Quick import: detecta si el seed pre-cargado tiene apps pendientes ──
+  const [quickPreview, setQuickPreview] = useState<{ will_insert: number; already_existing: number; total: number; breakdown: Array<{ vacancy: string; new: number; existed: number }> } | null>(null);
+  const [quickRunning, setQuickRunning] = useState(false);
+  const [quickResult, setQuickResult] = useState<{ inserted: number; already_existing: number; breakdown: any[] } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/seed-linkedin-apps', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { if (j.total) setQuickPreview(j); })
+      .catch(() => {});
+  }, []);
+
+  const runQuickImport = async () => {
+    setQuickRunning(true);
+    try {
+      const r = await fetch('/api/admin/seed-linkedin-apps', { method: 'POST' });
+      const j = await r.json();
+      if (j.success || j.inserted >= 0) {
+        setQuickResult({ inserted: j.inserted, already_existing: j.already_existing, breakdown: j.breakdown });
+      }
+    } finally {
+      setQuickRunning(false);
+    }
+  };
+
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     setParsing(true);
@@ -507,8 +532,63 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
 
         {step === 'upload' && (
           <div className="p-6">
+            {/* QUICK IMPORT · seed pre-cargado de los Excel del 2026-05-03 */}
+            {quickResult ? (
+              <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 mb-4">
+                <div className="text-2xl mb-1">✅</div>
+                <div className="text-sm font-bold text-emerald-900">Quick import completado</div>
+                <div className="text-xs text-emerald-800 mt-1">
+                  <strong>{quickResult.inserted}</strong> candidatos nuevos insertados · <strong>{quickResult.already_existing}</strong> ya existían (skip).
+                </div>
+                {quickResult.breakdown && quickResult.breakdown.length > 0 && (
+                  <div className="mt-2 space-y-0.5">
+                    {quickResult.breakdown.map((b: any, i: number) => (
+                      <div key={i} className="text-[11px] text-emerald-800">
+                        · <strong>{b.vacancy}</strong>: {b.new} nuevos {b.existed > 0 ? `(${b.existed} ya estaban)` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={onDone} className="mt-3 bg-black hover:bg-gray-800 text-white text-xs font-semibold px-4 py-2 rounded-full">
+                  Ver Funnel →
+                </button>
+              </div>
+            ) : quickPreview && quickPreview.will_insert > 0 ? (
+              <div className="bg-black text-white rounded-xl p-4 mb-4 relative overflow-hidden">
+                <div
+                  className="absolute inset-0 opacity-15 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${TS_IMG.hero})` }}
+                />
+                <div className="relative">
+                  <div className="text-[10px] uppercase tracking-[2px] font-semibold opacity-70 mb-1">Quick import</div>
+                  <div className="text-base font-bold tracking-tight mb-1">
+                    📥 {quickPreview.will_insert} aplicaciones de LinkedIn pendientes
+                  </div>
+                  <div className="text-[11px] opacity-80 mb-2">
+                    Pre-cargadas del bulk del 2026-05-03 · {quickPreview.already_existing} ya estaban en el ATS
+                  </div>
+                  {quickPreview.breakdown && quickPreview.breakdown.length > 0 && (
+                    <div className="mb-3 space-y-0.5">
+                      {quickPreview.breakdown.map((b: any, i: number) => (
+                        <div key={i} className="text-[11px] opacity-90">
+                          · <strong>{b.vacancy}</strong>: {b.new} nuevos {b.existed > 0 ? `(${b.existed} skip)` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={runQuickImport}
+                    disabled={quickRunning}
+                    className="bg-white text-black hover:bg-white/90 disabled:opacity-50 text-xs font-bold px-4 py-2 rounded-full inline-flex items-center gap-1.5"
+                  >
+                    {quickRunning ? '⏳ Importando…' : `🌱 Importar ${quickPreview.will_insert} con un click`}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-sm">
-              <div className="font-bold text-gray-900 mb-1">Formato esperado</div>
+              <div className="font-bold text-gray-900 mb-1">…o subí un Excel nuevo</div>
               <p className="text-gray-700 leading-relaxed text-xs">
                 Excel exportados desde <strong>LinkedIn Recruiter → Reportes de candidatos</strong>. Hoja "Solicitudes de empleo".
                 Podés cargar varios archivos al mismo tiempo. Se hace cruce automático por email contra los candidatos que ya tenés en el ATS.
@@ -626,7 +706,7 @@ function CandidatesImportModal({ onClose, onDone }: { onClose: () => void; onDon
                       {r.same_vacancy ? (
                         <span className="bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded font-bold">Misma vacante</span>
                       ) : (
-                        <span className="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded font-bold" title={`En ATS: ${r.existing_vacancy_title}, Nueva: ${r.new_vacancy_title}`}>
+                        <span className="bg-gray-900 text-white text-[10px] px-1.5 py-0.5 rounded font-bold" title={`En ATS: ${r.existing_vacancy_title}, Nueva: ${r.new_vacancy_title}`}>
                           Otra vacante
                         </span>
                       )}
@@ -1321,21 +1401,24 @@ function TodayFocus({ onJumpToVacancy, onJumpToFunnel }: { onJumpToVacancy: () =
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-xl p-4 mb-4 text-white relative overflow-hidden shadow-lg">
-      {/* Decorative bg glow */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl" />
+    <div className="rounded-2xl p-5 mb-4 text-white relative overflow-hidden shadow-sm" style={{ background: '#0A0A0A' }}>
+      {/* Foto TS de fondo sutil */}
+      <div
+        className="absolute inset-0 opacity-[0.18] bg-cover bg-center"
+        style={{ backgroundImage: `url(${TS_IMG.hero})` }}
+      />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(105deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 100%)' }} />
 
       <div className="relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="text-xl">🎯</span>
             <div>
-              <div className="text-[10px] uppercase tracking-[2px] font-bold text-purple-300">Today's Focus</div>
-              <div className="text-base font-extrabold leading-tight">
+              <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-white/55">Today's Focus</div>
+              <div className="text-lg font-bold tracking-[-0.01em] leading-tight font-display">
                 {totalAlerts} acci{totalAlerts !== 1 ? 'ones' : 'ón'} pendiente{totalAlerts !== 1 ? 's' : ''}
-                {data.counts.quick_wins > 0 && <span className="ml-2 text-emerald-300">· {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''} 🏆</span>}
+                {data.counts.quick_wins > 0 && <span className="ml-2 text-emerald-300 font-semibold">· {data.counts.quick_wins} quick win{data.counts.quick_wins !== 1 ? 's' : ''} 🏆</span>}
               </div>
             </div>
           </div>
@@ -1849,7 +1932,7 @@ function VacanciesOverview() {
                     <td className="px-3 py-2 text-right">
                       <button
                         onClick={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
-                        className="text-[10px] font-bold text-purple-700 hover:text-purple-900 hover:underline"
+                        className="text-[10px] font-bold text-black hover:underline"
                         title="Estudio de mercado"
                       >
                         🤖 Ver
@@ -1966,7 +2049,7 @@ function OpenVacancyCard({ v, onResearch }: { v: VacancyOverview; onResearch: ()
             return (
               <div
                 key={stage}
-                className={`relative group ${isLate ? 'bg-emerald-500' : 'bg-purple-400'} hover:opacity-80 cursor-help transition-opacity`}
+                className={`relative group ${isLate ? 'bg-emerald-500' : 'bg-gray-700'} hover:opacity-80 cursor-help transition-opacity`}
                 style={{ width: `${pct}%`, minWidth: '12px' }}
                 title={`${stageLabelShort(stage)}: ${count}`}
               >
@@ -2172,7 +2255,7 @@ function VacancyMarketResearchModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-3 rounded-t-xl flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-black text-white px-5 py-3 rounded-t-xl flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4" />
             <div>
@@ -2213,7 +2296,7 @@ function VacancyMarketResearchModal({
               <button
                 onClick={generate}
                 disabled={generating}
-                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-5 py-2.5 rounded-lg shadow-md inline-flex items-center gap-2"
+                className="bg-black hover:bg-gray-800 text-white font-semibold px-5 py-2.5 rounded-full inline-flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4" />
                 Generar estudio de mercado
@@ -6682,7 +6765,7 @@ function OnboardingTab() {
               <span className="text-gray-500">People file: </span>
               <strong className="text-gray-900">{peopleStats.total}</strong>
               <span className="text-gray-400 mx-1">·</span>
-              <span className="text-purple-700 font-bold">{peopleStats.tps} TPs</span>
+              <span className="text-black font-bold">{peopleStats.tps} TPs</span>
             </div>
           )}
           <button
@@ -6939,7 +7022,7 @@ function OnboardingDetailDrawer({
               <span className="text-2xl font-extrabold">{pct}%</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-purple-500 to-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+              <div className="h-full bg-gradient-to-r from-gray-700 to-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
             </div>
             <div className="text-[11px] text-gray-500 mt-1">{totalDone}/{total} tareas completadas · started {data.start_date}</div>
           </div>
