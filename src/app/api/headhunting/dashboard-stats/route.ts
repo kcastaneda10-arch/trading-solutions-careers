@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
 
     // Lista mínima de columnas que sabemos existen. Si alguna columna opcional
     // (e.g. `source`) no existe en este schema, hacemos un retry sin ella.
-    const baseCols = "id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, created_at, ht_vacancies(title)";
-    const withSource = `id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, source, created_at, ht_vacancies(title)`;
+    const baseCols = "id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, created_at, updated_at, ht_vacancies(title)";
+    const withSource = `id, name, email, vacancy_id, stage, status, prefilter_decision, prefilter_invited_at, prefilter_completed_at, source, created_at, updated_at, ht_vacancies(title)`;
 
     async function runQuery(cols: string) {
       let q = supabaseAdmin.from("ht_candidates").select(cols);
@@ -126,6 +126,57 @@ export async function GET(req: NextRequest) {
       return { ...f, count: reached };
     });
 
+    // ─── Top candidates · activos en pipeline con Elevare score ───
+    // Excluir contratado/rechazado y casos terminales
+    const ACTIVE_FOR_TOP = [
+      "aplico", "prefiltro_pasado", "assessment_completado", "entrevista_ia",
+      "recruiter_interview", "cwo_interview", "touring", "terna", "oferta",
+    ];
+    const activeCands = all.filter((c) => ACTIVE_FOR_TOP.includes((c.stage as string) || ""));
+
+    // Cargar Elevare scores en una query separada
+    const candIds = activeCands.map((c) => c.id);
+    let aiScoresByCandId: Record<string, { score: number | null; recommendation: string | null }> = {};
+    if (candIds.length > 0) {
+      const { data: aiInts } = await supabaseAdmin
+        .from("ht_ai_interviews")
+        .select("candidate_id, ai_score, overall_score, ai_recommendation, completed_at")
+        .in("candidate_id", candIds)
+        .order("completed_at", { ascending: false });
+      // Guardar el más reciente por candidato
+      (aiInts || []).forEach((ai: any) => {
+        if (!aiScoresByCandId[ai.candidate_id]) {
+          aiScoresByCandId[ai.candidate_id] = {
+            score: ai.ai_score ?? ai.overall_score ?? null,
+            recommendation: ai.ai_recommendation ?? null,
+          };
+        }
+      });
+    }
+
+    const now = Date.now();
+    const enrichedTop = activeCands
+      .map((c) => {
+        const ai = aiScoresByCandId[c.id] || {};
+        const score = ai.score ?? null;
+        const updated = c.updated_at ? new Date(c.updated_at).getTime() : null;
+        const daysInStage = updated ? Math.floor((now - updated) / (1000 * 60 * 60 * 24)) : null;
+        return {
+          candidate_id: c.id,
+          name: c.name,
+          email: c.email,
+          stage: c.stage,
+          vacancy_id: c.vacancy_id,
+          vacancy_title: c.ht_vacancies?.title || "—",
+          elevare_score: score,
+          elevare_recommendation: ai.recommendation || null,
+          days_in_stage: daysInStage,
+        };
+      })
+      .filter((c) => c.elevare_score !== null && c.elevare_score >= 50) // solo con score reasonable
+      .sort((a, b) => (b.elevare_score || 0) - (a.elevare_score || 0))
+      .slice(0, 6);
+
     return NextResponse.json({
       total: all.length,
       byStage,
@@ -139,6 +190,7 @@ export async function GET(req: NextRequest) {
       completedElevare: byStage["assessment_completado"] ?? 0,
       prefilterCompleted: all.filter((c) => c.prefilter_completed_at).length,
       prefilterInvited: all.filter((c) => c.prefilter_invited_at).length,
+      top_candidates_enriched: enrichedTop,
     });
   } catch (err: any) {
     console.error("dashboard-stats error:", err);

@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 import { factorXTS } from "@/data/assessments";
+import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
 import PipelineFunnel from "@/components/PipelineFunnel";
 
@@ -1002,6 +1003,9 @@ type TopCandidate = {
   matchPct: number | null;
   light: 'green' | 'amber' | 'red' | 'gray';
   status: string;
+  stage?: string | null;
+  daysInStage?: number | null;
+  candidateId?: string | null;
 };
 
 type DashboardStats = {
@@ -1157,25 +1161,42 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
           byStatus[a.status ?? 'new'] = (byStatus[a.status ?? 'new'] ?? 0) + 1;
         }
 
-        // Top candidatos: apps de la vacante seleccionada (o todas), con score,
-        // ordenadas DESC, top 5. Score viene de columna `score` o se extrae de why_ts.
-        const sourceForTop = apps.length > 0 ? apps : appsAll;
-        const enriched = sourceForTop.map((a) => {
-          const score = (a.score as number | null | undefined) ?? extractScoreFromText(a.why_ts);
-          const matchPct = scoreToMatchPct(score);
-          return {
-            name: a.full_name ?? '',
-            role: vacsRaw.find((v) => v.id === a.job_id)?.title ?? '—',
-            score,
-            matchPct,
-            light: matchLight(matchPct),
-            status: a.status ?? 'new',
-          } as TopCandidate;
-        });
-        const topCandidates = enriched
-          .filter((c) => c.score !== null && c.status !== 'rejected')
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, 6);
+        // Top candidatos: usa top_candidates_enriched del endpoint headhunting
+        // (incluye stage actual + days_in_stage + Elevare score real).
+        // Si el endpoint no lo provee aún, fallback a la lógica legacy con apps/score.
+        let topCandidates: TopCandidate[] = [];
+        if (htR?.top_candidates_enriched && Array.isArray(htR.top_candidates_enriched) && htR.top_candidates_enriched.length > 0) {
+          topCandidates = htR.top_candidates_enriched.slice(0, 6).map((c: any) => ({
+            name: c.name || '',
+            role: c.vacancy_title || '—',
+            score: c.elevare_score,
+            matchPct: c.elevare_score, // el Elevare score es 0-100, ya es match%
+            light: matchLight(c.elevare_score),
+            status: c.stage || 'pipeline',
+            stage: c.stage,
+            daysInStage: c.days_in_stage,
+            candidateId: c.candidate_id,
+          }));
+        } else {
+          // Fallback legacy
+          const sourceForTop = apps.length > 0 ? apps : appsAll;
+          const enriched = sourceForTop.map((a) => {
+            const score = (a.score as number | null | undefined) ?? extractScoreFromText(a.why_ts);
+            const matchPct = scoreToMatchPct(score);
+            return {
+              name: a.full_name ?? '',
+              role: vacsRaw.find((v) => v.id === a.job_id)?.title ?? '—',
+              score,
+              matchPct,
+              light: matchLight(matchPct),
+              status: a.status ?? 'new',
+            } as TopCandidate;
+          });
+          topCandidates = enriched
+            .filter((c) => c.score !== null && c.status !== 'rejected')
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, 6);
+        }
 
         // Filtrar assessments para la vacante seleccionada (cruzando emails)
         const emailsInVacancy = new Set(apps.map((a) => (a.email || '').toLowerCase()));
@@ -1306,6 +1327,12 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
         onJumpToFunnel={() => setTab("funnel")}
       />
 
+      {/* ═════ STAGE HEALTH · cuello de botella del pipeline ═════ */}
+      <StageHealthCard vacancyFilter={selectedVacancyUuid} onJumpToFunnel={() => setTab("funnel")} />
+
+      {/* ═════ SOURCE QUALITY · qué canal genera mejores hires ═════ */}
+      <SourceQualityCard vacancyFilter={selectedVacancyUuid} />
+
       {/* ═════ OVERVIEW · Big Picture · Hero KPIs vs Targets ═════ */}
       <DashboardHero vacancyFilter={selectedVacancyUuid} />
 
@@ -1409,7 +1436,7 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
           )}
         </Card>
 
-        <Card title="Top candidatos" eyebrow="MATCH % vs PERFIL IDEAL">
+        <Card title="Top candidatos · listos para acción" eyebrow="ELEVARE SCORE · STAGE · DÍAS ESPERANDO">
           {loading || !s ? (
             <div className="text-sm text-gray-400 py-6 text-center">Cargando…</div>
           ) : s.topCandidates.length === 0 ? (
@@ -1421,14 +1448,18 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
               {s.topCandidates.map((c, idx) => {
                 const dotColor = c.light === 'green' ? '#10B981' : c.light === 'amber' ? '#F59E0B' : c.light === 'red' ? '#EF4444' : '#9CA3AF';
                 const labelColor = c.light === 'green' ? 'text-emerald-700' : c.light === 'amber' ? 'text-amber-700' : c.light === 'red' ? 'text-red-700' : 'text-gray-500';
+                const stageHuman = c.stage ? stageLabelShort(c.stage) : null;
+                // SLA check para badge "atascado"
+                const sla = c.stage ? STAGE_SLA_DAYS[c.stage] : null;
+                const isStuck = sla !== undefined && sla !== null && c.daysInStage !== null && c.daysInStage !== undefined && c.daysInStage > sla;
                 return (
                   <div
                     key={`${c.name}-${idx}`}
-                    className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5"
+                    className="flex justify-between items-center border border-gray-200 rounded-lg px-3 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <span
-                        title={c.light === 'green' ? 'Alto match — invitar' : c.light === 'amber' ? 'Match medio — revisar' : 'Match bajo'}
+                        title={c.light === 'green' ? 'Alto match · prioridad' : c.light === 'amber' ? 'Match medio · revisar' : 'Match bajo'}
                         style={{
                           width: 10,
                           height: 10,
@@ -1441,21 +1472,38 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold truncate">{c.name}</div>
                         <div className="text-xs text-gray-500 truncate">{c.role}</div>
+                        {stageHuman && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">
+                              {stageHuman}
+                            </span>
+                            {c.daysInStage !== null && c.daysInStage !== undefined && (
+                              <span className={`text-[10px] tabular-nums ${isStuck ? 'text-red-700 font-bold' : 'text-gray-500'}`}>
+                                {c.daysInStage}d{isStuck ? ` / ${sla}d SLA` : ''}
+                              </span>
+                            )}
+                            {isStuck && (
+                              <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                                Atascado
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right pl-2 flex-shrink-0">
                       <div className={`text-sm font-bold ${labelColor}`}>
                         {c.matchPct !== null ? `${c.matchPct}%` : '—'}
                       </div>
                       <div className="text-[10px] text-gray-400 uppercase tracking-wide">
-                        score {c.score ?? '—'}
+                        Elevare {c.score ?? '—'}/100
                       </div>
                     </div>
                   </div>
                 );
               })}
               <div className="text-[11px] text-gray-400 mt-1.5 px-1">
-                <span style={{ color: '#10B981' }}>●</span> verde ≥80% · <span style={{ color: '#F59E0B' }}>●</span> amarillo 50-79% · <span style={{ color: '#EF4444' }}>●</span> rojo &lt;50%
+                <span style={{ color: '#10B981' }}>●</span> ≥80 · <span style={{ color: '#F59E0B' }}>●</span> 50-79 · <span style={{ color: '#EF4444' }}>●</span> &lt;50 · Score Elevare. Click va a Funnel.
               </div>
             </div>
           )}
@@ -1720,6 +1768,7 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                 primary: c.name,
                 secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
                 meta: `${c.days_in_stage}d en stage`,
+                stageCode: c.stage,
                 onClick: onJumpToFunnel,
               }))}
             />
@@ -1776,8 +1825,9 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                 items={data.pending_decisions.slice(0, 5).map(c => ({
                   candidate_id: c.candidate_id,
                   primary: c.name,
-                  secondary: c.action,
+                  secondary: c.vacancy_title,
                   meta: `${stageLabelShort(c.stage)} · ${c.days_in_stage}d`,
+                  stageCode: c.stage,
                   onClick: onJumpToFunnel,
                 }))}
               />
@@ -1797,6 +1847,7 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
                   secondary: `${stageLabelShort(c.stage)} · ${c.vacancy_title}`,
                   meta: `${c.days_since_update}d sin moverse`,
                   severity: c.severity === 'high' ? 'high' : undefined,
+                  stageCode: c.stage,
                   onClick: onJumpToFunnel,
                 }))}
               />
@@ -1888,13 +1939,176 @@ function RecentMovementsList({
   );
 }
 
+/* ─── Stage Health Card · cuello de botella del pipeline ──────── */
+type StageHealthData = {
+  generated_at: string;
+  stages: {
+    stage: string;
+    label: string;
+    category: 'screening' | 'assessment' | 'interview' | 'decision' | 'terminal';
+    count: number;
+    avg_days: number;
+    max_days: number;
+    sla_target: number | null;
+    status: 'green' | 'yellow' | 'red';
+    over_sla_count: number;
+    bottleneck_score: number;
+    worst_candidate: { id: string; name: string; days: number; vacancy_id: string } | null;
+  }[];
+  top_bottleneck: any;
+  summary: {
+    total_active_candidates: number;
+    stages_red: number;
+    stages_yellow: number;
+    stages_green: number;
+  };
+};
+
+function StageHealthCard({ vacancyFilter = 'all', onJumpToFunnel }: { vacancyFilter?: string; onJumpToFunnel: () => void }) {
+  const [data, setData] = useState<StageHealthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/dashboard/stage-health?vacancy_id=${encodeURIComponent(vacancyFilter)}`
+        : '/api/dashboard/stage-health';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
+  }, [vacancyFilter]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const run = async () => { if (alive) await fetchData(); };
+    run();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) fetchData();
+    }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [fetchData]);
+
+  if (loading) return <div className="mb-4 text-sm text-gray-400">Cargando salud del pipeline…</div>;
+  if (error) return (
+    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-center justify-between">
+      <span>No se pudo cargar Stage Health: {error}</span>
+      <button onClick={() => { setLoading(true); fetchData(); }} className="font-bold underline ml-2">Reintentar</button>
+    </div>
+  );
+  if (!data) return null;
+
+  const stagesWithCandidates = data.stages.filter(s => s.count > 0);
+  if (stagesWithCandidates.length === 0) return null;
+
+  const statusColor = (s: 'green'|'yellow'|'red') => ({
+    green: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', dot: 'bg-emerald-500', label: 'OK' },
+    yellow: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', dot: 'bg-amber-500', label: 'Atención' },
+    red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-500', label: 'Atascado' },
+  }[s]);
+
+  return (
+    <div className="mb-4 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <div className="flex items-end justify-between mb-3 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-black/5 ring-1 ring-black/10 flex items-center justify-center">
+            <Hourglass className="w-4 h-4 text-gray-900" strokeWidth={2} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-gray-500">Stage Health</div>
+            <div className="text-lg font-bold tracking-tight text-gray-900">
+              {data.summary.stages_red > 0 ? (
+                <>{data.summary.stages_red} stage{data.summary.stages_red !== 1 ? 's' : ''} atascado{data.summary.stages_red !== 1 ? 's' : ''} · {data.summary.total_active_candidates} candidatos activos</>
+              ) : data.summary.stages_yellow > 0 ? (
+                <>Pipeline en alerta · {data.summary.stages_yellow} stage{data.summary.stages_yellow !== 1 ? 's' : ''} cerca de SLA</>
+              ) : (
+                <>Pipeline saludable · {data.summary.total_active_candidates} candidatos activos</>
+              )}
+            </div>
+          </div>
+        </div>
+        {data.top_bottleneck && (
+          <div className="text-[11px] text-gray-500">
+            Cuello de botella: <strong className="text-gray-900">{data.top_bottleneck.label}</strong>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[9px] uppercase tracking-wider text-gray-500 border-b border-gray-100">
+              <th className="text-left font-bold py-2 pr-3">Stage</th>
+              <th className="text-right font-bold py-2 px-2 tabular-nums">Activos</th>
+              <th className="text-right font-bold py-2 px-2 tabular-nums">Avg días</th>
+              <th className="text-right font-bold py-2 px-2 tabular-nums">SLA</th>
+              <th className="text-left font-bold py-2 px-2">Estado</th>
+              <th className="text-left font-bold py-2 pl-2">Peor candidato</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stagesWithCandidates.map(s => {
+              const c = statusColor(s.status);
+              return (
+                <tr
+                  key={s.stage}
+                  onClick={onJumpToFunnel}
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <td className="py-2 pr-3">
+                    <div className="font-semibold text-gray-900">{s.label}</div>
+                    <div className="text-[10px] text-gray-400 capitalize">{s.category}</div>
+                  </td>
+                  <td className="py-2 px-2 text-right font-bold tabular-nums text-gray-900">{s.count}</td>
+                  <td className={`py-2 px-2 text-right font-bold tabular-nums ${s.status === 'red' ? 'text-red-700' : s.status === 'yellow' ? 'text-amber-700' : 'text-gray-700'}`}>
+                    {s.avg_days}d
+                  </td>
+                  <td className="py-2 px-2 text-right text-gray-500 tabular-nums">
+                    {s.sla_target !== null ? `${s.sla_target}d` : '—'}
+                  </td>
+                  <td className="py-2 px-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${c.bg} ${c.border} border ${c.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                      {c.label}
+                      {s.over_sla_count > 0 && <span className="opacity-70">· {s.over_sla_count} fuera</span>}
+                    </span>
+                  </td>
+                  <td className="py-2 pl-2 text-gray-700 truncate max-w-[180px]">
+                    {s.worst_candidate ? (
+                      <span title={s.worst_candidate.name}>
+                        {s.worst_candidate.name} · <span className="text-gray-500 tabular-nums">{s.worst_candidate.days}d</span>
+                      </span>
+                    ) : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-100">
+        SLA = días máximos esperados antes que el candidato pase al siguiente stage. Click en una fila para ir al Funnel.
+      </div>
+    </div>
+  );
+}
+
 function FocusRow({
   item,
   onReject,
   onAdvance,
   onRefresh,
 }: {
-  item: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; onClick?: () => void };
+  item: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; stageCode?: string; onClick?: () => void };
   onReject?: (id: string) => Promise<void>;
   onAdvance?: (id: string) => Promise<void>;
   onRefresh?: () => void;
@@ -1943,6 +2157,9 @@ function FocusRow({
     );
   }
 
+  // Si el item viene con stageCode, leemos la acción concreta
+  const action = item.stageCode ? STAGE_ACTION[item.stageCode] : null;
+
   return (
     <div className="bg-white hover:bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs transition-colors group">
       <div className="flex items-center justify-between gap-3">
@@ -1955,6 +2172,12 @@ function FocusRow({
           </div>
           <div className="text-[10px] text-gray-600 truncate">{item.secondary}</div>
           <div className="text-[9px] text-gray-400 mt-0.5">{item.meta}</div>
+          {action && (
+            <div className="text-[10px] text-blue-700 font-semibold mt-1 flex items-center gap-1">
+              <ArrowRight className="w-2.5 h-2.5" />
+              <span className="truncate">{action}</span>
+            </div>
+          )}
         </button>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {item.candidate_id && onAdvance && (
@@ -2033,7 +2256,7 @@ function FocusList({
   title: string;
   Icon: React.ComponentType<{ className?: string }>;
   tone: 'amber' | 'blue' | 'red' | 'gray' | 'emerald';
-  items: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; onClick?: () => void }[];
+  items: { primary: string; secondary: string; meta: string; severity?: 'high'; candidate_id?: string; stageCode?: string; onClick?: () => void }[];
   onReject?: (id: string) => Promise<void>;
   onAdvance?: (id: string) => Promise<void>;
   onRefresh?: () => void;
@@ -2065,6 +2288,159 @@ function FocusList({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ─── Source Quality Card · qué canal trae mejores hires ──────── */
+type SourceQualityData = {
+  sources: { linkedin: { count: number; pct: number }; organic: { count: number; pct: number }; unknown: { count: number; pct: number } };
+  sources_quality: { linkedin_hire_rate: number; organic_hire_rate: number; linkedin_hires: number; organic_hires: number };
+};
+
+function SourceQualityCard({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
+  const [data, setData] = useState<SourceQualityData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const url = vacancyFilter && vacancyFilter !== 'all'
+        ? `/api/dashboard/analytics?vacancy_id=${encodeURIComponent(vacancyFilter)}`
+        : '/api/dashboard/analytics';
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      setData(j);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || 'Error de red');
+    } finally {
+      setLoading(false);
+    }
+  }, [vacancyFilter]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const run = async () => { if (alive) await fetchData(); };
+    run();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) fetchData();
+    }, 60000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [fetchData]);
+
+  if (loading) return null;
+  if (error || !data) return null;
+
+  const { sources, sources_quality } = data;
+  const totalAplicaciones = sources.linkedin.count + sources.organic.count + sources.unknown.count;
+  if (totalAplicaciones === 0) return null;
+
+  // Construir filas comparables
+  const rows = [
+    {
+      key: 'linkedin',
+      label: 'LinkedIn',
+      color: '#0A66C2',
+      applied: sources.linkedin.count,
+      hires: sources_quality.linkedin_hires,
+      conversion: sources_quality.linkedin_hire_rate,
+    },
+    {
+      key: 'organic',
+      label: 'Orgánico / Email',
+      color: '#111',
+      applied: sources.organic.count,
+      hires: sources_quality.organic_hires,
+      conversion: sources_quality.organic_hire_rate,
+    },
+  ].filter(r => r.applied > 0);
+
+  // Identificar el winner
+  rows.sort((a, b) => b.conversion - a.conversion);
+  const winner = rows.find(r => r.hires > 0);
+
+  return (
+    <div className="mb-4 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <div className="flex items-end justify-between mb-3 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-black/5 ring-1 ring-black/10 flex items-center justify-center">
+            <BarChart3 className="w-4 h-4 text-gray-900" strokeWidth={2} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[2.5px] font-semibold text-gray-500">Source Quality</div>
+            <div className="text-lg font-bold tracking-tight text-gray-900">
+              {winner ? (
+                <>
+                  <span className="capitalize">{winner.label}</span> es tu canal con mejor ROI · {winner.conversion}% conversión
+                </>
+              ) : (
+                <>Sin hires aún para evaluar canales</>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-[9px] uppercase tracking-wider text-gray-500 border-b border-gray-100">
+            <th className="text-left font-bold py-2 pr-3">Canal</th>
+            <th className="text-right font-bold py-2 px-2 tabular-nums">Aplicaron</th>
+            <th className="text-right font-bold py-2 px-2 tabular-nums">Contratados</th>
+            <th className="text-right font-bold py-2 px-2 tabular-nums">Conversión</th>
+            <th className="text-left font-bold py-2 pl-2">Performance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const isWinner = winner && r.key === winner.key;
+            const conversionTone = r.conversion >= 15
+              ? { text: 'text-emerald-700', bar: 'bg-emerald-500' }
+              : r.conversion >= 5
+              ? { text: 'text-amber-700', bar: 'bg-amber-500' }
+              : { text: 'text-red-700', bar: 'bg-red-400' };
+            return (
+              <tr key={r.key} className="border-b border-gray-50">
+                <td className="py-2 pr-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: r.color }} />
+                    <span className="font-semibold text-gray-900">{r.label}</span>
+                    {isWinner && r.hires > 0 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                        ⭐ Top
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="py-2 px-2 text-right tabular-nums text-gray-900 font-semibold">{r.applied}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-gray-900 font-semibold">{r.hires}</td>
+                <td className={`py-2 px-2 text-right tabular-nums font-bold ${conversionTone.text}`}>
+                  {r.conversion}%
+                </td>
+                <td className="py-2 pl-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${conversionTone.bar} transition-all`}
+                        style={{ width: `${Math.min(100, r.conversion * 4)}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {sources.unknown.count > 0 && (
+        <div className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-100">
+          {sources.unknown.count} candidatos sin source identificado (no se incluyen en ranking).
+        </div>
+      )}
     </div>
   );
 }
