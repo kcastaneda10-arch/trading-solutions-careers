@@ -100,7 +100,25 @@ const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", emoji: "❌", colo
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
-  const [vacFilter, setVacFilter] = useState("all");
+  // Inicializar vacFilter desde URL query (?vacancy=UUID) — persiste entre reloads.
+  // Usamos query string (no hash) porque el HR Admin ya usa el hash para el tab.
+  const [vacFilter, setVacFilterState] = useState(() => {
+    if (typeof window === 'undefined') return 'all';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('vacancy') || 'all';
+  });
+  const setVacFilter = (v: string) => {
+    setVacFilterState(v);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (v === 'all') params.delete('vacancy');
+      else params.set('vacancy', v);
+      const search = params.toString();
+      // Preservar el hash (que tiene el tab)
+      const newUrl = `${window.location.pathname}${search ? '?' + search : ''}${window.location.hash}`;
+      window.history.replaceState(null, '', newUrl);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [selectedCand, setSelectedCand] = useState<Cand | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -108,6 +126,17 @@ export default function PipelineFunnel() {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
 
   useEffect(() => { void load(); }, []);
+
+  // Listener para back/forward del browser (popstate)
+  useEffect(() => {
+    const onPop = () => {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get('vacancy') || 'all';
+      setVacFilterState(v);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -273,7 +302,7 @@ export default function PipelineFunnel() {
       )}
 
       {/* Side panel con detalles del candidato */}
-      {selectedCand && <CandDetailPanel cand={selectedCand} onClose={() => setSelectedCand(null)} />}
+      {selectedCand && <CandDetailPanel cand={selectedCand} onClose={() => setSelectedCand(null)} onChanged={() => { void load(); }} />}
     </div>
   );
 }
@@ -565,7 +594,7 @@ function BulkActionBar({
 }
 
 // ─── Side panel con detalle + respuestas del prefiltro ──────────────
-function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void }) {
+function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: () => void; onChanged?: () => void }) {
   const pf = cand.prefilter_data;
   const decision = cand.prefilter_decision;
   const decisionBadge = decision === "pass" ? { label: "✅ PASS", color: "#10B981" }
@@ -594,7 +623,11 @@ function CandDetailPanel({ cand, onClose }: { cand: Cand; onClose: () => void })
         setFeedback(targetStage === "rechazado"
           ? "✅ Rechazado · draft de descarte creado en tu Gmail"
           : `✅ Movido a ${targetStage}`);
-        setTimeout(() => { onClose(); window.location.reload(); }, 1200);
+        // Re-fetch sin reload: preserva filtro de vacante
+        setTimeout(() => {
+          onChanged?.();
+          onClose();
+        }, 1000);
       } else {
         setFeedback(`❌ ${j.error || "Error"}`);
       }
