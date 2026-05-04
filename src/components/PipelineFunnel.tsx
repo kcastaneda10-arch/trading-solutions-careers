@@ -1062,31 +1062,72 @@ function AIInterviewBlock({ candidateId, candidateEmail }: { candidateId: string
 // ─── Botón inline para correr scoring AI de UNA entrevista pendiente ─
 function PendingScoringPanel({ interview, onScored, candidateEmail }: { interview: any; onScored: () => void; candidateEmail?: string }) {
   const [running, setRunning] = React.useState(false);
-  const [result, setResult] = React.useState<{ ok: boolean; message: string; score?: number } | null>(null);
+  const [elapsed, setElapsed] = React.useState(0);
+  const [result, setResult] = React.useState<{ ok: boolean; message: string; score?: number; error_kind?: string } | null>(null);
+
+  // Cronómetro mientras corre
+  React.useEffect(() => {
+    if (!running) { setElapsed(0); return; }
+    const start = Date.now();
+    const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [running]);
 
   const runScoring = async () => {
     setRunning(true);
     setResult(null);
     try {
+      // Timeout 100s — un poco más que el del backend (90s) para no cortar antes
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 100_000);
+
       const r = await fetch('/api/admin/rescore-ai-interviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ interview_ids: [interview.id] }),
-      });
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (!r.ok) {
+        setResult({ ok: false, message: `HTTP ${r.status}: el endpoint falló. Mirá logs de Vercel.` });
+        return;
+      }
+
       const j = await r.json();
       const myResult = j.results?.find((x: any) => x.interview_id === interview.id);
       if (myResult?.success) {
         setResult({ ok: true, message: `Score: ${myResult.score}/100`, score: myResult.score });
-        // Refrescar la data del panel
         setTimeout(() => onScored(), 800);
       } else {
-        setResult({ ok: false, message: myResult?.error || j.error || 'Error desconocido' });
+        setResult({
+          ok: false,
+          message: myResult?.error || j.error || 'Error desconocido (sin detalle del backend)',
+          error_kind: myResult?.error_kind,
+        });
       }
     } catch (e: any) {
-      setResult({ ok: false, message: e?.message || 'Error de red' });
+      const isAbort = e?.name === 'AbortError';
+      setResult({
+        ok: false,
+        message: isAbort
+          ? 'Timeout cliente (>100s). Probablemente Vercel cortó la conexión. Revisá logs.'
+          : (e?.message || 'Error de red'),
+        error_kind: isAbort ? 'timeout' : 'network',
+      });
     } finally {
       setRunning(false);
     }
+  };
+
+  // Mensaje de ayuda según el tipo de error
+  const errorHelp = (kind?: string): string | null => {
+    if (kind === 'no_transcript') {
+      return 'Solución: Click "Reenviar entrevista" para que el candidato la haga otra vez. ElevenLabs ya borró el audio/transcripción de la sesión anterior.';
+    }
+    if (kind === 'timeout') {
+      return 'Solución: Reintentar (a veces Anthropic tarda más con transcripts largos). Si persiste, revisar logs en Vercel.';
+    }
+    return null;
   };
 
   return (
@@ -1105,8 +1146,21 @@ function PendingScoringPanel({ interview, onScored, candidateEmail }: { intervie
         />
       )}
       {result ? (
-        <div className={`mt-2 p-2 rounded text-[11px] font-semibold ${result.ok ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
-          {result.ok ? `✅ Scoring completado · ${result.message} · refrescando…` : `❌ ${result.message}`}
+        <div className={`mt-2 p-2.5 rounded text-[11px] ${result.ok ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
+          <div className="font-bold">
+            {result.ok ? `✅ Scoring completado · ${result.message} · refrescando…` : `❌ ${result.message}`}
+          </div>
+          {!result.ok && errorHelp(result.error_kind) && (
+            <div className="mt-1.5 text-[10px] font-medium opacity-90">→ {errorHelp(result.error_kind)}</div>
+          )}
+          {!result.ok && (
+            <button
+              onClick={() => { setResult(null); }}
+              className="mt-2 text-[10px] font-bold underline"
+            >
+              Reintentar
+            </button>
+          )}
         </div>
       ) : (
         <button
@@ -1114,7 +1168,7 @@ function PendingScoringPanel({ interview, onScored, candidateEmail }: { intervie
           disabled={running}
           className="w-full bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full flex items-center justify-center gap-1.5"
         >
-          {running ? '⏳ Corriendo 3 agentes Claude (~1 min)…' : '🤖 Correr scoring AI ahora'}
+          {running ? `⏳ Corriendo 3 agentes Claude · ${elapsed}s/90s` : '🤖 Correr scoring AI ahora'}
         </button>
       )}
     </div>

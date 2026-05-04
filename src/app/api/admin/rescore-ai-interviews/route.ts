@@ -56,16 +56,21 @@ export async function POST(req: NextRequest) {
       ? `${proto}://${host}`
       : "https://trading-solutions-careers.vercel.app";
 
-    const results: Array<{ interview_id: string; success: boolean; score?: number; error?: string }> = [];
+    const results: Array<{ interview_id: string; success: boolean; score?: number; error?: string; error_kind?: string; http_status?: number }> = [];
 
-    // 3. Para cada interview, invocar /finalize
+    // 3. Para cada interview, invocar /finalize con timeout explícito
     for (const interview of pending) {
       try {
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), 90_000); // 90s timeout
+
         const r = await fetch(`${baseUrl}/api/headhunting/ai-interview/${interview.token}/finalize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversation_id: interview.conversation_id }),
-        });
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(timeoutId));
+
         const j = await r.json();
         if (j.success && j.scored) {
           results.push({
@@ -73,18 +78,31 @@ export async function POST(req: NextRequest) {
             success: true,
             score: j.score,
           });
+        } else if (j.note === "No transcript available") {
+          results.push({
+            interview_id: interview.id,
+            success: false,
+            error: "ElevenLabs no tiene transcript para este conversation_id. Probablemente el audio expiró o nunca se grabó completo. Reenviar entrevista.",
+            error_kind: "no_transcript",
+          });
         } else {
           results.push({
             interview_id: interview.id,
             success: false,
-            error: j.error || j.note || 'no scored',
+            error: j.error || j.note || `HTTP ${r.status} sin scoring`,
+            error_kind: "scoring_failed",
+            http_status: r.status,
           });
         }
       } catch (e: any) {
+        const isAbort = e?.name === 'AbortError';
         results.push({
           interview_id: interview.id,
           success: false,
-          error: e?.message || String(e),
+          error: isAbort
+            ? "Timeout: el scoring tardó más de 90s. Probablemente Anthropic está lento o transcript muy largo. Reintentar."
+            : (e?.message || String(e)),
+          error_kind: isAbort ? "timeout" : "exception",
         });
       }
     }
