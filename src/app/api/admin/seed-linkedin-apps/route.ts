@@ -90,7 +90,8 @@ export async function POST(req: NextRequest) {
           phone: c.phone,
           vacancy_id: c.vacancy_id,
           stage: 'aplico',
-          status: 'new',
+          // status check: pending|invited|in_progress|completed|expired|rejected
+          status: 'pending',
           created_at: c.applied ? `${c.applied}T12:00:00Z` : new Date().toISOString(),
         };
         if (hasMetadataCols) {
