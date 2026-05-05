@@ -98,6 +98,25 @@ export default function HRAdminPage() {
   const [gmailAuditOpen, setGmailAuditOpen] = useState(false);
   const [decisionsOpen, setDecisionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Detector global de sesión expirada — interceptamos fetch para detectar 401
+  // en cualquier endpoint /api/headhunting/* o /api/admin/* y mostrar banner.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const r = await originalFetch.apply(window, args as any);
+      try {
+        const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request).url;
+        if (r.status === 401 && (url.includes('/api/headhunting') || url.includes('/api/admin') || url.includes('/api/dashboard'))) {
+          setSessionExpired(true);
+        }
+      } catch {}
+      return r;
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
 
   // Poll referrals pendientes cada 60s
   useEffect(() => {
@@ -294,6 +313,32 @@ export default function HRAdminPage() {
       {gmailAuditOpen && <GmailAuditModal onClose={() => setGmailAuditOpen(false)} />}
       {decisionsOpen && <DecisionNudgesModal onClose={() => setDecisionsOpen(false)} />}
       {settingsOpen && <DashboardSettingsModal onClose={() => setSettingsOpen(false)} />}
+      {sessionExpired && (
+        <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Tu sesión expiró</h2>
+                <p className="text-xs text-gray-600 mt-1">
+                  La cookie de admin dura 12 horas. Volvé a iniciar sesión para seguir trabajando — tus datos no se pierden.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                try { await fetch('/api/hr-admin/login', { method: 'DELETE' }); } catch {}
+                window.location.href = '/hr-admin/login';
+              }}
+              className="w-full bg-black hover:bg-gray-800 text-white text-sm font-bold py-2.5 rounded-full inline-flex items-center justify-center gap-2"
+            >
+              Volver a iniciar sesión
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3433,7 +3478,11 @@ function VacancyMarketResearchModal({
       const r = await fetch(`/api/headhunting/vacancies/${vacancyId}/market-research`, { method: 'POST' });
       const j = await r.json();
       if (!r.ok) {
-        setError(j.error || 'Error generando estudio');
+        if (r.status === 401 || j.error === 'Unauthorized') {
+          setError('Tu sesión expiró (las cookies duran 12h). Cerrá sesión arriba a la derecha y volvé a entrar.');
+        } else {
+          setError(j.error || 'Error generando estudio');
+        }
       } else {
         setReport(j.research?.report || null);
         setGeneratedAt(j.research?.generated_at || new Date().toISOString());

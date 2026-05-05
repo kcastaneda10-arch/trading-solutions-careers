@@ -13,6 +13,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import Anthropic from "@anthropic-ai/sdk";
 
+// Permitir hasta 90s — los 3 agentes Claude en paralelo con transcripts de
+// 14K chars pueden tardar 40-60s. Vercel Pro permite hasta 90s.
+export const maxDuration = 90;
+export const runtime = "nodejs";
+
 let _anthropic: Anthropic | null = null;
 function getAnthropic(): Anthropic {
   if (_anthropic) return _anthropic;
@@ -232,6 +237,14 @@ export async function POST(
 
     if (error || !interview) {
       return NextResponse.json({ error: "invalid_token" }, { status: 401 });
+    }
+
+    // ─── Optimización: si la BD ya tiene transcript cacheado, usarlo ───
+    // Evita refetch a ElevenLabs cuando se invoca /finalize otra vez para
+    // correr scoring que falló antes (caso típico: rescore-ai-interviews).
+    if (!transcript && interview.transcript) {
+      transcript = interview.transcript;
+      console.log(`[finalize] using cached transcript from BD (${JSON.stringify(transcript).length} chars)`);
     }
 
     // ─── Fallback: si no llega conversation_id, buscarlo en ElevenLabs ───

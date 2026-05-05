@@ -75,18 +75,31 @@ export async function GET(req: NextRequest) {
   let elevenlabs_audio_check: any = null;
   let elevenlabs_transcript_check: any = null;
   if (ai.conversation_id && process.env.ELEVENLABS_API_KEY) {
-    // Audio HEAD
+    // Audio: GET con Range: bytes=0-0 (ElevenLabs no soporta HEAD para audio)
     try {
       const r = await fetch(
         `https://api.elevenlabs.io/v1/convai/conversations/${ai.conversation_id}/audio`,
-        { method: "HEAD", headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+        {
+          method: "GET",
+          headers: {
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+            "Range": "bytes=0-0",
+          },
+        }
       );
+      // Leer Content-Range que tiene el tamaño total
+      const contentRange = r.headers.get('content-range'); // "bytes 0-0/12345"
+      const totalBytes = contentRange ? Number(contentRange.split('/')[1]) : null;
+      // Cancelar body para no descargar
+      if (r.body) {
+        try { r.body.cancel?.(); } catch {}
+      }
       elevenlabs_audio_check = {
         status: r.status,
-        ok: r.ok,
+        ok: r.status === 200 || r.status === 206,
         content_type: r.headers.get('content-type'),
-        content_length: r.headers.get('content-length'),
-        content_length_kb: r.headers.get('content-length') ? Math.round(Number(r.headers.get('content-length')) / 1024) : null,
+        content_range: contentRange,
+        total_size_kb: totalBytes ? Math.round(totalBytes / 1024) : null,
       };
     } catch (e: any) {
       elevenlabs_audio_check = { error: e?.message || String(e) };

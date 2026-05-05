@@ -100,6 +100,8 @@ export async function GET(
 }
 
 // HEAD para que el <audio> pueda hacer pre-flight check rápido
+// IMPORTANTE: ElevenLabs NO soporta HEAD para /audio (devuelve 405).
+// Hacemos GET con Range: bytes=0-0 (solo 1 byte) para validar sin descargar todo.
 export async function HEAD(
   req: NextRequest,
   { params }: { params: { token: string } }
@@ -122,12 +124,24 @@ export async function HEAD(
   }
 
   try {
+    // GET con Range: bytes=0-0 — ElevenLabs sí soporta esto y devuelve 206
+    // con metadata sin descargar el audio entero
     const r = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
-      { method: "HEAD", headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+      {
+        method: "GET",
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Range": "bytes=0-0",
+        },
+      }
     );
+    // Cerramos body inmediatamente para no descargar más bytes
+    if (r.body) {
+      try { r.body.cancel?.(); } catch {}
+    }
     return new NextResponse(null, {
-      status: r.ok ? 200 : r.status,
+      status: (r.status === 200 || r.status === 206) ? 200 : r.status,
       headers: {
         "Content-Type": r.headers.get("Content-Type") || "audio/mpeg",
         "Content-Length": r.headers.get("Content-Length") || "0",
