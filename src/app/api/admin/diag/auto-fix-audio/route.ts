@@ -35,9 +35,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Pull todas las entrevistas completadas con conversation_id
+    //    + JOIN con candidato para tener su nombre (necesario para validación)
     const { data: interviews } = await supabaseAdmin
       .from("ht_ai_interviews")
-      .select("id, candidate_id, token, conversation_id, agent_id, started_at, ai_score")
+      .select("id, candidate_id, token, conversation_id, agent_id, started_at, ai_score, ht_candidates(name)")
       .eq("status", "completed")
       .not("conversation_id", "is", null)
       .order("created_at", { ascending: false });
@@ -92,10 +93,14 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // OPTIMIZACIÓN: en lugar de bajar audio de cada sesión (lento),
-        // ordenamos candidatas por (duration desc, message_count desc) y
-        // sólo descargamos el audio de la #1. Si vacío, probamos la #2.
-        // Esto reduce las descargas de N a 1-2 por entrevista.
+        // CRÍTICO: como el agent_id es compartido entre TODOS los candidatos,
+        // filtrar solo por timestamp puede asignar la conversación de OTRA persona.
+        // Validamos por NOMBRE leyendo el primer mensaje del agent en cada conversación.
+        const candidateName: string = (it as any).ht_candidates?.name || "";
+        const firstName = candidateName.split(" ")[0]?.trim() || "";
+        const firstNameNorm = firstName.toLowerCase()
+          .normalize("NFD").replace(/\p{Diacritic}/gu, ""); // sin acentos
+
         const candidates = nearby
           .filter((c: any) => c.status === "done" && (c.call_duration_secs || 0) >= 30)
           .sort((a: any, b: any) => {
@@ -105,29 +110,52 @@ export async function POST(req: NextRequest) {
             return (b.message_count || 0) - (a.message_count || 0);
           });
 
-        // Probar las top 3 candidatas en paralelo y elegir la primera con audio real.
-        // Como ya están ordenadas por duración desc, la mejor candidata es la primera.
-        const top = candidates.slice(0, 3);
+        // Para cada conversación cercana, leer el transcript y verificar el nombre
+        // saludado por el agent. Solo aceptar las que matchean al candidato actual.
+        const top = candidates.slice(0, 5);
         const checks = await Promise.all(
           top.map(async (c: any) => {
             try {
+              // 1. Pull metadata + transcript
+              const metaR = await fetch(
+                `https://api.elevenlabs.io/v1/convai/conversations/${c.conversation_id}`,
+                { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+              );
+              if (!metaR.ok) return null;
+              const meta = await metaR.json();
+              const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
+              const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
+              const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
+
+              // 2. Validar nombre — el agent dice "Hola Vianny" / "Hola María"
+              //    O el candidato se presenta "Soy Vianny"
+              const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
+                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+              const nameMatches = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
+
+              if (!nameMatches) return { convo: c, size: 0, name_match: false, skipped: 'name_mismatch' };
+
+              // 3. Solo si nombre matchea, bajar audio para verificar tamaño
               const audioR = await fetch(
                 `https://api.elevenlabs.io/v1/convai/conversations/${c.conversation_id}/audio`,
                 { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
               );
               if (audioR.ok) {
                 const buf = await audioR.arrayBuffer();
-                return { convo: c, size: buf.byteLength };
+                return { convo: c, size: buf.byteLength, name_match: true, full_transcript: meta };
               }
             } catch {}
             return null;
           })
         );
 
-        // Filtrar solo las que tienen audio real, mantener orden de candidates (duration desc)
-        const valid = checks.filter(x => x && x.size > 1000) as { convo: any; size: number }[];
+        // Filtrar solo las con name_match Y audio real
+        const valid = checks
+          .filter(x => x && (x as any).name_match && (x as any).size > 1000) as
+          { convo: any; size: number; name_match: boolean; full_transcript: any }[];
         const bestConvo = valid[0]?.convo || null;
         const bestSize = valid[0]?.size || 0;
+        const bestTranscript = valid[0]?.full_transcript || null;
 
         if (!bestConvo) {
           results.push({
@@ -153,22 +181,17 @@ export async function POST(req: NextRequest) {
         if (dryRun) {
           results.push({
             candidate_id: it.candidate_id,
+            candidate_name: candidateName,
             status: "would_fix",
             old_cid: it.conversation_id,
             new_cid: bestConvo.conversation_id,
             new_audio_size_kb: Math.round(bestSize / 1024),
             new_duration_secs: bestConvo.call_duration_secs,
+            name_validated: true,
           });
         } else {
-          // Refetch transcript de la sesión nueva
-          let newTranscript: any = null;
-          try {
-            const tR = await fetch(
-              `https://api.elevenlabs.io/v1/convai/conversations/${bestConvo.conversation_id}`,
-              { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
-            );
-            if (tR.ok) newTranscript = await tR.json();
-          } catch {}
+          // Reutilizar transcript ya descargado durante validación de nombre
+          const newTranscript: any = bestTranscript;
 
           // Construir audio_url proxy
           const proto = req.headers.get('x-forwarded-proto') || 'https';
