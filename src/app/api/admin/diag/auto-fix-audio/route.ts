@@ -82,45 +82,76 @@ export async function POST(req: NextRequest) {
         // buscar en el listado paginado (que puede no incluir la sesión correcta).
         if (it.conversation_id) {
           try {
-            // Bajar audio de la cid actual (lo más relevante: ¿tiene contenido?)
-            const audioR = await fetch(
-              `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
+            // Pull metadata + transcript de la cid actual
+            const metaR = await fetch(
+              `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
               { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
             );
-            if (audioR.ok) {
-              const buf = await audioR.arrayBuffer();
-              if (buf.byteLength > 1000) {
-                // La cid actual TIENE audio. Ya está bien — no hace falta buscar
-                // alternativa. (No exigimos que el nombre matchee porque algunos
-                // agentes saludan genérico, pero la cid fue asignada por nuestro
-                // backend en /finalize, que confía en el started_at).
-                let nameMatch = false;
-                try {
-                  const metaR = await fetch(
-                    `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
-                    { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
-                  );
-                  if (metaR.ok) {
-                    const meta = await metaR.json();
-                    const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
-                    const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
-                    const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
-                    const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
-                      .normalize("NFD").replace(/\p{Diacritic}/gu, "");
-                    nameMatch = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
-                  }
-                } catch {}
+            if (metaR.ok) {
+              const meta = await metaR.json();
+              const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
+              const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
+              const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
+              const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
+                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+              const nameMatch = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
 
+              // Detectar si el agent saluda a OTRA persona (cruce de candidato)
+              const otherNamePatterns = /[Hh]ola[,\s]+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)/g;
+              const otherNames: string[] = [];
+              let m;
+              while ((m = otherNamePatterns.exec(firstAgent)) !== null) {
+                if (m[1] && m[1].length > 2) otherNames.push(m[1]);
+              }
+              const wrongNameMentioned = otherNames.length > 0 && !nameMatch;
+
+              // Bajar audio para confirmar tamaño
+              const audioR = await fetch(
+                `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
+                { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+              );
+              const audioOk = audioR.ok;
+              const audioBuf = audioOk ? await audioR.arrayBuffer() : null;
+              const audioBytes = audioBuf ? audioBuf.byteLength : 0;
+
+              if (audioBytes > 1000 && nameMatch) {
+                // ✅ Audio + nombre matchea: la cid actual es 100% correcta
                 results.push({
                   candidate_id: it.candidate_id,
                   candidate_name: candidateName,
                   status: "already_correct",
-                  audio_size_kb: Math.round(buf.byteLength / 1024),
-                  validated_by_name: nameMatch,
-                  note: nameMatch ? null : "Audio OK pero el agent no menciona el nombre del candidato (saludo genérico)",
+                  audio_size_kb: Math.round(audioBytes / 1024),
+                  validated_by_name: true,
                 });
-                continue; // siguiente entrevista
+                continue;
+              } else if (audioBytes > 1000 && wrongNameMentioned) {
+                // 🚨 La cid actual tiene audio pero pertenece a OTRO candidato (cruce)
+                results.push({
+                  candidate_id: it.candidate_id,
+                  candidate_name: candidateName,
+                  status: "cid_mismatch_other_candidate",
+                  current_cid: it.conversation_id,
+                  audio_size_kb: Math.round(audioBytes / 1024),
+                  agent_saluda_a: otherNames[0],
+                  first_agent_message: firstAgent.slice(0, 200),
+                  recommendation: `El audio es de "${otherNames[0]}", no de "${candidateName}". Revisar manualmente.`,
+                });
+                continue;
+              } else if (audioBytes > 1000 && !nameMatch) {
+                // Audio existe pero no detectamos nombre del candidato ni de otro.
+                // Probablemente saludo genérico — caso ambiguo, marcar para revisión.
+                results.push({
+                  candidate_id: it.candidate_id,
+                  candidate_name: candidateName,
+                  status: "audio_ok_name_unclear",
+                  current_cid: it.conversation_id,
+                  audio_size_kb: Math.round(audioBytes / 1024),
+                  first_agent_message: firstAgent.slice(0, 200),
+                  recommendation: "Audio OK pero el agent saluda genérico (sin nombre). Revisar manualmente abriendo el panel.",
+                });
+                continue;
               }
+              // Si llegamos acá: audio < 1000 bytes (vacío) → cae al PASO 1
             }
           } catch {}
         }
@@ -289,6 +320,8 @@ export async function POST(req: NextRequest) {
       fixed: results.filter(r => r.status === "fixed").length,
       already_correct: results.filter(r => r.status === "already_correct").length,
       would_fix: results.filter(r => r.status === "would_fix").length,
+      cid_mismatch_other_candidate: results.filter(r => r.status === "cid_mismatch_other_candidate").length,
+      audio_ok_name_unclear: results.filter(r => r.status === "audio_ok_name_unclear").length,
       no_audio: results.filter(r => r.status === "no_audio_in_any_session").length,
       no_sessions: results.filter(r => r.status === "no_sessions_found").length,
       errors: results.filter(r => r.status === "fix_failed" || r.error).length,
