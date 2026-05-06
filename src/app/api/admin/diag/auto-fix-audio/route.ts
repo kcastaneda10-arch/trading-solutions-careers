@@ -92,26 +92,42 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // Validar audio de cada conversación cercana (HEAD-style con GET completo)
-        // Buscar la más larga con audio real
-        let bestConvo: any = null;
-        let bestSize = 0;
+        // OPTIMIZACIÓN: en lugar de bajar audio de cada sesión (lento),
+        // ordenamos candidatas por (duration desc, message_count desc) y
+        // sólo descargamos el audio de la #1. Si vacío, probamos la #2.
+        // Esto reduce las descargas de N a 1-2 por entrevista.
+        const candidates = nearby
+          .filter((c: any) => c.status === "done" && (c.call_duration_secs || 0) >= 30)
+          .sort((a: any, b: any) => {
+            const da = a.call_duration_secs || 0;
+            const db = b.call_duration_secs || 0;
+            if (db !== da) return db - da;
+            return (b.message_count || 0) - (a.message_count || 0);
+          });
 
-        for (const c of nearby) {
-          try {
-            const audioR = await fetch(
-              `https://api.elevenlabs.io/v1/convai/conversations/${c.conversation_id}/audio`,
-              { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
-            );
-            if (audioR.ok) {
-              const buf = await audioR.arrayBuffer();
-              if (buf.byteLength > 1000 && buf.byteLength > bestSize) {
-                bestConvo = c;
-                bestSize = buf.byteLength;
+        // Probar las top 3 candidatas en paralelo y elegir la primera con audio real.
+        // Como ya están ordenadas por duración desc, la mejor candidata es la primera.
+        const top = candidates.slice(0, 3);
+        const checks = await Promise.all(
+          top.map(async (c: any) => {
+            try {
+              const audioR = await fetch(
+                `https://api.elevenlabs.io/v1/convai/conversations/${c.conversation_id}/audio`,
+                { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+              );
+              if (audioR.ok) {
+                const buf = await audioR.arrayBuffer();
+                return { convo: c, size: buf.byteLength };
               }
-            }
-          } catch {}
-        }
+            } catch {}
+            return null;
+          })
+        );
+
+        // Filtrar solo las que tienen audio real, mantener orden de candidates (duration desc)
+        const valid = checks.filter(x => x && x.size > 1000) as { convo: any; size: number }[];
+        const bestConvo = valid[0]?.convo || null;
+        const bestSize = valid[0]?.size || 0;
 
         if (!bestConvo) {
           results.push({
