@@ -1329,14 +1329,14 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
 
   return (
     <>
-      {/* TS Hero Banner — fotografía corporativa estilo página oficial */}
-      <TSHeroBanner />
+      {/* Storytelling header — saludo + verdict del Q + acciones críticas */}
+      <DashboardStoryHeader vacancyFilter={selectedVacancyUuid} />
 
       <PageHead
-        title="Dashboard · Talent Acquisition"
+        title="Pipeline · vista del día"
         desc={
           filterIsAll
-            ? 'Vista ejecutiva en vivo del pipeline real de Trading Solutions.'
+            ? 'Lo que necesita tu acción hoy y cómo va tu trimestre.'
             : `Vista filtrada · ${selectedVacancyTitle}`
         }
         actions={
@@ -1630,6 +1630,108 @@ type TodayFocusData = {
   todays_interviews?: { id: string; candidate_id: string; candidate_name: string; vacancy_id: string; vacancy_title: string; interview_type: string; scheduled_at: string; duration_min: number; meeting_url: string | null; location: string | null; status: string }[];
   recent_movements?: { candidate_id: string; name: string; stage: string; status: string; updated_at: string; hours_ago: number; vacancy_id: string; vacancy_title: string; movement_type: 'hired'|'rejected'|'late_stage'|'interview'|'other' }[];
 };
+
+/* ─── Dashboard Story Header · saludo + verdict + acciones ─────── */
+function DashboardStoryHeader({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
+  const [hero, setHero] = useState<HeroData | null>(null);
+  const [today, setToday] = useState<TodayFocusData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const url = vacancyFilter && vacancyFilter !== 'all'
+      ? `?vacancy_id=${encodeURIComponent(vacancyFilter)}`
+      : '';
+    Promise.all([
+      fetch(`/api/dashboard/overview${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+      fetch(`/api/dashboard/today${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+    ]).then(([h, t]) => {
+      if (!alive) return;
+      setHero(h);
+      setToday(t);
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [vacancyFilter]);
+
+  // Saludo según hora local
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const firstName = 'Kelly'; // TODO: leer de session/cookie
+
+  // Cómputos narrativos
+  const targetQ = hero?.targets?.hires_quarter ?? 5;
+  const hiresQ = hero?.hires?.quarter ?? 0;
+  const remaining = Math.max(0, targetQ - hiresQ);
+  const onTrack = remaining === 0 || (hiresQ / targetQ) >= 0.7;
+
+  const quickWins = today?.counts?.quick_wins || 0;
+  const decisions = today?.counts?.pending_decisions || 0;
+  const aging = today?.counts?.aging || 0;
+  const urgent = today?.counts?.urgent_vacancies || 0;
+
+  // Verdict trimestral en una frase
+  const verdictQ = remaining === 0
+    ? `🎯 Meta del Q cumplida · ${hiresQ}/${targetQ} hires.`
+    : onTrack
+    ? `Vas ${hiresQ}/${targetQ} hires · ${remaining} para llegar a meta.`
+    : `Vas ${hiresQ}/${targetQ} hires · te faltan ${remaining}, ritmo ajustado.`;
+
+  // Frase de acción de hoy
+  let actionLine = '';
+  if (quickWins > 0) {
+    actionLine = `${quickWins} quick win${quickWins !== 1 ? 's' : ''} a un click de cerrar`;
+    if (decisions > 0) actionLine += ` · ${decisions} esperan tu decisión`;
+  } else if (decisions > 0) {
+    actionLine = `${decisions} candidato${decisions !== 1 ? 's' : ''} esperan tu decisión hoy`;
+  } else if (aging > 0) {
+    actionLine = `${aging} candidato${aging !== 1 ? 's' : ''} en pausa · revisá quiénes siguen y quiénes no`;
+  } else {
+    actionLine = `Sin alertas críticas · día ideal para sourcing`;
+  }
+
+  return (
+    <div className="mb-5 bg-white border border-gray-200 rounded-2xl px-6 py-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
+          {/* Greeting */}
+          <div className="text-[11px] uppercase tracking-[2.5px] font-semibold text-gray-500 mb-1">
+            {greeting}, {firstName}
+          </div>
+          {/* Verdict trimestral · grande */}
+          <h1 className="text-[28px] font-extrabold tracking-tight text-gray-900 leading-tight mb-1">
+            {loading ? 'Cargando…' : verdictQ}
+          </h1>
+          {/* Acción de hoy */}
+          {!loading && (
+            <p className="text-sm text-gray-600">{actionLine}.</p>
+          )}
+        </div>
+
+        {/* Mini KPI badges · forecast a 30d + urgent + aging */}
+        {!loading && hero && today && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 min-w-[100px]">
+              <div className="text-[9px] uppercase font-bold tracking-wider text-emerald-700">Forecast 30d</div>
+              <div className="text-xl font-extrabold text-emerald-900 tabular-nums">{hero.pipeline?.forecast_hires_30d ?? 0}</div>
+              <div className="text-[10px] text-emerald-700/80">hires probables</div>
+            </div>
+            <div className={`${aging > 10 ? 'bg-red-50 border-red-200' : aging > 0 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'} border rounded-lg px-3 py-2 min-w-[100px]`}>
+              <div className={`text-[9px] uppercase font-bold tracking-wider ${aging > 10 ? 'text-red-700' : aging > 0 ? 'text-amber-700' : 'text-gray-500'}`}>Aging</div>
+              <div className={`text-xl font-extrabold tabular-nums ${aging > 10 ? 'text-red-900' : aging > 0 ? 'text-amber-900' : 'text-gray-700'}`}>{aging}</div>
+              <div className={`text-[10px] ${aging > 10 ? 'text-red-700/80' : aging > 0 ? 'text-amber-700/80' : 'text-gray-500'}`}>{aging > 10 ? 'críticos' : aging > 0 ? 'en pausa' : 'al día'}</div>
+            </div>
+            <div className={`${urgent > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'} border rounded-lg px-3 py-2 min-w-[100px]`}>
+              <div className={`text-[9px] uppercase font-bold tracking-wider ${urgent > 0 ? 'text-red-700' : 'text-gray-500'}`}>Vacantes</div>
+              <div className={`text-xl font-extrabold tabular-nums ${urgent > 0 ? 'text-red-900' : 'text-gray-700'}`}>{urgent}</div>
+              <div className={`text-[10px] ${urgent > 0 ? 'text-red-700/80' : 'text-gray-500'}`}>{urgent > 0 ? 'fuera de target' : 'en ritmo'}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: { vacancyFilter?: string; onJumpToVacancy: () => void; onJumpToFunnel: () => void }) {
   const [data, setData] = useState<TodayFocusData | null>(null);
@@ -3879,8 +3981,8 @@ function fmtDate(iso?: string | null): string {
 function stageLabelShort(s: string): string {
   const map: Record<string, string> = {
     aplico: 'Aplicó', prefiltro_enviado: 'Pref. enviado', prefiltro_pasado: 'Pref. ✓',
-    prefiltro_revision: 'Pref. (rev)', assessment_invitado: 'Elev. inv', assessment_en_progreso: 'Elev. prog',
-    assessment_completado: 'Elev. ✓', entrevista_ia: 'IA', bateria_psicometrica: 'Batería',
+    prefiltro_revision: 'Pref. (rev)', assessment_invitado: 'Integ. inv', assessment_en_progreso: 'Integ. prog',
+    assessment_completado: 'Integ. ✓', entrevista_ia: 'IA', bateria_psicometrica: 'Batería',
     recruiter_interview: 'Recr.', cwo_interview: 'CWO', touring: 'Touring', terna: 'Terna', oferta: 'Oferta',
     contratado: 'Contratado', rechazado: 'Rechazado',
   };
