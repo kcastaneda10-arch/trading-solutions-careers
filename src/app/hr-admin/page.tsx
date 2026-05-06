@@ -1401,7 +1401,7 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
           tone="neutral"
         />
         <KPI
-          label="En Elevare"
+          label="En Integridad"
           value={loading ? '…' : String(s?.htInElevareProcess ?? 0)}
           delta={s ? `${s.htCompletedElevare} completaron` : ''}
           tone="neutral"
@@ -1541,14 +1541,14 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
                         {c.matchPct !== null ? `${c.matchPct}%` : '—'}
                       </div>
                       <div className="text-[10px] text-gray-400 uppercase tracking-wide">
-                        Elevare {c.score ?? '—'}/100
+                        Integridad {c.score ?? '—'}/100
                       </div>
                     </div>
                   </div>
                 );
               })}
               <div className="text-[11px] text-gray-400 mt-1.5 px-1">
-                <span style={{ color: '#10B981' }}>●</span> ≥80 · <span style={{ color: '#F59E0B' }}>●</span> 50-79 · <span style={{ color: '#EF4444' }}>●</span> &lt;50 · Score Elevare. Click va a Funnel.
+                <span style={{ color: '#10B981' }}>●</span> ≥80 · <span style={{ color: '#F59E0B' }}>●</span> 50-79 · <span style={{ color: '#EF4444' }}>●</span> &lt;50 · Score Integridad. Click va a Funnel.
               </div>
             </div>
           )}
@@ -4047,7 +4047,7 @@ function Vacantes() {
   }
   async function bulkSendTest(vid: number, candidates: Array<{ id: number; name: string; email: string }>, vacancyTitle: string) {
     if (candidates.length === 0) return;
-    if (!confirm(`Enviar prueba Elevare a ${candidates.length} candidatos?`)) return;
+    if (!confirm(`Enviar prueba de integridad a ${candidates.length} candidatos?`)) return;
     setActionBusy(`bulk-${vid}`);
     let ok = 0;
     for (const c of candidates) {
@@ -4329,7 +4329,7 @@ function Vacantes() {
                     <AgenteBox icon="📥" title="Recepción" desc="Recibe aplicación · valida email" status="active" onClick={() => setAgentModal({ agent: 'recepcion' })} />
                     <AgenteBox icon="🔍" title="Pareo HDV" desc="Anthropic CV parser · extrae skills" status="active" onClick={() => setAgentModal({ agent: 'pareo' })} />
                     <AgenteBox icon="✅" title="Screening" desc="16 Mandamientos · score 0-100" status={stats && stats.total > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'screening' })} />
-                    <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba Elevare" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'assessment' })} />
+                    <AgenteBox icon="📧" title="Assessment" desc="Envío + tracking de prueba de integridad" status={stats && stats.reviewing > 0 ? 'active' : 'idle'} onClick={() => setAgentModal({ agent: 'assessment' })} />
                   </div>
 
                   {/* Ranking + filtros + bulk */}
@@ -4496,7 +4496,7 @@ function Vacantes() {
                               <button
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  if (!confirm(`Enviar prueba Elevare a ${c.name} (${c.email})?`)) return;
+                                  if (!confirm(`Enviar prueba de integridad a ${c.name} (${c.email})?`)) return;
                                   setActionBusy(`send-${c.id}`);
                                   try {
                                     const r = await fetch('/api/assessments', {
@@ -4839,7 +4839,7 @@ function ScreeningDetailModal({ data, onClose }: { data: ScreeningModalData; onC
               <div className="text-2xl font-bold">{data.category}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Prueba Elevare</div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Prueba de integridad</div>
               <div className="text-base font-semibold mt-1">
                 {data.assessmentStatus === 'completed' ? '✓ Completada' : data.assessmentStatus === 'in_progress' ? 'En curso' : data.assessmentStatus === 'sent' ? 'Enviada' : 'No enviada'}
               </div>
@@ -5929,7 +5929,7 @@ function Entrevistas() {
     <>
       <PageHead
         title="Entrevistas IA · Complemento al perfil psicométrico"
-        desc="La entrevista IA genera preguntas STAR específicas según los puntos a validar de la prueba Elevare. No es un cuestionario genérico — es targeted al candidato y a la vacante."
+        desc="La entrevista IA genera preguntas STAR específicas según los puntos a validar de la prueba de integridad. No es un cuestionario genérico — es targeted al candidato y a la vacante."
         actions={
           <>
             <select
@@ -5999,7 +5999,7 @@ function Entrevistas() {
           {activeAppData && !guide && !generating && (
             <div className="py-10 text-center">
               <div className="text-sm text-gray-600 mb-1">Listo para generar guía de entrevista IA para <strong>{activeAppData.full_name}</strong>.</div>
-              <div className="text-xs text-gray-400 mb-4">El agente cruzará el CV + prefilter + prueba Elevare (si la completó) y generará 6-8 preguntas STAR targeted.</div>
+              <div className="text-xs text-gray-400 mb-4">El agente cruzará el CV + prefilter + prueba de integridad (si la completó) y generará 6-8 preguntas STAR targeted.</div>
               <button onClick={() => generatePrep(activeAppData.id)} className="pill-btn pill-btn-primary text-sm">
                 <Sparkles className="w-3.5 h-3.5" /> Generar guía IA
               </button>
@@ -8947,7 +8947,7 @@ function AnalyticsDeep({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
           <div className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-4 text-xs">
             {data.avg_elevare_score != null && (
               <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-gray-500">Elevare avg score</span>
+                <span className="text-[10px] uppercase font-bold text-gray-500">Integridad avg score</span>
                 <span className={`text-base font-extrabold ${data.avg_elevare_score >= 70 ? 'text-emerald-600' : data.avg_elevare_score >= 50 ? 'text-amber-600' : 'text-red-500'}`}>{data.avg_elevare_score}</span>
               </div>
             )}

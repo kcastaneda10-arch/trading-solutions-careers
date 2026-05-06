@@ -82,9 +82,9 @@ const STAGES: Array<{ id: string; label: string; emoji: string; color: string }>
   { id: "prefiltro_enviado",      label: "Prefiltro enviado",     emoji: "📋", color: "#3B82F6" },
   { id: "prefiltro_pasado",       label: "Prefiltro · Pass",      emoji: "✅", color: "#10B981" },
   { id: "prefiltro_revision",     label: "Prefiltro · Review",    emoji: "⚠️",  color: "#F59E0B" },
-  { id: "assessment_invitado",    label: "Elevare invitado",      emoji: "📨", color: "#8B5CF6" },
-  { id: "assessment_en_progreso", label: "Elevare en progreso",   emoji: "⏳", color: "#A855F7" },
-  { id: "assessment_completado",  label: "Elevare completado",    emoji: "🎯", color: "#7C3AED" },
+  { id: "assessment_invitado",    label: "Integridad invitada",   emoji: "📨", color: "#8B5CF6" },
+  { id: "assessment_en_progreso", label: "Integridad en progreso", emoji: "⏳", color: "#A855F7" },
+  { id: "assessment_completado",  label: "Integridad completada",  emoji: "🎯", color: "#7C3AED" },
   { id: "entrevista_ia",          label: "Entrevista IA",         emoji: "🎥", color: "#EC4899" },
   { id: "bateria_psicometrica",   label: "Batería Psicométrica",  emoji: "📋", color: "#D946EF" },
   { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
@@ -313,8 +313,8 @@ export default function PipelineFunnel() {
 // con candidatos legacy o casos especiales (RYS Phase 3 sub-batería 2 / 3).
 const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> = {
   aplico: { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" },
-  prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a Elevare", emoji: "📨" },
-  prefiltro_revision: { id: "assessment_invitado", label: "Invitar a Elevare (override)", emoji: "📨" },
+  prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a prueba de integridad", emoji: "📨" },
+  prefiltro_revision: { id: "assessment_invitado", label: "Invitar a integridad (override)", emoji: "📨" },
   assessment_completado: { id: "recruiter_interview", label: "Agendar Entrevista Recruiter", emoji: "💬" },
   entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
   bateria_psicometrica: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
@@ -475,8 +475,8 @@ function BulkActionBar({
 
   const stageActions: Record<string, { label: string; emoji: string; endpoint: (id: string) => string; method: "POST" }> = {
     aplico: { label: "Enviar prefiltro", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-prefilter`, method: "POST" },
-    prefiltro_pasado: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    prefiltro_revision: { label: "Invitar a Elevare", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    prefiltro_pasado: { label: "Invitar a prueba de integridad", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    prefiltro_revision: { label: "Invitar a prueba de integridad", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     // Post-Elevare: salta directo a Recruiter Interview (Entrevista IA pausada 2026-05)
     assessment_completado: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     // Stages legacy mantenidos por compatibilidad — también avanzan a Recruiter
@@ -722,7 +722,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
           {/* Estado */}
           <Section title="Estado actual">
             <Row k="Stage" v={<span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{cand.stage || "aplico"}</span>} />
-            <Row k="Status Elevare" v={cand.status} />
+            <Row k="Status Integridad" v={cand.status} />
             {decisionBadge && (
               <Row k="Decisión prefiltro" v={
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: decisionBadge.color }}>
@@ -1259,7 +1259,7 @@ function ElevareResultsBlock({
 
   if (loading) {
     return (
-      <Section title="🧠 Resultados Elevare">
+      <Section title="🧠 Resultados Integridad">
         <div className="text-xs text-gray-400">Cargando…</div>
       </Section>
     );

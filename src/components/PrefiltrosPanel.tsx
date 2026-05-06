@@ -21,7 +21,7 @@ type Vacancy = { id: string; title: string };
 const FILTERS = [
   { id: "all", label: "Todos" },
   { id: "no-invitado", label: "Sin contactar" },
-  { id: "ya-contactado", label: "Ya en proceso (Elevare)" },
+  { id: "ya-contactado", label: "Ya en proceso (Integridad)" },
   { id: "invitado-pendiente", label: "Prefiltro enviado · esperando" },
   { id: "pass", label: "✅ Pass" },
   { id: "review", label: "⚠️ Review" },
@@ -255,7 +255,7 @@ export default function PrefiltrosPanel() {
                 const decision = c.prefilter_decision;
                 const decisionLabel = decision === "pass" ? "✅ Pass" : decision === "review" ? "⚠️ Review" : decision === "reject" ? "❌ Reject" : "—";
                 const inElevare = isInElevareProcess(c);
-                const elevareLabel = c.status === "completed" ? "Elevare completado" : c.status === "in_progress" ? "Elevare en progreso" : "Elevare invitado";
+                const elevareLabel = c.status === "completed" ? "Integridad completada" : c.status === "in_progress" ? "Integridad en progreso" : "Integridad invitada";
                 const statusText = c.prefilter_completed_at ? decisionLabel
                   : c.prefilter_invited_at ? "Esperando respuesta"
                   : inElevare ? `🟡 ${elevareLabel}`
