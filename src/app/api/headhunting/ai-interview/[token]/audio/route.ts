@@ -13,7 +13,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 // Forzar runtime Node.js para soportar streaming de body grande
 export const runtime = "nodejs";
-// Permitir respuestas largas (Vercel free: 30s; pro: 60s+)
+// Permitir respuestas largas (Vercel free: 30s; pro: 60s+).
+// El audio puede ser de 20-30MB (entrevistas de 25 min) y bajarlo + procesarlo
+// puede tardar 5-15s la primera vez. Después el browser cachea con max-age.
 export const maxDuration = 60;
 
 export async function GET(
@@ -46,21 +48,22 @@ export async function GET(
   }
 
   try {
-    // Forward Range header desde el cliente para soporte de seek nativo
+    // ─── ElevenLabs NO soporta Range requests ───
+    // Devuelve 200 con cuerpo entero, ignora Range. Eso confunde al <audio>
+    // que recibe 200 sin Content-Length y muestra `--:--` en duración.
+    //
+    // Solución: bajamos el audio entero de ElevenLabs (sin Range), lo
+    // bufferizamos, y nosotros respondemos al browser con:
+    //   - 206 Partial Content + Content-Range (si pidió Range)
+    //   - 200 OK + Content-Length completo (si no)
     const rangeHeader = req.headers.get("range");
-    const upstreamHeaders: Record<string, string> = {
-      "xi-api-key": process.env.ELEVENLABS_API_KEY,
-    };
-    if (rangeHeader) {
-      upstreamHeaders["Range"] = rangeHeader;
-    }
 
     const r = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`,
-      { headers: upstreamHeaders }
+      { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
     );
 
-    if (!r.ok && r.status !== 206) {
+    if (!r.ok) {
       const detail = await r.text().catch(() => "");
       return NextResponse.json(
         { error: "elevenlabs_fetch_failed", status: r.status, detail: detail.slice(0, 200) },
@@ -68,27 +71,57 @@ export async function GET(
       );
     }
 
-    // Construir headers de respuesta — propagamos los relevantes para streaming
-    const responseHeaders = new Headers({
-      "Content-Type": r.headers.get("Content-Type") || "audio/mpeg",
+    // Buffer el audio entero (puede ser 5-30MB según duración)
+    const arrayBuffer = await r.arrayBuffer();
+    const audio = Buffer.from(arrayBuffer);
+    const totalSize = audio.length;
+    const contentType = r.headers.get("Content-Type") || "audio/mpeg";
+
+    // Headers comunes
+    const baseHeaders: Record<string, string> = {
+      "Content-Type": contentType,
       "Accept-Ranges": "bytes",
-      // Cache 24h público (audio inmutable por conversation_id) — el browser y CDN cachean
+      // Cache 24h: el audio es inmutable por conversation_id
       "Cache-Control": "public, max-age=86400, immutable",
       "Content-Disposition": `inline; filename="entrevista-${conversationId}.mp3"`,
-      // CORS por si el audio se carga desde otro origen
       "Access-Control-Allow-Origin": "*",
-    });
+    };
 
-    // Propagar Content-Length / Content-Range si vienen
-    const cl = r.headers.get("Content-Length");
-    if (cl) responseHeaders.set("Content-Length", cl);
-    const cr = r.headers.get("Content-Range");
-    if (cr) responseHeaders.set("Content-Range", cr);
+    // ─── Caso 1: el browser pidió Range (típico para seek/streaming) ───
+    if (rangeHeader) {
+      const m = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+      if (m) {
+        const start = parseInt(m[1], 10);
+        const end = m[2] && m[2].length > 0
+          ? Math.min(parseInt(m[2], 10), totalSize - 1)
+          : totalSize - 1;
 
-    // ✨ Stream directo del body de ElevenLabs al cliente — NO buffearlo
-    return new NextResponse(r.body, {
-      status: r.status === 206 ? 206 : 200,
-      headers: responseHeaders,
+        if (start >= totalSize || start > end) {
+          return new NextResponse(null, {
+            status: 416, // Range Not Satisfiable
+            headers: { "Content-Range": `bytes */${totalSize}` },
+          });
+        }
+
+        const slice = audio.subarray(start, end + 1);
+        return new NextResponse(slice, {
+          status: 206,
+          headers: {
+            ...baseHeaders,
+            "Content-Length": String(slice.length),
+            "Content-Range": `bytes ${start}-${end}/${totalSize}`,
+          },
+        });
+      }
+    }
+
+    // ─── Caso 2: sin Range — devolver todo con 200 + Content-Length ───
+    return new NextResponse(audio, {
+      status: 200,
+      headers: {
+        ...baseHeaders,
+        "Content-Length": String(totalSize),
+      },
     });
   } catch (err) {
     console.error("audio proxy error:", err);
