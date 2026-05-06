@@ -57,9 +57,9 @@ export async function POST(req: NextRequest) {
     const results: any[] = [];
 
     for (const [agentId, agentInterviews] of Object.entries(byAgent)) {
-      // Pull todas las conversaciones del agent (200 max)
+      // Pull todas las conversaciones del agent (100 = max permitido por ElevenLabs)
       const r = await fetch(
-        `https://api.elevenlabs.io/v1/convai/conversations?agent_id=${agentId}&page_size=200`,
+        `https://api.elevenlabs.io/v1/convai/conversations?agent_id=${agentId}&page_size=100`,
         { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
       );
       if (!r.ok) {
