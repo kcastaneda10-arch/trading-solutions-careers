@@ -22,21 +22,29 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const email = url.searchParams.get("email");
   const candidateId = url.searchParams.get("candidate_id");
+  const name = url.searchParams.get("name");
 
-  if (!email && !candidateId) {
-    return NextResponse.json({ error: "Pasá ?email=foo@bar.com o ?candidate_id=UUID" }, { status: 400 });
+  if (!email && !candidateId && !name) {
+    return NextResponse.json({ error: "Pasá ?email=foo@bar.com, ?candidate_id=UUID o ?name=parteDelNombre" }, { status: 400 });
   }
 
-  // Buscar candidato
+  // Buscar candidato (email exacto, id exacto, o nombre parcial ILIKE)
   let candQuery = supabaseAdmin
     .from("ht_candidates")
     .select("id, name, email, stage")
     .limit(1);
   if (email) candQuery = candQuery.ilike("email", email);
   if (candidateId) candQuery = candQuery.eq("id", candidateId);
+  if (name) candQuery = candQuery.ilike("name", `%${name}%`);
   const { data: cand } = await candQuery.maybeSingle();
 
-  if (!cand) return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
+  if (!cand) {
+    return NextResponse.json({
+      error: "Candidato no encontrado",
+      hint: "Probá con ?name=Vianny o copiá el email exacto del panel del candidato",
+      tried: { email, candidateId, name },
+    }, { status: 404 });
+  }
 
   // Buscar última entrevista IA
   const { data: ai } = await supabaseAdmin
