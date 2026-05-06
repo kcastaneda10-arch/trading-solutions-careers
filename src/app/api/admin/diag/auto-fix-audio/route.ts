@@ -72,6 +72,56 @@ export async function POST(req: NextRequest) {
 
       // Para cada entrevista de este agent
       for (const it of agentInterviews) {
+        const candidateName: string = (it as any).ht_candidates?.name || "";
+        const firstName = candidateName.split(" ")[0]?.trim() || "";
+        const firstNameNorm = firstName.toLowerCase()
+          .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+        // PASO 0 — VERIFICAR PRIMERO si la conversation_id actual de la BD
+        // ya es válida (tiene audio + nombre matchea). Si sí, no hace falta
+        // buscar en el listado paginado (que puede no incluir la sesión correcta).
+        if (it.conversation_id) {
+          try {
+            // Pull metadata + transcript de la cid actual
+            const metaR = await fetch(
+              `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
+              { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+            );
+            if (metaR.ok) {
+              const meta = await metaR.json();
+              const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
+              const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
+              const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
+              const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
+                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+              const nameMatchesCurrent = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
+
+              if (nameMatchesCurrent) {
+                // Bajar audio para confirmar tamaño
+                const audioR = await fetch(
+                  `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
+                  { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+                );
+                if (audioR.ok) {
+                  const buf = await audioR.arrayBuffer();
+                  if (buf.byteLength > 1000) {
+                    // ¡La conversation_id actual ya es la correcta!
+                    results.push({
+                      candidate_id: it.candidate_id,
+                      candidate_name: candidateName,
+                      status: "already_correct",
+                      audio_size_kb: Math.round(buf.byteLength / 1024),
+                      validated_by_name: true,
+                    });
+                    continue; // siguiente entrevista
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+
+        // PASO 1 — Si la cid actual no funciona, buscar alternativas en el listado
         const startedUnix = it.started_at ? Math.floor(new Date(it.started_at).getTime() / 1000) : 0;
         if (!startedUnix) {
           results.push({ candidate_id: it.candidate_id, status: "skip", reason: "Sin started_at" });
@@ -96,10 +146,7 @@ export async function POST(req: NextRequest) {
         // CRÍTICO: como el agent_id es compartido entre TODOS los candidatos,
         // filtrar solo por timestamp puede asignar la conversación de OTRA persona.
         // Validamos por NOMBRE leyendo el primer mensaje del agent en cada conversación.
-        const candidateName: string = (it as any).ht_candidates?.name || "";
-        const firstName = candidateName.split(" ")[0]?.trim() || "";
-        const firstNameNorm = firstName.toLowerCase()
-          .normalize("NFD").replace(/\p{Diacritic}/gu, ""); // sin acentos
+        // (candidateName, firstName y firstNameNorm ya declarados arriba en PASO 0)
 
         const candidates = nearby
           .filter((c: any) => c.status === "done" && (c.call_duration_secs || 0) >= 30)
