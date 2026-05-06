@@ -82,40 +82,44 @@ export async function POST(req: NextRequest) {
         // buscar en el listado paginado (que puede no incluir la sesión correcta).
         if (it.conversation_id) {
           try {
-            // Pull metadata + transcript de la cid actual
-            const metaR = await fetch(
-              `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
+            // Bajar audio de la cid actual (lo más relevante: ¿tiene contenido?)
+            const audioR = await fetch(
+              `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
               { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
             );
-            if (metaR.ok) {
-              const meta = await metaR.json();
-              const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
-              const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
-              const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
-              const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
-                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
-              const nameMatchesCurrent = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
-
-              if (nameMatchesCurrent) {
-                // Bajar audio para confirmar tamaño
-                const audioR = await fetch(
-                  `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
-                  { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
-                );
-                if (audioR.ok) {
-                  const buf = await audioR.arrayBuffer();
-                  if (buf.byteLength > 1000) {
-                    // ¡La conversation_id actual ya es la correcta!
-                    results.push({
-                      candidate_id: it.candidate_id,
-                      candidate_name: candidateName,
-                      status: "already_correct",
-                      audio_size_kb: Math.round(buf.byteLength / 1024),
-                      validated_by_name: true,
-                    });
-                    continue; // siguiente entrevista
+            if (audioR.ok) {
+              const buf = await audioR.arrayBuffer();
+              if (buf.byteLength > 1000) {
+                // La cid actual TIENE audio. Ya está bien — no hace falta buscar
+                // alternativa. (No exigimos que el nombre matchee porque algunos
+                // agentes saludan genérico, pero la cid fue asignada por nuestro
+                // backend en /finalize, que confía en el started_at).
+                let nameMatch = false;
+                try {
+                  const metaR = await fetch(
+                    `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
+                    { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
+                  );
+                  if (metaR.ok) {
+                    const meta = await metaR.json();
+                    const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
+                    const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
+                    const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
+                    const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
+                      .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+                    nameMatch = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
                   }
-                }
+                } catch {}
+
+                results.push({
+                  candidate_id: it.candidate_id,
+                  candidate_name: candidateName,
+                  status: "already_correct",
+                  audio_size_kb: Math.round(buf.byteLength / 1024),
+                  validated_by_name: nameMatch,
+                  note: nameMatch ? null : "Audio OK pero el agent no menciona el nombre del candidato (saludo genérico)",
+                });
+                continue; // siguiente entrevista
               }
             }
           } catch {}
