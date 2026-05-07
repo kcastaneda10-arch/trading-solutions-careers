@@ -5,6 +5,7 @@ import {
   Inbox, ClipboardList, ClipboardCheck, AlertTriangle, Mail, Hourglass, Target,
   Video, ListChecks, MessageSquare, UserCheck, Building2, Trophy, Send,
   CheckCircle2, XCircle, ArrowRight,
+  User, Users,
 } from "lucide-react";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
@@ -80,26 +81,38 @@ const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 // (negros, grises y solo 2 acentos: emerald para terminal positivo, red para rechazo).
 // La distinción entre stages se hace por categoría visual, no por colores brillantes.
 type StageCategory = "screening" | "assessment" | "interview" | "decision" | "terminal-positive" | "terminal-negative";
+// Owner = de quién depende mover la pelota en este stage.
+//   candidate → estamos esperando que el candidato responda/haga algo
+//   recruiter → la pelota está en cancha de Talento (revisar, decidir, agendar)
+//   shared    → coordinación entre ambos (touring requiere agenda + asistencia)
+type StageOwner = "candidate" | "recruiter" | "shared" | "terminal";
 
-const STAGES: Array<{ id: string; label: string; category: StageCategory }> = [
-  { id: "aplico",                 label: "Aplicó",                  category: "screening" },
-  { id: "prefiltro_enviado",      label: "Prefiltro enviado",       category: "screening" },
-  { id: "prefiltro_pasado",       label: "Prefiltro · Pass",        category: "screening" },
-  { id: "prefiltro_revision",     label: "Prefiltro · Review",      category: "screening" },
-  { id: "assessment_invitado",    label: "Integridad invitada",     category: "assessment" },
-  { id: "assessment_en_progreso", label: "Integridad en progreso",  category: "assessment" },
-  { id: "assessment_completado",  label: "Integridad completada",   category: "assessment" },
-  { id: "entrevista_ia",          label: "Entrevista IA",           category: "interview" },
-  { id: "bateria_psicometrica",   label: "Batería Psicométrica",    category: "assessment" },
-  { id: "recruiter_interview",    label: "Entrevista Recruiter",    category: "interview" },
-  { id: "cwo_interview",          label: "CWO + Hiring",            category: "interview" },
-  { id: "touring",                label: "Touring",                 category: "interview" },
-  { id: "terna",                  label: "Terna · Finalistas",      category: "decision" },
-  { id: "oferta",                 label: "Oferta",                  category: "decision" },
-  { id: "contratado",             label: "Contratado",              category: "terminal-positive" },
+const STAGES: Array<{ id: string; label: string; category: StageCategory; owner: StageOwner }> = [
+  { id: "aplico",                 label: "Aplicó",                  category: "screening",  owner: "recruiter" },
+  { id: "prefiltro_enviado",      label: "Prefiltro enviado",       category: "screening",  owner: "candidate" },
+  { id: "prefiltro_pasado",       label: "Prefiltro · Pass",        category: "screening",  owner: "recruiter" },
+  { id: "prefiltro_revision",     label: "Prefiltro · Review",      category: "screening",  owner: "recruiter" },
+  { id: "assessment_invitado",    label: "Integridad invitada",     category: "assessment", owner: "candidate" },
+  { id: "assessment_en_progreso", label: "Integridad en progreso",  category: "assessment", owner: "candidate" },
+  { id: "assessment_completado",  label: "Integridad completada",   category: "assessment", owner: "recruiter" },
+  { id: "entrevista_ia",          label: "Entrevista IA",           category: "interview",  owner: "candidate" },
+  { id: "bateria_psicometrica",   label: "Batería Psicométrica",    category: "assessment", owner: "candidate" },
+  { id: "recruiter_interview",    label: "Entrevista Recruiter",    category: "interview",  owner: "recruiter" },
+  { id: "cwo_interview",          label: "CWO + Hiring",            category: "interview",  owner: "recruiter" },
+  { id: "touring",                label: "Touring",                 category: "interview",  owner: "shared" },
+  { id: "terna",                  label: "Terna · Finalistas",      category: "decision",   owner: "recruiter" },
+  { id: "oferta",                 label: "Oferta",                  category: "decision",   owner: "candidate" },
+  { id: "contratado",             label: "Contratado",              category: "terminal-positive", owner: "terminal" },
 ];
 
-const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", category: "terminal-negative" as StageCategory };
+const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", category: "terminal-negative" as StageCategory, owner: "terminal" as StageOwner };
+
+const OWNER_STYLE: Record<StageOwner, { label: string; barColor: string; bgTint: string }> = {
+  candidate: { label: "Candidato",  barColor: "#1e40af", bgTint: "rgba(30,64,175,0.04)" },  // azul corporativo
+  recruiter: { label: "Reclutador", barColor: "#0a0a0a", bgTint: "rgba(10,10,10,0.04)" },   // negro TS
+  shared:    { label: "Compartido", barColor: "#b45309", bgTint: "rgba(180,83,9,0.04)" },    // ámbar
+  terminal:  { label: "—",          barColor: "#737373", bgTint: "transparent" },
+};
 
 // Paleta sobria por categoría (estilo editorial TS · NO neón)
 const CATEGORY_STYLE: Record<StageCategory, { headerBg: string; headerText: string; accentBar: string; columnBg: string }> = {
@@ -219,7 +232,7 @@ export default function PipelineFunnel() {
           <div>
             <div className="ts-eyebrow mb-3">Talent Acquisition · Pipeline</div>
             <h1 className="ts-display text-[44px] md:text-[56px] text-[var(--ts-black)] m-0">
-              Embudo de selección
+              Funnel
             </h1>
             <p className="text-[15px] text-[var(--ts-gray-60)] mt-3 max-w-[640px] leading-[1.55]">
               Vista del proceso completo · {totals} candidatos
@@ -251,6 +264,17 @@ export default function PipelineFunnel() {
         <div className="text-center py-16 ts-eyebrow text-[var(--ts-gray-40)]">Cargando pipeline…</div>
       ) : (
         <>
+          {/* ════════════════ LEYENDA DE OWNERS ════════════════ */}
+          <div className="flex items-center gap-5 mb-3 pb-3 border-b border-[var(--ts-gray-10)]">
+            <div className="ts-eyebrow text-[10px]">¿De quién depende?</div>
+            <LegendItem icon={User} label="Candidato" color={OWNER_STYLE.candidate.barColor} />
+            <LegendItem icon={UserCheck} label="Reclutador" color={OWNER_STYLE.recruiter.barColor} />
+            <LegendItem icon={Users} label="Compartido" color={OWNER_STYLE.shared.barColor} />
+            <div className="text-[11px] text-[var(--ts-gray-40)] ml-auto italic">
+              La barra superior de cada columna indica quién mueve la pelota.
+            </div>
+          </div>
+
           {/* ════════════════ KANBAN FUNNEL ════════════════ */}
           <div className="overflow-x-auto pb-4 -mx-6 px-6">
             <div className="flex gap-2 min-w-max">
@@ -258,8 +282,16 @@ export default function PipelineFunnel() {
                 const cands = byStage[stage.id] || [];
                 const stageSelected = cands.filter(c => selectedIds.has(c.id)).length;
                 const style = CATEGORY_STYLE[stage.category];
+                const ownerStyle = OWNER_STYLE[stage.owner];
+                const OwnerIcon = stage.owner === 'candidate' ? User : stage.owner === 'recruiter' ? UserCheck : stage.owner === 'shared' ? Users : null;
                 return (
                   <div key={stage.id} className="w-[260px] flex-shrink-0">
+                    {/* Owner bar · indica de quién depende mover este stage */}
+                    <div
+                      className="h-[5px] flex items-center"
+                      style={{ background: ownerStyle.barColor }}
+                      title={`Depende de: ${ownerStyle.label}`}
+                    />
                     {/* Column header · negro editorial con accent bar lateral */}
                     <div
                       className="px-3.5 py-3 relative"
@@ -270,7 +302,15 @@ export default function PipelineFunnel() {
                       }}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <StageIcon stage={stage.id} className="w-3.5 h-3.5 opacity-70 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-center gap-1.5">
+                          <StageIcon stage={stage.id} className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
+                          {OwnerIcon && (
+                            <OwnerIcon
+                              className="w-3 h-3 opacity-60"
+                              aria-label={`Depende de: ${ownerStyle.label}`}
+                            />
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5">
                           {cands.length > 0 && (
                             <button
@@ -288,6 +328,12 @@ export default function PipelineFunnel() {
                       </div>
                       <div className="text-[10px] font-bold uppercase tracking-[1.8px] leading-tight">
                         {stage.label}
+                      </div>
+                      <div
+                        className="text-[9px] uppercase tracking-[1.5px] mt-1.5 opacity-60"
+                        style={{ color: style.headerText }}
+                      >
+                        {ownerStyle.label}
                       </div>
                     </div>
                     {/* Column body */}
@@ -1698,3 +1744,16 @@ function RobustAudioPlayer({
     </div>
   );
 }
+
+
+// ─── Legend item · usado en la barra superior del Funnel ──────────
+function LegendItem({ icon: Icon, label, color }: { icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-3 h-[3px]" style={{ background: color }} />
+      <Icon className="w-3 h-3" style={{ color }} />
+      <span className="text-[11px] font-semibold text-[var(--ts-gray-90)]">{label}</span>
+    </div>
+  );
+}
+
