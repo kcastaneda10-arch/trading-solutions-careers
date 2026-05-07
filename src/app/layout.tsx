@@ -11,17 +11,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Open Sauce Sans · alineado con tradingsolutions.com */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-        {/* Open Sauce Sans (Florian Karsten) — variantes self-hosted vía CDN */}
+        {/* Open Sauce Sans · oficial desde Fontshare (alineado con tradingsolutions.com y reportes Talento) */}
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/marcologous/open-sauce-fonts/css/OpenSauceSans.css"
+          href="https://api.fontshare.com/v2/css?f[]=open-sauce-sans@300,400,500,600,700,800,900&display=swap"
         />
       </head>
       <body className="antialiased font-sans">

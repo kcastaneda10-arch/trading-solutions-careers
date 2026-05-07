@@ -76,26 +76,40 @@ type Vacancy = { id: string; title: string };
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
-// Definición del funnel — orden importa (de izquierda a derecha)
-const STAGES: Array<{ id: string; label: string; emoji: string; color: string }> = [
-  { id: "aplico",                 label: "Aplicó",                emoji: "📥", color: "#9CA3AF" },
-  { id: "prefiltro_enviado",      label: "Prefiltro enviado",     emoji: "📋", color: "#3B82F6" },
-  { id: "prefiltro_pasado",       label: "Prefiltro · Pass",      emoji: "✅", color: "#10B981" },
-  { id: "prefiltro_revision",     label: "Prefiltro · Review",    emoji: "⚠️",  color: "#F59E0B" },
-  { id: "assessment_invitado",    label: "Integridad invitada",   emoji: "📨", color: "#8B5CF6" },
-  { id: "assessment_en_progreso", label: "Integridad en progreso", emoji: "⏳", color: "#A855F7" },
-  { id: "assessment_completado",  label: "Integridad completada",  emoji: "🎯", color: "#7C3AED" },
-  { id: "entrevista_ia",          label: "Entrevista IA",         emoji: "🎥", color: "#EC4899" },
-  { id: "bateria_psicometrica",   label: "Batería Psicométrica",  emoji: "📋", color: "#D946EF" },
-  { id: "recruiter_interview",    label: "Entrevista Recruiter",  emoji: "💬", color: "#F472B6" },
-  { id: "cwo_interview",          label: "CWO + Hiring",          emoji: "👔", color: "#DB2777" },
-  { id: "touring",                label: "Prueba Touring",        emoji: "🏢", color: "#BE185D" },
-  { id: "terna",                  label: "Terna · Mejores",       emoji: "🏆", color: "#9333EA" },
-  { id: "oferta",                 label: "Oferta",                emoji: "📨", color: "#0EA5E9" },
-  { id: "contratado",             label: "Contratado",            emoji: "🎉", color: "#16A34A" },
+// Definición del funnel — agrupado por fase semántica con paleta TS sobria
+// (negros, grises y solo 2 acentos: emerald para terminal positivo, red para rechazo).
+// La distinción entre stages se hace por categoría visual, no por colores brillantes.
+type StageCategory = "screening" | "assessment" | "interview" | "decision" | "terminal-positive" | "terminal-negative";
+
+const STAGES: Array<{ id: string; label: string; category: StageCategory }> = [
+  { id: "aplico",                 label: "Aplicó",                  category: "screening" },
+  { id: "prefiltro_enviado",      label: "Prefiltro enviado",       category: "screening" },
+  { id: "prefiltro_pasado",       label: "Prefiltro · Pass",        category: "screening" },
+  { id: "prefiltro_revision",     label: "Prefiltro · Review",      category: "screening" },
+  { id: "assessment_invitado",    label: "Integridad invitada",     category: "assessment" },
+  { id: "assessment_en_progreso", label: "Integridad en progreso",  category: "assessment" },
+  { id: "assessment_completado",  label: "Integridad completada",   category: "assessment" },
+  { id: "entrevista_ia",          label: "Entrevista IA",           category: "interview" },
+  { id: "bateria_psicometrica",   label: "Batería Psicométrica",    category: "assessment" },
+  { id: "recruiter_interview",    label: "Entrevista Recruiter",    category: "interview" },
+  { id: "cwo_interview",          label: "CWO + Hiring",            category: "interview" },
+  { id: "touring",                label: "Touring",                 category: "interview" },
+  { id: "terna",                  label: "Terna · Finalistas",      category: "decision" },
+  { id: "oferta",                 label: "Oferta",                  category: "decision" },
+  { id: "contratado",             label: "Contratado",              category: "terminal-positive" },
 ];
 
-const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", emoji: "❌", color: "#EF4444" };
+const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", category: "terminal-negative" as StageCategory };
+
+// Paleta sobria por categoría (estilo editorial TS · NO neón)
+const CATEGORY_STYLE: Record<StageCategory, { headerBg: string; headerText: string; accentBar: string; columnBg: string }> = {
+  "screening":         { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#737373", columnBg: "#fafafa" },
+  "assessment":        { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#b45309", columnBg: "#fafafa" },
+  "interview":         { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#1e40af", columnBg: "#fafafa" },
+  "decision":          { headerBg: "#0a0a0a", headerText: "#ffffff", accentBar: "#1a7d3e", columnBg: "#fafafa" },
+  "terminal-positive": { headerBg: "#1a7d3e", headerText: "#ffffff", accentBar: "#1a7d3e", columnBg: "#f4faf6" },
+  "terminal-negative": { headerBg: "#c41818", headerText: "#ffffff", accentBar: "#c41818", columnBg: "#fdf6f6" },
+};
 
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
@@ -191,81 +205,127 @@ export default function PipelineFunnel() {
 
   const totals = filtered.length;
 
+  // Stages a renderizar (ocultar las terminales · van en footer aparte)
+  const visibleStages = STAGES.filter(s => s.category !== 'terminal-positive');
+  const hiredCount = (byStage['contratado'] || []).length;
+  const rejectedCount = (byStage['rechazado'] || []).length;
+  const activeCount = totals - hiredCount - rejectedCount;
+
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4 mb-5">
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-tight m-0">Pipeline · Funnel completo</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {totals} candidatos {vacFilter !== "all" && "(filtrado)"} · Vista Kanban del proceso de reclutamiento.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Vacante:</span>
-          <select
-            value={vacFilter}
-            onChange={(e) => setVacFilter(e.target.value)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-2 font-medium"
-          >
-            <option value="all">Todas</option>
-            {vacancies.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
-          </select>
+    <div className="font-sans">
+      {/* ════════════════ HEADER EDITORIAL ════════════════ */}
+      <div className="mb-8 pb-6 border-b border-[var(--ts-gray-10)]">
+        <div className="flex items-end justify-between flex-wrap gap-6">
+          <div>
+            <div className="ts-eyebrow mb-3">Talent Acquisition · Pipeline</div>
+            <h1 className="ts-display text-[44px] md:text-[56px] text-[var(--ts-black)] m-0">
+              Embudo de selección
+            </h1>
+            <p className="text-[15px] text-[var(--ts-gray-60)] mt-3 max-w-[640px] leading-[1.55]">
+              Vista del proceso completo · {totals} candidatos
+              {vacFilter !== "all" && <span className="text-[var(--ts-black)] font-semibold"> · filtro activo</span>}
+              <span className="text-[var(--ts-gray-40)]"> · </span>
+              <span className="ts-tabular">{activeCount}</span> activos
+              <span className="text-[var(--ts-gray-40)]"> · </span>
+              <span className="ts-tabular text-[var(--ts-green)]">{hiredCount}</span> contratados
+              <span className="text-[var(--ts-gray-40)]"> · </span>
+              <span className="ts-tabular text-[var(--ts-red)]">{rejectedCount}</span> rechazados
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="ts-eyebrow text-[10px]">Vacante</span>
+            <select
+              value={vacFilter}
+              onChange={(e) => setVacFilter(e.target.value)}
+              className="text-sm font-medium border border-[var(--ts-gray-20)] bg-white px-4 py-2.5 hover:border-[var(--ts-black)] focus:border-[var(--ts-black)] outline-none transition-colors min-w-[240px]"
+              style={{ borderRadius: 0 }}
+            >
+              <option value="all">Todas las vacantes</option>
+              {vacancies.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Cargando…</div>
+        <div className="text-center py-16 ts-eyebrow text-[var(--ts-gray-40)]">Cargando pipeline…</div>
       ) : (
         <>
-          {/* Kanban funnel - horizontal scroll */}
+          {/* ════════════════ KANBAN FUNNEL ════════════════ */}
           <div className="overflow-x-auto pb-4 -mx-6 px-6">
-            <div className="flex gap-3 min-w-max">
-              {STAGES.map((stage) => {
+            <div className="flex gap-2 min-w-max">
+              {visibleStages.map((stage) => {
                 const cands = byStage[stage.id] || [];
                 const stageSelected = cands.filter(c => selectedIds.has(c.id)).length;
+                const style = CATEGORY_STYLE[stage.category];
                 return (
                   <div key={stage.id} className="w-[260px] flex-shrink-0">
-                    <div className="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style={{ background: stage.color, color: "white" }}>
-                      <div className="flex items-center gap-2">
-                        <StageIcon stage={stage.id} className="w-4 h-4 opacity-90" />
-                        <span className="text-[11px] font-semibold uppercase tracking-[1.5px]">{stage.label}</span>
+                    {/* Column header · negro editorial con accent bar lateral */}
+                    <div
+                      className="px-3.5 py-3 relative"
+                      style={{
+                        background: style.headerBg,
+                        color: style.headerText,
+                        borderLeft: `3px solid ${style.accentBar}`,
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <StageIcon stage={stage.id} className="w-3.5 h-3.5 opacity-70 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-center gap-1.5">
+                          {cands.length > 0 && (
+                            <button
+                              onClick={() => stageSelected === cands.length ? cands.forEach(c => toggleSelect(c.id)) : selectAllInStage(stage.id)}
+                              className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-100 transition-opacity"
+                              title={stageSelected === cands.length ? "Deseleccionar" : "Seleccionar todos"}
+                            >
+                              {stageSelected === cands.length ? "−" : "+"}
+                            </button>
+                          )}
+                          <span className="text-[18px] font-extrabold ts-tabular leading-none" style={{ letterSpacing: '-0.04em' }}>
+                            {cands.length}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {cands.length > 0 && (
-                          <button
-                            onClick={() => stageSelected === cands.length ? cands.forEach(c => toggleSelect(c.id)) : selectAllInStage(stage.id)}
-                            className="text-[9px] font-semibold bg-white/30 hover:bg-white/50 px-1.5 py-0.5 rounded transition-colors"
-                            title={stageSelected === cands.length ? "Deseleccionar todos" : "Seleccionar todos en esta etapa"}
-                          >
-                            {stageSelected === cands.length ? "✓✓" : "☐"}
-                          </button>
-                        )}
-                        <span className="text-xs font-extrabold bg-white/20 px-2 py-0.5 rounded-full">{cands.length}</span>
+                      <div className="text-[10px] font-bold uppercase tracking-[1.8px] leading-tight">
+                        {stage.label}
                       </div>
                     </div>
-                    <div className="bg-white border border-gray-200 border-t-0 rounded-b-xl p-2 min-h-[120px] max-h-[600px] overflow-y-auto">
+                    {/* Column body */}
+                    <div
+                      className="border-l border-r border-b border-[var(--ts-gray-10)] p-2 min-h-[120px] max-h-[600px] overflow-y-auto"
+                      style={{ background: style.columnBg }}
+                    >
                       {cands.length === 0 ? (
-                        <div className="text-xs text-gray-400 text-center py-4 italic">Vacío</div>
+                        <div className="ts-eyebrow text-[9px] text-[var(--ts-gray-40)] text-center py-6">
+                          Sin candidatos
+                        </div>
                       ) : cands.map(c => {
                         const isSelected = selectedIds.has(c.id);
                         return (
                           <div
                             key={c.id}
-                            className={`relative bg-white border rounded-lg p-2.5 mb-2 transition-colors ${isSelected ? "border-purple-500 bg-purple-50" : "border-gray-200 hover:bg-gray-50"}`}
+                            className={`relative bg-white border p-3 mb-2 transition-all ${
+                              isSelected
+                                ? "border-[var(--ts-black)] shadow-sm"
+                                : "border-[var(--ts-gray-10)] hover:border-[var(--ts-gray-60)]"
+                            }`}
                           >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={(e) => { e.stopPropagation(); toggleSelect(c.id); }}
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute top-2 right-2 w-3.5 h-3.5 cursor-pointer"
+                              className="absolute top-2.5 right-2.5 w-3.5 h-3.5 cursor-pointer accent-[var(--ts-black)]"
                               title="Seleccionar para acción masiva"
                             />
                             <button onClick={() => setSelectedCand(c)} className="w-full text-left pr-5">
-                              <div className="text-sm font-semibold leading-tight">{c.name}</div>
-                              <div className="text-[11px] text-gray-500 truncate mt-0.5">{c.email}</div>
-                              <div className="text-[10px] mt-1.5 inline-block bg-gray-100 px-1.5 py-0.5 rounded font-medium text-gray-700">
+                              <div className="text-[14px] font-bold leading-tight text-[var(--ts-black)]" style={{ letterSpacing: '-0.01em' }}>
+                                {c.name}
+                              </div>
+                              <div className="text-[11px] text-[var(--ts-gray-60)] truncate mt-1 ts-tabular">
+                                {c.email}
+                              </div>
+                              <div className="mt-2 inline-block ts-eyebrow text-[9px] tracking-[1.5px] text-[var(--ts-gray-90)] border border-[var(--ts-gray-20)] px-1.5 py-0.5">
                                 {c.ht_vacancies?.title || "—"}
                               </div>
                             </button>
@@ -277,6 +337,22 @@ export default function PipelineFunnel() {
                 );
               })}
             </div>
+          </div>
+
+          {/* ════════════════ TERMINAL FOOTER · contratados + rechazados ════════════════ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[var(--ts-gray-20)] mt-6 border border-[var(--ts-gray-20)]">
+            <ContractedColumn
+              cands={byStage['contratado'] || []}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onSelect={setSelectedCand}
+            />
+            <RejectedColumn
+              cands={byStage['rechazado'] || []}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onSelect={setSelectedCand}
+            />
           </div>
 
           {/* Bulk action bar — floating bottom */}
@@ -588,6 +664,117 @@ function BulkActionBar({
             Limpiar
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+// ─── Terminal footer columns · contratados + rechazados ──────────
+function ContractedColumn({
+  cands,
+  selectedIds,
+  onToggle,
+  onSelect,
+}: {
+  cands: Cand[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelect: (c: Cand) => void;
+}) {
+  return (
+    <div className="bg-white p-5">
+      <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-[var(--ts-gray-10)]">
+        <div className="flex items-baseline gap-3">
+          <CheckCircle2 className="w-4 h-4 text-[var(--ts-green)] flex-shrink-0 self-center" />
+          <div className="ts-eyebrow text-[var(--ts-green)]">Contratados</div>
+        </div>
+        <div className="text-[28px] font-extrabold ts-tabular text-[var(--ts-green)]" style={{ letterSpacing: '-0.04em' }}>
+          {cands.length}
+        </div>
+      </div>
+      {cands.length === 0 ? (
+        <div className="ts-eyebrow text-[10px] text-[var(--ts-gray-40)] py-4">Sin contrataciones aún</div>
+      ) : (
+        <div className="space-y-2">
+          {cands.map(c => {
+            const isSelected = selectedIds.has(c.id);
+            return (
+              <div
+                key={c.id}
+                className={`relative bg-white border p-3 transition-all ${isSelected ? 'border-[var(--ts-black)]' : 'border-[var(--ts-green-border)] hover:border-[var(--ts-green)]'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggle(c.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-2.5 right-2.5 w-3.5 h-3.5 cursor-pointer accent-[var(--ts-black)]"
+                />
+                <button onClick={() => onSelect(c)} className="w-full text-left pr-5">
+                  <div className="text-[14px] font-bold text-[var(--ts-black)] leading-tight" style={{ letterSpacing: '-0.01em' }}>
+                    {c.name}
+                  </div>
+                  <div className="text-[11px] text-[var(--ts-gray-60)] mt-1">{c.ht_vacancies?.title || '—'}</div>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RejectedColumn({
+  cands,
+  selectedIds,
+  onToggle,
+  onSelect,
+}: {
+  cands: Cand[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelect: (c: Cand) => void;
+}) {
+  return (
+    <div className="bg-white p-5">
+      <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-[var(--ts-gray-10)]">
+        <div className="flex items-baseline gap-3">
+          <XCircle className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0 self-center" />
+          <div className="ts-eyebrow text-[var(--ts-red)]">Rechazados</div>
+        </div>
+        <div className="text-[28px] font-extrabold ts-tabular text-[var(--ts-red)]" style={{ letterSpacing: '-0.04em' }}>
+          {cands.length}
+        </div>
+      </div>
+      {cands.length === 0 ? (
+        <div className="ts-eyebrow text-[10px] text-[var(--ts-gray-40)] py-4">Sin rechazos</div>
+      ) : (
+        <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+          {cands.map(c => {
+            const isSelected = selectedIds.has(c.id);
+            return (
+              <div
+                key={c.id}
+                className={`relative bg-white border p-2.5 transition-all ${isSelected ? 'border-[var(--ts-black)]' : 'border-[var(--ts-red-border)] hover:border-[var(--ts-red)]'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggle(c.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-2 right-2 w-3.5 h-3.5 cursor-pointer accent-[var(--ts-black)]"
+                />
+                <button onClick={() => onSelect(c)} className="w-full text-left pr-5">
+                  <div className="text-[13px] font-semibold text-[var(--ts-gray-90)] leading-tight">
+                    {c.name}
+                  </div>
+                  <div className="text-[10px] text-[var(--ts-gray-60)] mt-0.5">{c.ht_vacancies?.title || '—'}</div>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

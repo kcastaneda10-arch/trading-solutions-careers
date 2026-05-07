@@ -82,76 +82,86 @@ export async function POST(req: NextRequest) {
         // buscar en el listado paginado (que puede no incluir la sesión correcta).
         if (it.conversation_id) {
           try {
-            // Pull metadata + transcript de la cid actual
+            // Pull metadata de la cid actual
             const metaR = await fetch(
               `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}`,
               { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
             );
             if (metaR.ok) {
               const meta = await metaR.json();
-              const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
-              const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
-              const firstUser = transcript.find((t: any) => t.role === 'user')?.message || '';
-              const haystack = (firstAgent + ' ' + firstUser).toLowerCase()
-                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
-              const nameMatch = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
 
-              // Detectar si el agent saluda a OTRA persona (cruce de candidato)
-              const otherNamePatterns = /[Hh]ola[,\s]+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)/g;
-              const otherNames: string[] = [];
-              let m;
-              while ((m = otherNamePatterns.exec(firstAgent)) !== null) {
-                if (m[1] && m[1].length > 2) otherNames.push(m[1]);
-              }
-              const wrongNameMentioned = otherNames.length > 0 && !nameMatch;
+              // ✅ FUENTE DE VERDAD: dynamic_variables.candidate_name
+              // Lo setea nuestro backend cuando inicia la conversación con ElevenLabs.
+              // Si esto no matchea, la cid es de OTRO candidato (cruce confirmado).
+              const dynVars = meta.conversation_initiation_client_data?.dynamic_variables
+                || meta.metadata?.dynamic_variables
+                || {};
+              const cidCandidateName: string = dynVars.candidate_name || dynVars.first_name || "";
+              const cidCandidateNorm = cidCandidateName.toLowerCase()
+                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+              const candidateNameNorm = candidateName.toLowerCase()
+                .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+              // Match si el candidate_name del dynamic_variable coincide con el de la BD
+              // (compara por nombre completo o al menos primer nombre)
+              const dynVarMatch = cidCandidateName.length >= 3 && (
+                cidCandidateNorm === candidateNameNorm ||
+                cidCandidateNorm.includes(firstNameNorm) ||
+                candidateNameNorm.includes(cidCandidateNorm.split(" ")[0] || "")
+              );
 
               // Bajar audio para confirmar tamaño
               const audioR = await fetch(
                 `https://api.elevenlabs.io/v1/convai/conversations/${it.conversation_id}/audio`,
                 { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! } }
               );
-              const audioOk = audioR.ok;
-              const audioBuf = audioOk ? await audioR.arrayBuffer() : null;
+              const audioBuf = audioR.ok ? await audioR.arrayBuffer() : null;
               const audioBytes = audioBuf ? audioBuf.byteLength : 0;
 
-              if (audioBytes > 1000 && nameMatch) {
-                // ✅ Audio + nombre matchea: la cid actual es 100% correcta
+              if (audioBytes > 1000 && dynVarMatch) {
+                // ✅ Audio existe Y dynamic_variable matchea: 100% correcto
                 results.push({
                   candidate_id: it.candidate_id,
                   candidate_name: candidateName,
                   status: "already_correct",
                   audio_size_kb: Math.round(audioBytes / 1024),
-                  validated_by_name: true,
+                  validated_by: "dynamic_variables.candidate_name",
+                  cid_candidate_name: cidCandidateName,
                 });
                 continue;
-              } else if (audioBytes > 1000 && wrongNameMentioned) {
-                // 🚨 La cid actual tiene audio pero pertenece a OTRO candidato (cruce)
+              } else if (audioBytes > 1000 && cidCandidateName && !dynVarMatch) {
+                // 🚨 CRUCE CONFIRMADO por dynamic_variables
                 results.push({
                   candidate_id: it.candidate_id,
                   candidate_name: candidateName,
                   status: "cid_mismatch_other_candidate",
                   current_cid: it.conversation_id,
                   audio_size_kb: Math.round(audioBytes / 1024),
-                  agent_saluda_a: otherNames[0],
-                  first_agent_message: firstAgent.slice(0, 200),
-                  recommendation: `El audio es de "${otherNames[0]}", no de "${candidateName}". Revisar manualmente.`,
+                  cid_actually_belongs_to: cidCandidateName,
+                  recommendation: `La conversación actual pertenece a "${cidCandidateName}", no a "${candidateName}". Reenviar entrevista a este candidato.`,
                 });
                 continue;
-              } else if (audioBytes > 1000 && !nameMatch) {
-                // Audio existe pero no detectamos nombre del candidato ni de otro.
-                // Probablemente saludo genérico — caso ambiguo, marcar para revisión.
+              } else if (audioBytes > 1000 && !cidCandidateName) {
+                // Audio existe pero la conversación no tiene dynamic_variables (sesión vieja).
+                // Validar por transcript como fallback.
+                const transcript = Array.isArray(meta.transcript) ? meta.transcript : [];
+                const firstAgent = transcript.find((t: any) => t.role === 'agent')?.message || '';
+                const haystack = firstAgent.toLowerCase()
+                  .normalize("NFD").replace(/\p{Diacritic}/gu, "");
+                const transcriptMatch = firstNameNorm.length >= 3 && haystack.includes(firstNameNorm);
+
                 results.push({
                   candidate_id: it.candidate_id,
                   candidate_name: candidateName,
-                  status: "audio_ok_name_unclear",
-                  current_cid: it.conversation_id,
+                  status: transcriptMatch ? "already_correct" : "audio_ok_name_unclear",
                   audio_size_kb: Math.round(audioBytes / 1024),
+                  validated_by: transcriptMatch ? "transcript_first_message" : null,
                   first_agent_message: firstAgent.slice(0, 200),
-                  recommendation: "Audio OK pero el agent saluda genérico (sin nombre). Revisar manualmente abriendo el panel.",
+                  note: transcriptMatch ? null : "Sin dynamic_variables y agent saluda genérico. Revisar manualmente.",
                 });
                 continue;
               }
-              // Si llegamos acá: audio < 1000 bytes (vacío) → cae al PASO 1
+              // Si llegamos acá: audio < 1000 bytes → cae al PASO 1
             }
           } catch {}
         }
