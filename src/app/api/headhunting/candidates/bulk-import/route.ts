@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
         phone: c.phone || null,
         vacancy_id: vacId,
         stage: defaultStage,
-        status: 'new',
+        status: 'pending',
         current_role: c.current_role || null,
         notes: notesArr.join(' · '),
         linkedin_url: c.linkedin_url || null,
