@@ -7,6 +7,7 @@ import {
   CheckCircle2, XCircle, ArrowRight,
   User, Users,
 } from "lucide-react";
+import RejectionModal from "./RejectionModal";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -46,6 +47,11 @@ type Cand = {
   prefilter_data: PrefilterData | null;
   cv_url: string | null;
   ht_vacancies?: { title: string };
+  // Rejection metadata · llenado al rechazar con motivo
+  rejection_category?: string | null;
+  rejection_sub_detail?: string | null;
+  rejection_save_for_future?: boolean | null;
+  rejected_at?: string | null;
 };
 
 type PrefilterData = {
@@ -771,6 +777,17 @@ function ContractedColumn({
   );
 }
 
+// Etiquetas cortas por category_key para badges en cards
+const REJECTION_CATEGORY_SHORT: Record<string, string> = {
+  experiencia_insuficiente: "Experiencia",
+  match_cultural: "Cultural",
+  pretension_salarial: "Salario",
+  disponibilidad_movilidad: "Disponibilidad",
+  resultado_evaluacion: "Evaluación",
+  comunicacion_proceso: "Comunicación",
+  decision_candidato: "Decisión cand",
+};
+
 function RejectedColumn({
   cands,
   selectedIds,
@@ -782,23 +799,82 @@ function RejectedColumn({
   onToggle: (id: string) => void;
   onSelect: (c: Cand) => void;
 }) {
+  // Filtro por categoría · solo los rechazos clasificados
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+
+  // Agrupar por categoría para los chips
+  const byCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    cands.forEach(c => {
+      const k = c.rejection_category || "sin_clasificar";
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  }, [cands]);
+
+  const visibleCands = useMemo(() => {
+    return cands.filter(c => {
+      if (showSavedOnly && !c.rejection_save_for_future) return false;
+      if (categoryFilter === "all") return true;
+      if (categoryFilter === "sin_clasificar") return !c.rejection_category;
+      return c.rejection_category === categoryFilter;
+    });
+  }, [cands, categoryFilter, showSavedOnly]);
+
+  const savedCount = cands.filter(c => c.rejection_save_for_future).length;
+
   return (
     <div className="bg-white p-5">
-      <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-[var(--ts-gray-10)]">
+      <div className="flex items-baseline justify-between mb-3 pb-3 border-b border-[var(--ts-gray-10)]">
         <div className="flex items-baseline gap-3">
           <XCircle className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0 self-center" />
           <div className="ts-eyebrow text-[var(--ts-red)]">Rechazados</div>
         </div>
         <div className="text-[28px] font-extrabold ts-tabular text-[var(--ts-red)]" style={{ letterSpacing: '-0.04em' }}>
-          {cands.length}
+          {visibleCands.length}<span className="text-[14px] text-[var(--ts-gray-40)]">/{cands.length}</span>
         </div>
       </div>
-      {cands.length === 0 ? (
-        <div className="ts-eyebrow text-[10px] text-[var(--ts-gray-40)] py-4">Sin rechazos</div>
+
+      {/* Filtros · categoría + saved for future */}
+      {cands.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <button
+            onClick={() => setCategoryFilter("all")}
+            className={`text-[10px] uppercase tracking-[1px] px-2 py-1 border ${categoryFilter === "all" ? "border-[var(--ts-black)] bg-[var(--ts-black)] text-white" : "border-[var(--ts-gray-10)] text-[var(--ts-gray-60)] hover:border-[var(--ts-gray-40)]"}`}
+          >
+            Todos
+          </button>
+          {Object.entries(byCategory).map(([key, count]) => (
+            <button
+              key={key}
+              onClick={() => setCategoryFilter(key)}
+              className={`text-[10px] uppercase tracking-[1px] px-2 py-1 border ${categoryFilter === key ? "border-[var(--ts-black)] bg-[var(--ts-black)] text-white" : "border-[var(--ts-gray-10)] text-[var(--ts-gray-60)] hover:border-[var(--ts-gray-40)]"}`}
+            >
+              {REJECTION_CATEGORY_SHORT[key] || key} · {count}
+            </button>
+          ))}
+          {savedCount > 0 && (
+            <button
+              onClick={() => setShowSavedOnly(!showSavedOnly)}
+              className={`text-[10px] uppercase tracking-[1px] px-2 py-1 border ${showSavedOnly ? "border-[var(--ts-green)] bg-[var(--ts-green)] text-white" : "border-[var(--ts-green-border,#bce3c5)] text-[var(--ts-green)] hover:border-[var(--ts-green)]"}`}
+              title="CV Bank · perfiles guardados para futuras búsquedas"
+            >
+              ★ Saved · {savedCount}
+            </button>
+          )}
+        </div>
+      )}
+
+      {visibleCands.length === 0 ? (
+        <div className="ts-eyebrow text-[10px] text-[var(--ts-gray-40)] py-4">
+          {cands.length === 0 ? "Sin rechazos" : "Sin coincidencias con el filtro"}
+        </div>
       ) : (
         <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
-          {cands.map(c => {
+          {visibleCands.map(c => {
             const isSelected = selectedIds.has(c.id);
+            const catShort = c.rejection_category ? REJECTION_CATEGORY_SHORT[c.rejection_category] : null;
             return (
               <div
                 key={c.id}
@@ -814,8 +890,16 @@ function RejectedColumn({
                 <button onClick={() => onSelect(c)} className="w-full text-left pr-5">
                   <div className="text-[13px] font-semibold text-[var(--ts-gray-90)] leading-tight">
                     {c.name}
+                    {c.rejection_save_for_future && (
+                      <span className="ml-1.5 text-[var(--ts-green)]" title="Guardado para CV Bank">★</span>
+                    )}
                   </div>
                   <div className="text-[10px] text-[var(--ts-gray-60)] mt-0.5">{c.ht_vacancies?.title || '—'}</div>
+                  {catShort && (
+                    <div className="text-[9px] uppercase tracking-[1px] text-[var(--ts-red)] mt-1 font-bold">
+                      {catShort}
+                    </div>
+                  )}
                 </button>
               </div>
             );
@@ -837,6 +921,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
 
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
+  const [showRejectModal, setShowRejectModal] = useState(false);
   const currentStage = cand.stage || "aplico";
   const nextStage = NEXT_STAGE[currentStage];
   const isTerminal = currentStage === "rechazado" || currentStage === "contratado";
@@ -871,12 +956,13 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
     }
   }
 
-  async function reject() {
-    if (!confirm(`¿Rechazar a ${cand.name}? Se creará un draft de descarte automático en tu Gmail.`)) return;
-    await moveToStage("rechazado", "Rechazando");
+  function reject() {
+    // Abre el modal con clasificación obligatoria · ya no usamos confirm() ni el path legacy
+    setShowRejectModal(true);
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
       <div className="bg-white w-[560px] h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -928,8 +1014,9 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
               onClick={reject}
               disabled={busy}
               className="text-xs font-bold px-4 py-2 rounded-full border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+              title="Clasificá el motivo + edita el mensaje al candidato"
             >
-              ❌ Rechazar (draft auto)
+              ❌ Rechazar con motivo
             </button>
           )}
 
@@ -967,6 +1054,11 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
               <Row k="Completó prefiltro" v={new Date(cand.prefilter_completed_at).toLocaleString("es-CO")} />
             )}
           </Section>
+
+          {/* Motivo de rechazo · solo si ya está clasificado */}
+          {cand.stage === "rechazado" && cand.rejection_category && (
+            <RejectionDetailBlock cand={cand} />
+          )}
 
           {/* Elevare results — solo si ya hizo el assessment */}
           {(cand.status === "completed" || cand.status === "in_progress" ||
@@ -1054,6 +1146,24 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
         </div>
       </div>
     </div>
+
+    {showRejectModal && (
+      <RejectionModal
+        candidateId={cand.id}
+        candidateName={cand.name}
+        vacancyTitle={cand.ht_vacancies?.title || "la posición"}
+        onClose={() => setShowRejectModal(false)}
+        onRejected={() => {
+          setShowRejectModal(false);
+          setFeedback("✅ Rechazado · clasificado · draft listo en Gmail");
+          setTimeout(() => {
+            onChanged?.();
+            onClose();
+          }, 1200);
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -1062,6 +1172,63 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <h3 className="text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-2">{title}</h3>
       <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+// ─── Bloque de motivo de rechazo · pull lazy del catálogo para mostrar labels humanos
+function RejectionDetailBlock({ cand }: { cand: Cand }) {
+  const [catalog, setCatalog] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/rejection-categories")
+      .then(r => r.json())
+      .then(j => setCatalog(j.categories || []))
+      .catch(() => {});
+  }, []);
+
+  const cat = catalog.find((c: any) => c.category_key === cand.rejection_category);
+  const subDetail = cat?.sub_details?.find((sd: any) => sd.key === cand.rejection_sub_detail);
+
+  return (
+    <div className="border border-[var(--ts-red-border,#fbcfcf)] bg-[var(--ts-red-bg,#fff5f5)] p-4">
+      <h3 className="text-[11px] uppercase tracking-[1.5px] font-bold text-[var(--ts-red)] mb-3">
+        Motivo de rechazo
+      </h3>
+      <div className="space-y-2 text-[13px]">
+        <div>
+          <div className="text-[10px] uppercase tracking-[1px] text-[var(--ts-gray-60)]">Categoría</div>
+          <div className="font-semibold text-[var(--ts-black)]">
+            {cat?.category_label || cand.rejection_category}
+          </div>
+        </div>
+        {subDetail && (
+          <div>
+            <div className="text-[10px] uppercase tracking-[1px] text-[var(--ts-gray-60)]">Detalle</div>
+            <div className="font-semibold text-[var(--ts-black)]">{subDetail.label}</div>
+          </div>
+        )}
+        {(cand as any).rejection_note_private && (
+          <div>
+            <div className="text-[10px] uppercase tracking-[1px] text-[var(--ts-gray-60)]">Nota privada · interna</div>
+            <div className="text-[var(--ts-gray-90)] italic leading-relaxed">
+              {(cand as any).rejection_note_private}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-3 pt-2 border-t border-[var(--ts-red-border,#fbcfcf)]">
+          {cand.rejection_save_for_future ? (
+            <span className="text-[11px] font-semibold text-[var(--ts-green)]">★ Guardado en CV Bank</span>
+          ) : (
+            <span className="text-[11px] text-[var(--ts-gray-60)]">Sin marcar para CV Bank</span>
+          )}
+          {cand.rejected_at && (
+            <span className="text-[11px] text-[var(--ts-gray-60)] ml-auto">
+              {new Date(cand.rejected_at).toLocaleDateString("es-CO")}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

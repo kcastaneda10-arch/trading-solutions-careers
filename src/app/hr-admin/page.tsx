@@ -62,6 +62,7 @@ import { factorXTS } from "@/data/assessments";
 import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
 import PipelineFunnel from "@/components/PipelineFunnel";
+import RejectionReasonsCard from "@/components/RejectionReasonsCard";
 
 type Tab =
   | "dashboard"
@@ -1377,6 +1378,9 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
 
       {/* ═════ SOURCE QUALITY · qué canal genera mejores hires ═════ */}
       <SourceQualityCard vacancyFilter={selectedVacancyUuid} />
+
+      {/* ═════ RAZONES DE RECHAZO · ¿por qué perdemos gente? + CV Bank ═════ */}
+      <RejectionReasonsCard />
 
       {/* ═════ OVERVIEW · Big Picture · Hero KPIs vs Targets ═════ */}
       <DashboardHero vacancyFilter={selectedVacancyUuid} />
