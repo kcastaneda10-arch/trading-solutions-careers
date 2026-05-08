@@ -95,17 +95,21 @@ export async function POST(
           : `Gracias por participar en nuestro proceso de selección. Aunque esta vez no avanzamos juntos, tu experiencia importa y nos ayuda a mejorar.`;
 
         const html = `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #111;">
-            <div style="background: #000; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 800; letter-spacing: 2px; font-size: 14px;">TRADING SOLUTIONS</div>
-            <div style="border: 1px solid #e5e5e5; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
-              <p style="margin: 0 0 14px;">Hola ${cand.name?.split(' ')[0] || ''},</p>
-              <p style="margin: 0 0 14px; line-height: 1.55;">${greeting}</p>
-              <p style="margin: 0 0 18px; line-height: 1.55;">Te tomará menos de <strong>2 minutos</strong>. Tus respuestas son confidenciales y nos ayudan a mejorar la experiencia para futuros candidatos.</p>
-              <div style="text-align: center; margin: 26px 0;">
-                <a href="${surveyLink}" style="display: inline-block; background: #000; color: #fff; padding: 12px 28px; text-decoration: none; font-weight: 700; border-radius: 8px; font-size: 14px;">Responder encuesta →</a>
+          <div style="font-family: 'Open Sauce Sans', -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #0a0a0a; background: #fafafa;">
+            <div style="font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #737373; margin-bottom: 12px;">Trading Solutions · Talento</div>
+            <div style="border: 1px solid #e8e8e8; padding: 32px; background: white;">
+              <p style="margin: 0 0 14px; font-size: 14px;">Hola ${cand.name?.split(' ')[0] || ''},</p>
+              <p style="margin: 0 0 14px; line-height: 1.6; font-size: 14px;">${greeting}</p>
+              <p style="margin: 0 0 18px; line-height: 1.6; font-size: 14px;">Toma menos de <strong>2 minutos</strong>. Tus respuestas son confidenciales y nos ayudan a hacer mejor el proceso para los que vienen.</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${surveyLink}" style="display: inline-block; background: #0a0a0a; color: #fff; padding: 13px 28px; text-decoration: none; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;">Responder encuesta</a>
               </div>
-              <p style="margin: 18px 0 0; font-size: 12px; color: #666;">Si el botón no funciona, copia este link en tu navegador:<br/><span style="color: #000; word-break: break-all;">${surveyLink}</span></p>
-              <p style="margin: 24px 0 0; font-size: 12px; color: #888;">Equipo Talent Acquisition · Trading Solutions</p>
+              <p style="margin: 18px 0 0; font-size: 12px; color: #737373;">Si el botón no funciona, copiá este link:<br/><span style="color: #0a0a0a; word-break: break-all;">${surveyLink}</span></p>
+              <p style="margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #e8e8e8; font-size: 12px; color: #737373; line-height: 1.6;">
+                Un abrazo,<br/>
+                <strong style="color: #0a0a0a;">Kelly Castañeda</strong><br/>
+                Talent Acquisition and Development Lead · Trading Solutions
+              </p>
             </div>
           </div>
         `;

@@ -75,28 +75,28 @@ export async function POST(
       if (gmail.connected) {
         const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
-  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
-  .cta { display: inline-block; background: #2C64ED; color: white !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; margin: 16px 0; }
-  ul { margin: 12px 0; padding-left: 22px; }
-  li { margin-bottom: 6px; }
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .cta { display: inline-block; background: #0a0a0a; color: white !important; text-decoration: none; padding: 13px 28px; font-weight: 700; margin: 16px 0; letter-spacing: 0.3px; }
+  ul { margin: 8px 0 16px; padding-left: 20px; }
+  li { margin-bottom: 5px; font-size: 14px; }
+  p { font-size: 14px; margin: 0 0 14px; }
 </style></head><body>
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
-    <p>Has avanzado a la siguiente etapa del proceso para la posición de <strong>${vacancyTitle}</strong> en Trading Solutions. ¡Felicitaciones!</p>
-    <p>El siguiente paso es una <strong>entrevista por voz con nuestra recruiter virtual</strong>. Es una conversación natural, en tiempo real — nuestra reclutadora te hará preguntas sobre tu experiencia y al final habrá una sección corta en inglés.</p>
+    <p>Llegaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong>. El próximo paso es una conversación con nuestra recruiter virtual · es por voz, en tiempo real, y termina con una sección corta en inglés.</p>
+    <p>No es un examen · te va a preguntar sobre tu experiencia y querés contarle naturalmente, como una llamada cualquiera.</p>
     <p style="text-align:center"><a href="${interviewUrl}" class="cta">Iniciar entrevista</a></p>
-    <p><strong>Detalles importantes:</strong></p>
+    <p>Algunos detalles para que estés cómoda/o:</p>
     <ul>
-      <li><strong>Duración:</strong> 15-20 minutos</li>
-      <li><strong>Necesitas:</strong> computador con micrófono, internet estable, espacio tranquilo</li>
-      <li><strong>Recomendación:</strong> habla con naturalidad, como en una llamada normal — ella escucha y responde</li>
-      <li><strong>Validez:</strong> el enlace expira en 72 horas</li>
-      <li><strong>Una sola oportunidad:</strong> termina la entrevista, sin pausas largas</li>
+      <li>Dura entre 15 y 20 minutos</li>
+      <li>Necesitás computador con micrófono, internet estable y un espacio tranquilo</li>
+      <li>Hablá con naturalidad · ella te escucha y responde</li>
+      <li>El enlace queda activo 72 horas</li>
+      <li>Mejor hacela de corrido, sin pausas largas</li>
     </ul>
-    <p>Después de la entrevista, te contactaremos para los siguientes pasos.</p>
-    <p>Si tienes alguna duda por favor escribeme a este correo.</p>
-    <p>Un abrazo,<br><strong>Kelly Castañeda</strong></p>
+    <p>Después de la entrevista nos contactamos contigo para los siguientes pasos. Si te queda alguna duda, contestame este correo.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
   </div>
 </body></html>`;
 

@@ -34,62 +34,62 @@ function buildEmail(opts: {
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.55; color: #111; padding: 0; margin: 0; background: #f5f5f5; }
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.55; color: #0a0a0a; padding: 0; margin: 0; background: #fafafa; }
   .wrap { max-width: 580px; margin: 0 auto; padding: 24px 16px; }
-  .header { background: #000; color: #fff; padding: 16px 20px; border-radius: 12px 12px 0 0; font-weight: 800; letter-spacing: 2.5px; font-size: 12px; }
-  .container { background: white; border: 1px solid #e5e5e5; border-top: none; padding: 28px; border-radius: 0 0 12px 12px; }
-  h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: -0.02em; line-height: 1.2; }
-  .candidate-card { background: #f8f8f8; border-left: 4px solid #000; padding: 14px 18px; margin: 18px 0; border-radius: 4px; }
-  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; color: #888; margin-bottom: 4px; }
-  .btn { display: inline-block; padding: 14px 24px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 14px; margin: 4px 0; text-align: center; min-width: 220px; }
-  .btn-yes { background: #10B981; color: white; }
-  .btn-no { background: #EF4444; color: white; }
-  .btn-other { background: #2C64ED; color: white; }
-  .btn-more { background: #f5f5f5; color: #111; border: 2px solid #d4d4d4; }
-  .actions { margin: 26px 0 14px; text-align: center; }
-  .actions .btn { display: block; margin: 8px auto; }
-  .footer { font-size: 12px; color: #777; margin-top: 22px; padding-top: 18px; border-top: 1px solid #eee; }
-  .ai-summary { background: #fef3c7; border: 1px solid #fde68a; padding: 12px 14px; border-radius: 6px; font-size: 13px; margin: 14px 0; }
-  .ai-summary .label { color: #92400e; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #737373; margin-bottom: 8px; }
+  .container { background: white; border: 1px solid #e8e8e8; padding: 32px; }
+  h2 { margin: 0 0 14px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  .candidate-card { background: #fafafa; border: 1px solid #e8e8e8; padding: 16px 18px; margin: 20px 0; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; color: #737373; margin-bottom: 4px; }
+  .btn { display: block; padding: 13px 22px; font-weight: 700; text-decoration: none; font-size: 13px; margin: 8px auto; text-align: center; max-width: 320px; letter-spacing: 0.3px; }
+  .btn-yes { background: #1a7d3e; color: white; }
+  .btn-no { background: #c41818; color: white; }
+  .btn-other { background: #0a0a0a; color: white; }
+  .btn-more { background: white; color: #0a0a0a; border: 1px solid #d4d4d4; }
+  .actions { margin: 24px 0 12px; }
+  .footer { font-size: 12px; color: #737373; margin-top: 24px; padding-top: 18px; border-top: 1px solid #e8e8e8; }
+  .ai-summary { background: #fff8e1; border-left: 3px solid #f5b700; padding: 12px 14px; font-size: 13px; margin: 16px 0; }
+  .ai-summary .label { color: #8a6d1c; }
+  p { font-size: 14px; margin: 0 0 12px; }
 </style></head><body>
   <div class="wrap">
-    <div class="header">TRADING SOLUTIONS · TALENT ACQUISITION</div>
+    <div class="eyebrow">Trading Solutions · Talento</div>
     <div class="container">
-      <p style="margin:0 0 6px;color:#666;font-size:13px;">Hola ${firstName},</p>
-      <h2>Necesitamos tu decisión sobre un candidato.</h2>
-      <p style="color:#444;font-size:14px;">Para poder avanzar el proceso, ¿puedes responder en 2 clicks? Cualquier dilatación nos cuesta el candidato.</p>
+      <h2>Hola ${firstName}, tengo a alguien para vos.</h2>
+      <p style="color:#525252;">Quería pedirte tu lectura sobre este candidato cuando puedas. Con dos clicks te alcanza · si te queda alguna duda, escribime y lo conversamos.</p>
 
       <div class="candidate-card">
-        <div class="label">CANDIDATO</div>
+        <div class="label">Candidato</div>
         <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;">${opts.candidate_name}</div>
-        ${opts.candidate_role_at_company ? `<div style="font-size:12px;color:#666;margin-top:4px;">${opts.candidate_role_at_company}</div>` : ''}
-        <div class="label" style="margin-top:14px;">VACANTE</div>
-        <div style="font-weight:600;">${opts.vacancy_title}</div>
-        <div class="label" style="margin-top:14px;">TIPO DE ENTREVISTA</div>
-        <div style="font-weight:600;text-transform:capitalize;">${opts.interview_type.replace('_',' ')}</div>
+        ${opts.candidate_role_at_company ? `<div style="font-size:13px;color:#737373;margin-top:4px;">${opts.candidate_role_at_company}</div>` : ''}
+        <div class="label" style="margin-top:14px;">Vacante</div>
+        <div style="font-weight:600;font-size:14px;">${opts.vacancy_title}</div>
+        <div class="label" style="margin-top:14px;">Etapa</div>
+        <div style="font-weight:600;font-size:14px;text-transform:capitalize;">${opts.interview_type.replace('_',' ')}</div>
       </div>
 
       ${opts.ai_summary ? `
       <div class="ai-summary">
-        <div class="label">RESUMEN IA · score ${opts.ai_score ?? '—'}/100</div>
+        <div class="label">Lectura IA · score ${opts.ai_score ?? '—'}/100</div>
         <div style="margin-top:4px;">${opts.ai_summary}</div>
       </div>
       ` : ''}
 
       <div class="actions">
-        <a href="${linkAvanza}" class="btn btn-yes">✓ Sí, avanza para esta vacante</a>
-        <a href="${linkOther}" class="btn btn-other">→ No para esta, pero sí para otra vacante</a>
-        <a href="${linkNoAvanza}" class="btn btn-no">✗ No, no avanza</a>
-        <a href="${linkMore}" class="btn btn-more">? Necesito otra entrevista / más info</a>
+        <a href="${linkAvanza}" class="btn btn-yes">Sí, avanza para esta vacante</a>
+        <a href="${linkOther}" class="btn btn-other">Para esta no, pero lo veo en otra</a>
+        <a href="${linkNoAvanza}" class="btn btn-no">No avanza</a>
+        <a href="${linkMore}" class="btn btn-more">Quiero verlo de nuevo</a>
       </div>
 
-      <p style="font-size:12px;color:#888;margin-top:8px;text-align:center;">
-        <strong>Una respuesta concreta es 30 segundos.</strong> Cualquier "lo veo más para X" sin click no es decisión y el candidato queda en el aire.
+      <p style="font-size:12px;color:#737373;text-align:center;margin-top:18px;">
+        Tu respuesta actualiza el stage automáticamente. Si te quedaron dudas que un click no resuelve, contestame este correo.
       </p>
 
       <div class="footer">
-        El sistema actualiza el stage del candidato automáticamente con tu respuesta. Si tienes dudas, escribime.<br/>
-        — Kelly Castañeda · Talent Acquisition Lead
+        Un abrazo,<br/>
+        <strong>Kelly Castañeda</strong><br/>
+        Talent Acquisition and Development Lead · Trading Solutions
       </div>
     </div>
   </div>
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
       ai_score: aiInt?.ai_score ?? aiInt?.overall_score ?? undefined,
     });
 
-    const subject = `[Decisión requerida] ${cand.name} — ¿avanza o no?`;
+    const subject = `Tu lectura sobre ${cand.name} · 2 clicks`;
 
     // Crear draft en Gmail (To: comma-separated RFC 822)
     const draftRes = await createDraftViaGmail({

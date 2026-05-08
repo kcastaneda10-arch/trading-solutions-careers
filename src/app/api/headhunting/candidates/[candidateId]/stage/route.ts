@@ -124,30 +124,33 @@ export async function POST(
           const firstName = (candidate.name as string).split(" ")[0] || "candidato";
           const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  body { font-family: Inter, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
-  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
-  .cta { display: inline-block; background: #2C64ED; color: white !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .cta { display: inline-block; background: #0a0a0a; color: white !important; text-decoration: none; padding: 13px 28px; font-weight: 700; margin: 16px 0; letter-spacing: 0.3px; }
+  ul { margin: 8px 0 16px; padding-left: 20px; }
+  li { margin-bottom: 5px; font-size: 14px; }
+  p { font-size: 14px; margin: 0 0 14px; }
 </style></head><body>
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
-    <p>Espero que estés muy bien. Te escribo para invitarte a la siguiente etapa de nuestro proceso de selección para la posición de <strong>${vacancyTitle}</strong> en Trading Solutions.</p>
-    <p>El siguiente paso es una evaluación que nos ayuda a entender mejor cómo piensas y decides en situaciones reales del trabajo. No hay respuestas correctas o incorrectas — solo queremos conocer tu forma de ser.</p>
-    <p style="text-align:center"><a href="${elevareUrl}" class="cta">Iniciar Evaluación</a></p>
-    <p>Detalles importantes:</p>
+    <p>Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong>. El próximo paso es un Assessment virtual que nos ayuda a conocerte mejor · cómo pensás, cómo decidís, qué te mueve.</p>
+    <p>No es un examen · no hay respuestas correctas. Es solo entender tu forma de ver las cosas.</p>
+    <p style="text-align:center"><a href="${elevareUrl}" class="cta">Iniciar Assessment</a></p>
+    <p>Algunos detalles para que estés cómoda/o:</p>
     <ul>
-      <li>Duración aproximada: 55 minutos</li>
-      <li>Necesitas: computador con internet estable y cámara web (la usamos para verificar identidad)</li>
-      <li>Recomendación: busca un espacio tranquilo, sin interrupciones</li>
-      <li>El enlace es válido por 72 horas</li>
+      <li>Toma alrededor de 55 minutos · podés guardarlo y retomar</li>
+      <li>Necesitás computador con internet estable y cámara web (la usamos solo para validar identidad)</li>
+      <li>Buscá un espacio tranquilo, sin interrupciones</li>
+      <li>El enlace queda activo 72 horas</li>
       <li>Tus respuestas se guardan automáticamente</li>
     </ul>
-    <p>Si tienes alguna pregunta, simplemente responde este correo.</p>
-    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Trading Solutions</p>
+    <p>Si te queda alguna duda, contestame este correo.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
   </div>
 </body></html>`;
           const draftRes = await createDraftViaGmail({
             to: candidate.email as string,
-            subject: `Trading Solutions · Evaluación para ${vacancyTitle}`,
+            subject: `Trading Solutions · Assessment virtual para ${vacancyTitle}`,
             html,
             fromName: "Kelly Castañeda",
           });
@@ -195,7 +198,56 @@ export async function POST(
     // ─── Auto-create People + Onboarding when hired ───
     let onboardingId: string | null = null;
     let personId: string | null = null;
+    let welcomeDraftId: string | null = null;
     if (targetStage === "contratado") {
+      // Welcome email · primer contacto post-oferta firmada
+      try {
+        const gmail = await isGmailConnected();
+        if (gmail.connected && candidate.email) {
+          const firstName = (candidate.name as string).split(" ")[0] || "";
+          // @ts-expect-error supabase relation
+          const vacancyTitle = candidate.ht_vacancies?.title || "tu nuevo rol";
+          const welcomeHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #1a7d3e; margin-bottom: 12px; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 16px; }
+  p { font-size: 14px; margin: 0 0 14px; }
+  ul { margin: 8px 0 16px; padding-left: 20px; }
+  li { margin-bottom: 5px; font-size: 14px; }
+</style></head><body>
+  <div class="container">
+    <div class="eyebrow">Bienvenida/o a Trading Solutions</div>
+    <h1>${firstName}, qué bueno tenerte con nosotros.</h1>
+    <p>Cerramos el proceso para <strong>${vacancyTitle}</strong> y ya estás dentro. Antes de tu primer día queremos hacerte el camino corto · te paso lo que viene.</p>
+    <p><strong>En los próximos días te vamos a enviar:</strong></p>
+    <ul>
+      <li>Tu carta oferta firmada y los documentos para HR</li>
+      <li>Acceso a tu correo @tradingsolutions.com y a las herramientas que vas a usar</li>
+      <li>Tu plan de los primeros 30/60/90 días con el equipo</li>
+      <li>Quién será tu buddy para tus primeras semanas</li>
+    </ul>
+    <p>Si tenés alguna duda mientras tanto · sobre tu fecha de inicio, lo logístico, lo que sea · contestame este correo y resolvemos.</p>
+    <p>Nos vemos muy pronto.</p>
+    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
+  </div>
+</body></html>`;
+          const welcomeRes = await createDraftViaGmail({
+            to: candidate.email as string,
+            subject: `Bienvenida/o a Trading Solutions, ${firstName}`,
+            html: welcomeHtml,
+            fromName: "Kelly Castañeda",
+            replyTo: "kcastaneda@tradingsolutions.com",
+          });
+          if (welcomeRes.ok) {
+            welcomeDraftId = welcomeRes.draft_id;
+          }
+        }
+      } catch (e) {
+        console.error("Welcome draft creation failed:", e);
+      }
+
       try {
         // Get vacancy info
         const { data: vac } = await supabaseAdmin
@@ -269,6 +321,7 @@ export async function POST(
       from_stage: candidate.stage,
       to_stage: targetStage,
       draft_id: draftId,
+      welcome_draft_id: welcomeDraftId,
       elevare_url: elevareUrl,
       person_id: personId,
       onboarding_id: onboardingId,

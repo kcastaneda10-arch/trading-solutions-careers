@@ -63,6 +63,7 @@ import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
 import PipelineFunnel from "@/components/PipelineFunnel";
 import RejectionReasonsCard from "@/components/RejectionReasonsCard";
+import ReminderRulesEditor from "@/components/ReminderRulesEditor";
 
 type Tab =
   | "dashboard"
@@ -70,7 +71,8 @@ type Tab =
   | "funnel"
   | "onboarding"
   | "cvbank"
-  | "agentes";
+  | "agentes"
+  | "plantillas";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -79,9 +81,10 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "agentes", label: "Agentes IA", icon: Bot },
+  { id: "plantillas", label: "Plantillas", icon: SettingsIcon },
 ];
 
-const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "onboarding", "cvbank", "agentes"];
+const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "onboarding", "cvbank", "agentes", "plantillas"];
 
 function getInitialTab(): Tab {
   if (typeof window === 'undefined') return 'dashboard';
@@ -96,6 +99,7 @@ export default function HRAdminPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [referralsOpen, setReferralsOpen] = useState(false);
   const [referralsPending, setReferralsPending] = useState(0);
+  const [draftsPending, setDraftsPending] = useState(0);
   const [gmailAuditOpen, setGmailAuditOpen] = useState(false);
   const [decisionsOpen, setDecisionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -128,6 +132,19 @@ export default function HRAdminPage() {
     fetchPending();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchPending();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll drafts pendientes (Gmail) cada 60s · alimenta el bell badge
+  useEffect(() => {
+    const fetchDrafts = () => fetch('/api/admin/drafts-pending', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setDraftsPending(j.total || 0))
+      .catch(() => {});
+    fetchDrafts();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchDrafts();
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -237,6 +254,20 @@ export default function HRAdminPage() {
             >
               <SettingsIcon className="w-[18px] h-[18px]" />
             </button>
+            <a
+              href="https://mail.google.com/mail/u/0/#drafts"
+              target="_blank"
+              rel="noreferrer"
+              className="text-white/60 hover:text-white relative p-1.5"
+              title={draftsPending > 0 ? `${draftsPending} drafts esperando tu revisión en Gmail (últimas 48h)` : 'Sin drafts pendientes'}
+            >
+              <Mail className="w-[18px] h-[18px]" />
+              {draftsPending > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-black tabular-nums">
+                  {draftsPending > 99 ? '99+' : draftsPending}
+                </span>
+              ) : null}
+            </a>
             <button
               onClick={() => setReferralsOpen(true)}
               className="text-white/60 hover:text-white relative p-1.5"
@@ -300,6 +331,7 @@ export default function HRAdminPage() {
         {tab === "onboarding" && <OnboardingTab />}
         {tab === "cvbank" && <CVBank />}
         {tab === "agentes" && <Agentes />}
+        {tab === "plantillas" && <ReminderRulesEditor />}
       </main>
 
       {searchOpen && <CandidateSearchModal onClose={() => setSearchOpen(false)} onJumpFunnel={() => { setTab('funnel'); setSearchOpen(false); }} />}

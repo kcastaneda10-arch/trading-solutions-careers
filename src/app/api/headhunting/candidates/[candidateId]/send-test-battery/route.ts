@@ -58,59 +58,53 @@ export async function POST(
     // dejar placeholders muy visibles para Bluesite y Psicoalianza.
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 24px; background: #f9f9f9; }
-  .container { max-width: 640px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
-  h2 { color: #1a1a1a; margin-top: 0; font-size: 18px; }
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; margin: 0; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
   ol { padding-left: 20px; }
-  ol li { margin-bottom: 18px; }
-  a { color: #2C64ED; }
-  .nota { color: #666; font-size: 14px; font-style: italic; }
-  .placeholder { background: #FFF3CD; padding: 8px 12px; border-radius: 6px; color: #856404; font-weight: 600; }
-  .footer { margin-top: 24px; color: #999; font-size: 12px; }
+  ol li { margin-bottom: 14px; }
+  a { color: #0a0a0a; text-decoration: underline; }
+  .nota { color: #737373; font-size: 13px; }
+  .placeholder { background: #fff8e1; padding: 6px 10px; color: #8a6d1c; font-weight: 600; font-size: 13px; }
+  .footer { margin-top: 24px; color: #a3a3a3; font-size: 11px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
+  p { margin: 0 0 14px; font-size: 14px; }
 </style></head><body>
   <div class="container">
-    <p>Buenas tardes <strong>${firstName}</strong>,</p>
+    <p>Hola <strong>${firstName}</strong>,</p>
 
-    <p>Gracias por tu interés en formar parte de nuestro equipo en <strong>Trading Solutions</strong>. Como parte del proceso de selección para la posición de <strong>${vacancyTitle}</strong>, queremos conocerte un poco más, no solo a través de tu experiencia, sino también a través de tu estilo de personalidad y forma de trabajar.</p>
-
-    <p>Por eso, te pedimos completar los siguientes cuestionarios:</p>
+    <p>Llegaste a la siguiente etapa para la posición de <strong>${vacancyTitle}</strong>. Antes de la entrevista final queremos conocer un poco más cómo pensás y trabajás · estos cuestionarios nos ayudan a tener esa lectura.</p>
 
     <ol>
       <li>
-        <strong>Test MBTI:</strong> <a href="https://www.16personalities.com/es/test-de-personalidad">https://www.16personalities.com/es/test-de-personalidad</a><br>
-        <span class="nota">Al finalizar, compártenos los dos links que genera al darle click al ícono de compartir. Por favor, reenvíalos a esta misma dirección para que los registremos correctamente.</span>
+        <strong>16 Personalities (MBTI):</strong> <a href="https://www.16personalities.com/es/test-de-personalidad">16personalities.com</a><br>
+        <span class="nota">Al terminar, compartime los dos links que aparecen al darle al ícono de compartir.</span>
       </li>
       <li>
-        <strong>Test DISC:</strong> <a href="https://miperfildisc.com/">https://miperfildisc.com/</a><br>
-        <span class="nota">Al finalizar este test, recibirás un correo con tus resultados. Por favor reenvíalo a esta misma dirección una vez lo recibas.</span>
+        <strong>DISC:</strong> <a href="https://miperfildisc.com/">miperfildisc.com</a><br>
+        <span class="nota">Vas a recibir el resultado por correo · reenvialo a esta misma dirección.</span>
       </li>
       <li>
-        <strong>Test de Motivación:</strong> <a href="https://motivation-test-production.up.railway.app/">https://motivation-test-production.up.railway.app/</a>
+        <strong>Test de motivación:</strong> <a href="https://motivation-test-production.up.railway.app/">motivation-test-production.up.railway.app</a>
       </li>
       <li>
-        <strong>Test BETESA (Bluesite):</strong>
-        <span class="placeholder">[ PEGAR ENLACE PERSONALIZADO DE BLUESITE ]</span>
+        <strong>BETESA (Bluesite):</strong>
+        <span class="placeholder">[ PEGAR ENLACE PERSONALIZADO ]</span>
       </li>
       <li>
-        <strong>Test Psicoalianza:</strong>
-        <span class="placeholder">[ PEGAR ENLACE PERSONALIZADO DE PSICOALIANZA ]</span>
+        <strong>Psicoalianza:</strong>
+        <span class="placeholder">[ PEGAR ENLACE PERSONALIZADO ]</span>
       </li>
     </ol>
 
-    <p><strong>Tiempo estimado total:</strong> aproximadamente 2 horas (puedes repartirlas en varias sesiones).</p>
+    <p>Tomate tu tiempo · son alrededor de 2 horas en total y podés repartirlas en varias sesiones. No hay respuestas correctas, solo tu forma de ver las cosas.</p>
 
-    <p>Por favor, asegúrate de realizar los tests con tranquilidad y sin interrupciones. Una vez que los completes, por favor confírmame por este medio.</p>
-
-    <p>Cualquier duda o inconveniente, no dudes en escribirme.</p>
-
-    <p>¡Gracias de nuevo y muchos éxitos!</p>
+    <p>Cuando termines, contame por este mismo correo. Si surge cualquier duda en el camino, escribime.</p>
 
     <p>Un abrazo,<br>
     <strong>Kelly Castañeda</strong><br>
     Talent Acquisition and Development Lead<br>
     Trading Solutions</p>
 
-    <div class="footer">Este correo es personal. Antes de enviarlo, completa los enlaces de Bluesite y Psicoalianza arriba.</div>
+    <div class="footer">Antes de enviar, pegá los enlaces personalizados de Bluesite y Psicoalianza.</div>
   </div>
 </body></html>`;
 
