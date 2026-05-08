@@ -24,12 +24,61 @@ import {
   getLanguage,
 } from "@/lib/reminder-templates";
 import { requireAdmin } from "@/lib/admin-auth";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+
+/**
+ * Garantiza que el candidato tenga un token fresco según su stage actual.
+ * Cualquier reminder enviado siempre tendrá un enlace válido por al menos 7 días.
+ *
+ *   - Stages "prefiltro_*" → refresca prefilter_token + 7 días
+ *   - Stages "assessment_*" → refresca assessment_token + 7 días
+ *
+ * Devuelve {prefilterUrl, assessmentUrl} listos para meter en el template.
+ */
+async function ensureFreshTokensForReminder(cand: any): Promise<{ prefilterUrl: string; assessmentUrl: string }> {
+  const stage = cand.stage || "";
+  const isPrefilterStage = stage.startsWith("prefiltro_");
+  const isAssessmentStage = stage.startsWith("assessment_");
+
+  let prefilterToken = cand.prefilter_token;
+  let assessmentToken = cand.assessment_token;
+  const updates: Record<string, unknown> = {};
+
+  if (isPrefilterStage) {
+    // Siempre regenerar para que el candidato tenga 7 días desde HOY
+    prefilterToken = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    updates.prefilter_token = prefilterToken;
+    updates.prefilter_token_expires_at = expiresAt.toISOString();
+  }
+
+  if (isAssessmentStage) {
+    assessmentToken = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    updates.assessment_token = assessmentToken;
+    updates.token_expires_at = expiresAt.toISOString();
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await supabaseAdmin
+      .from("ht_candidates")
+      .update(updates)
+      .eq("id", cand.id);
+  }
+
+  return {
+    prefilterUrl: prefilterToken ? `${APP_URL}/prefiltro/${prefilterToken}` : "",
+    assessmentUrl: assessmentToken ? `${APP_URL}/assessment/ht/${assessmentToken}` : "",
+  };
+}
 
 function isVercelCron(req: NextRequest): boolean {
   const auth = req.headers.get("authorization");
@@ -158,8 +207,9 @@ export async function GET(req: NextRequest) {
       const firstName = (cand.name || "").split(" ")[0] || "candidato";
       // @ts-expect-error supabase relation
       const vacancyTitle = cand.ht_vacancies?.title || "la vacante";
-      const prefilterUrl = cand.prefilter_token ? `${APP_URL}/prefiltro/${cand.prefilter_token}` : "";
-      const assessmentUrl = cand.assessment_token ? `${APP_URL}/assessment/${cand.assessment_token}` : "";
+
+      // Refrescar token según stage · garantiza enlace válido por 7 días desde HOY
+      const { prefilterUrl, assessmentUrl } = await ensureFreshTokensForReminder(cand);
 
       const rendered = renderTemplate(tpl, {
         firstName,

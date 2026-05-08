@@ -19,8 +19,36 @@ import {
   getLanguage,
   buildWhatsAppLink,
 } from "@/lib/reminder-templates";
+import crypto from "crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+
+// Refresca el token según stage · garantiza que el WhatsApp manda un enlace de 7 días.
+async function refreshTokenIfNeeded(cand: any): Promise<{ prefilterToken: string | null; assessmentToken: string | null }> {
+  const stage = cand.stage || "";
+  let prefilterToken = cand.prefilter_token;
+  let assessmentToken = cand.assessment_token;
+  const updates: Record<string, unknown> = {};
+
+  if (stage.startsWith("prefiltro_")) {
+    prefilterToken = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    updates.prefilter_token = prefilterToken;
+    updates.prefilter_token_expires_at = expiresAt.toISOString();
+  }
+  if (stage.startsWith("assessment_")) {
+    assessmentToken = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    updates.assessment_token = assessmentToken;
+    updates.token_expires_at = expiresAt.toISOString();
+  }
+  if (Object.keys(updates).length > 0) {
+    await supabaseAdmin.from("ht_candidates").update(updates).eq("id", cand.id);
+  }
+  return { prefilterToken, assessmentToken };
+}
 
 export async function GET(req: NextRequest) {
   const authError = requireAdmin(req);
@@ -73,8 +101,11 @@ export async function GET(req: NextRequest) {
   const firstName = (cand.name || "").split(" ")[0] || "candidato";
   // @ts-expect-error supabase relation
   const vacancyTitle = cand.ht_vacancies?.title || "la vacante";
-  const prefilterUrl = cand.prefilter_token ? `${APP_URL}/prefiltro/${cand.prefilter_token}` : "";
-  const assessmentUrl = cand.assessment_token ? `${APP_URL}/assessment/${cand.assessment_token}` : "";
+
+  // Refrescar token · cada vez que generes un link de WhatsApp, queda válido 7 días desde hoy
+  const { prefilterToken, assessmentToken } = await refreshTokenIfNeeded(cand);
+  const prefilterUrl = prefilterToken ? `${APP_URL}/prefiltro/${prefilterToken}` : "";
+  const assessmentUrl = assessmentToken ? `${APP_URL}/assessment/ht/${assessmentToken}` : "";
 
   const rendered = renderTemplate(tpl, {
     firstName,
