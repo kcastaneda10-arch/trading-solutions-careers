@@ -165,6 +165,7 @@ export async function POST(req: NextRequest) {
       if (c.location) notesArr.push(`Ubicación: ${c.location}`);
 
       toInsert.push({
+        client_id: TS_CLIENT_ID,
         name: c.name,
         email,
         phone: c.phone || null,
