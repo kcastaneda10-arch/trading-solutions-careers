@@ -254,15 +254,29 @@ export default function PipelineFunnel() {
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <span className="ts-eyebrow text-[10px]">Vacante</span>
-            <select
-              value={vacFilter}
-              onChange={(e) => setVacFilter(e.target.value)}
-              className="text-sm font-medium border border-[var(--ts-gray-20)] bg-white px-4 py-2.5 hover:border-[var(--ts-black)] focus:border-[var(--ts-black)] outline-none transition-colors min-w-[240px]"
-              style={{ borderRadius: 0 }}
-            >
-              <option value="all">Todas las vacantes</option>
-              {vacancies.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={vacFilter}
+                onChange={(e) => setVacFilter(e.target.value)}
+                className="text-sm font-medium border border-[var(--ts-gray-20)] bg-white px-4 py-2.5 hover:border-[var(--ts-black)] focus:border-[var(--ts-black)] outline-none transition-colors min-w-[240px]"
+                style={{ borderRadius: 0 }}
+              >
+                <option value="all">Todas las vacantes</option>
+                {vacancies.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+              </select>
+              {vacFilter !== "all" && (
+                <a
+                  href={`/hr-admin/comparar/${vacFilter}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold px-3 py-2.5 bg-black text-white hover:bg-gray-800 transition-colors whitespace-nowrap"
+                  style={{ borderRadius: 0 }}
+                  title="Ver tabla comparativa de todos los candidatos de esta vacante con sus evaluaciones"
+                >
+                  📊 Comparar
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>
