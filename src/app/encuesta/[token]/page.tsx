@@ -149,7 +149,7 @@ export default function EncuestaPage() {
           <Section title="Califica los siguientes aspectos del proceso (1 = muy malo · 5 = excelente)">
             <RatingRow label="Claridad de la información del proceso" value={processClarity} onChange={setProcessClarity} />
             <RatingRow label="Calidad y velocidad de la comunicación" value={commQuality} onChange={setCommQuality} />
-            <RatingRow label="Experiencia con la prueba de integridad" value={assessmentExp} onChange={setAssessmentExp} />
+            <RatingRow label="Experiencia con las pruebas" value={assessmentExp} onChange={setAssessmentExp} />
             <RatingRow label="Trato y disponibilidad del equipo de reclutamiento" value={recruiterHelp} onChange={setRecruiterHelp} />
             <RatingRow label="Calidad de las entrevistas" value={interviewQ} onChange={setInterviewQ} />
           </Section>

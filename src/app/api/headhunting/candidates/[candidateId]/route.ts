@@ -78,3 +78,42 @@ export async function PATCH(
     return NextResponse.json({ error: err?.message || 'Error interno' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/headhunting/candidates/[candidateId]
+ * Elimina un candidato y registros relacionados (cascading via FK donde aplica).
+ * Usado para limpiar tests, duplicados, etc.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ candidateId: string }> },
+) {
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
+  try {
+    const { candidateId } = await params;
+    if (!candidateId) {
+      return NextResponse.json({ error: 'candidateId requerido' }, { status: 400 });
+    }
+
+    // Borrar registros relacionados primero (no todas tienen FK cascade)
+    await supabaseAdmin.from('ht_results').delete().eq('candidate_id', candidateId);
+    await supabaseAdmin.from('ts_candidate_experience').delete().eq('candidate_id', candidateId);
+    await supabaseAdmin.from('ts_reminders_sent').delete().eq('candidate_id', candidateId);
+    await supabaseAdmin.from('ts_candidate_reminders_paused').delete().eq('candidate_id', candidateId);
+
+    const { error } = await supabaseAdmin
+      .from('ht_candidates')
+      .delete()
+      .eq('id', candidateId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, deleted: candidateId });
+  } catch (err: any) {
+    console.error('Candidate DELETE error:', err);
+    return NextResponse.json({ error: err?.message || 'Error interno' }, { status: 500 });
+  }
+}
