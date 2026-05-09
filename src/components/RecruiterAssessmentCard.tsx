@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * RecruiterAssessmentCard · muestra la evaluación contra los 16 mandatos del CEO
- * en el panel del candidato cuando está en stage recruiter_interview o posterior.
+ * StageAssessmentCard (a.k.a RecruiterAssessmentCard por compat retro) ·
+ * evaluación contra los 16 mandatos del CEO. Acepta `stage` prop para
+ * soportar Recruiter, CWO, y Hiring Manager · cada stage guarda su propia
+ * evaluación en ts_recruiter_assessments.assessment_stage.
  *
- * Si no hay evaluación, muestra botón "Iniciar evaluación con IA" que abre un modal:
+ * Flujo:
  *   1. Pegar transcript
  *   2. Click "Parsear con IA" → llama /api/admin/parse-recruiter-transcript
  *   3. Revisar/editar scores y razones
- *   4. Click "Guardar" → POST /api/admin/recruiter-assessments
- *
- * Si ya hay, muestra grid 4×4 de mandatos color-coded + verdict + botones.
+ *   4. Click "Guardar" → POST /api/admin/recruiter-assessments con assessment_stage
  */
 import { useEffect, useState } from "react";
 import {
@@ -21,10 +21,12 @@ import {
   MANDATE_SCORE_COLORS,
   summarizeScores,
 } from "@/lib/ceo-mandates";
+import { AssessmentStage, ASSESSMENT_STAGES } from "@/lib/assessment-stages";
 
 type Assessment = {
   id?: string;
   candidate_id: string;
+  assessment_stage?: AssessmentStage;
   interview_date?: string;
   interviewer_email?: string;
   duration_minutes?: number | null;
@@ -52,15 +54,22 @@ const VERDICT_STYLES: Record<string, { bg: string; fg: string; label: string }> 
   no: { bg: "#FEE2E2", fg: "#C53030", label: "NO · Descartar con feedback" },
 };
 
-export default function RecruiterAssessmentCard({ candidateId, candidateName }: { candidateId: string; candidateName: string }) {
+export default function RecruiterAssessmentCard({
+  candidateId, candidateName, stage = "recruiter_interview"
+}: {
+  candidateId: string;
+  candidateName: string;
+  stage?: AssessmentStage;
+}) {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const stageInfo = ASSESSMENT_STAGES[stage];
 
   async function load() {
     setLoading(true);
     try {
-      const r = await fetch(`/api/admin/recruiter-assessments?candidate_id=${candidateId}`, { cache: "no-store" });
+      const r = await fetch(`/api/admin/recruiter-assessments?candidate_id=${candidateId}&stage=${stage}`, { cache: "no-store" });
       const j = await r.json();
       setAssessment(j.assessment || null);
     } catch (e) {
@@ -70,7 +79,7 @@ export default function RecruiterAssessmentCard({ candidateId, candidateName }: 
     }
   }
 
-  useEffect(() => { load(); }, [candidateId]);
+  useEffect(() => { load(); }, [candidateId, stage]);
 
   if (loading) {
     return (
@@ -84,7 +93,7 @@ export default function RecruiterAssessmentCard({ candidateId, candidateName }: 
     <div className="px-6 py-5 bg-white border-t border-gray-200">
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] uppercase tracking-[2px] font-bold text-gray-500">
-          Recruiter Assessment · 16 Mandatos del CEO
+          {stageInfo.label}
         </div>
         {assessment && (
           <div className="flex items-center gap-3">
@@ -127,6 +136,8 @@ export default function RecruiterAssessmentCard({ candidateId, candidateName }: 
         <AssessmentModal
           candidateId={candidateId}
           candidateName={candidateName}
+          stage={stage}
+          stageInfo={stageInfo}
           existing={assessment}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
@@ -257,9 +268,11 @@ function SummaryStat({ n, label, color, bg }: { n: number; label: string; color:
 /* ─────────── Modal de creación / edición ─────────── */
 
 function AssessmentModal({
-  candidateId, candidateName, existing, onClose, onSaved,
+  candidateId, candidateName, stage, stageInfo, existing, onClose, onSaved,
 }: {
   candidateId: string; candidateName: string;
+  stage: AssessmentStage;
+  stageInfo: typeof ASSESSMENT_STAGES[AssessmentStage];
   existing: Assessment | null;
   onClose: () => void; onSaved: () => void;
 }) {
@@ -271,6 +284,7 @@ function AssessmentModal({
   const [draft, setDraft] = useState<Assessment>(
     existing || {
       candidate_id: candidateId,
+      assessment_stage: stage,
       mandate_scores: {},
       mandate_evidence: {},
       mandate_quotes: {},
@@ -343,7 +357,7 @@ function AssessmentModal({
       const r = await fetch("/api/admin/recruiter-assessments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...draft, human_reviewed: true }),
+        body: JSON.stringify({ ...draft, assessment_stage: stage, human_reviewed: true }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -371,8 +385,9 @@ function AssessmentModal({
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <div>
-            <div className="text-[10px] uppercase tracking-wide font-bold text-gray-500">Recruiter Assessment</div>
+            <div className="text-[10px] uppercase tracking-wide font-bold text-gray-500">{stageInfo.shortLabel} Assessment</div>
             <h2 className="text-xl font-bold mt-0.5">{candidateName}</h2>
+            <div className="text-[10px] text-gray-500 mt-0.5">{stageInfo.interviewerLabel}</div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-black text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">×</button>
         </div>

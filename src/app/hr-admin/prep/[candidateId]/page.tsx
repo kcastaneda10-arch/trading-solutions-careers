@@ -142,9 +142,20 @@ export default function InterviewPrepPage() {
           <CWOHandoffSection assessment={assessment} candidateName={c.name} />
         )}
 
-        {/* Quick header stats */}
+        {/* Quick header stats · si hay assessment usa el inglés real, sino el declarado */}
         <section className="grid grid-cols-4 gap-3 text-xs">
-          <Stat label="Inglés decl." value={pf.english_level || "—"} highlight={pf.english_level?.startsWith("C") ? "good" : pf.english_level?.startsWith("B2") ? "ok" : "warn"} />
+          <Stat
+            label={assessment?.english_real ? "Inglés real" : "Inglés decl."}
+            value={assessment?.english_real || pf.english_level || "—"}
+            highlight={
+              assessment?.english_verdict === "pass" ? "good" :
+              assessment?.english_verdict === "gap" ? "ok" :
+              assessment?.english_verdict === "fail" ? "warn" :
+              pf.english_level?.startsWith("C") ? "good" :
+              pf.english_level?.startsWith("B2") ? "good" :
+              pf.english_level?.startsWith("B1") ? "ok" : "warn"
+            }
+          />
           <Stat label="Salario solic." value={pf.salary || "—"} />
           <Stat label="Promedio · GPA" value={pf.gpa || pf.avg || "preg en vivo"} />
           <Stat label="Stage actual" value={c.stage} />
@@ -336,7 +347,7 @@ export default function InterviewPrepPage() {
         {/* Resultados Elevare / AI interview si existen */}
         {data.results && data.results.length > 0 && (
           <section>
-            <SectionTitle>Resultados Elevare / AI Interview</SectionTitle>
+            <SectionTitle>Resultado prueba virtual</SectionTitle>
             <div className="bg-gray-50 border border-gray-300 rounded p-3 text-xs">
               {data.results.map((r: any, i: number) => (
                 <div key={i} className="mb-2">
@@ -412,8 +423,64 @@ function CWOHandoffSection({ assessment, candidateName }: { assessment: any; can
     evidence: assessment.mandate_evidence?.[String(m.num)] || "",
   }));
 
+  // ── Story narrativa auto-generada ──
+  const firstName = (candidateName || "").split(" ")[0];
+  const passCount = Object.values(scores).filter(s => s === "pass").length;
+  const partialCount = Object.values(scores).filter(s => s === "partial").length;
+  const failCount = Object.values(scores).filter(s => s === "fail").length;
+  const passReasonsText = (assessment.pass_reasons || []).slice(0, 3).join(" · ");
+  const failReasonsText = (assessment.fail_reasons || []).slice(0, 2).join(" · ");
+
+  const storyOpener =
+    verdict === "strong_yes"
+      ? `Después de la entrevista con ${firstName}, mi recomendación es avanzar con confianza. Cumplió ${passCount} de los 16 mandatos del CEO con evidencia clara${failCount === 0 ? " y no identifiqué ningún bloqueador estructural" : ""}. La trayectoria que comparte y la forma en que articula sus ejemplos validan el nivel de madurez y autonomía que el rol requiere.`
+      : verdict === "maybe"
+      ? `El perfil de ${firstName} presenta fortalezas relevantes pero también áreas que requieren validación adicional. Cumplió ${passCount} mandatos con claridad y ${partialCount} quedaron parcialmente probados durante mi entrevista. Sugiero que la conversación con CWO se enfoque en confirmar si esos elementos son riesgo real o falta de evidencia recogida.`
+      : `Mi recomendación después de la entrevista es no avanzar con ${firstName}. ${failCount > 0 ? `Identifiqué ${failCount} bloqueadores estructurales que se manifestaron de forma explícita en sus respuestas` : "El perfil no alcanza los mandatos críticos del rol"} y considero que el riesgo de seguir invirtiendo etapas excede el upside potencial. Adjunto el contexto completo por si necesitas referenciarlo.`;
+
+  const storyHighlight = passReasonsText
+    ? `Las fortalezas más relevantes que observé: ${passReasonsText}.`
+    : "";
+
+  const storyConcerns = failReasonsText
+    ? `Las áreas que sí me generan reserva: ${failReasonsText}.`
+    : "";
+
+  const storyClosing = probesForCWO.length > 0
+    ? `Quedan ${probesForCWO.length} mandato${probesForCWO.length !== 1 ? "s" : ""} sin probar a profundidad. Más abajo encontrarás preguntas sugeridas para cada uno; la intención es optimizar tu tiempo en la entrevista enfocándolo en lo que aún requiere validación, sin redundar sobre lo ya cubierto.`
+    : verdict === "strong_yes"
+    ? "Los 16 mandatos quedaron probados o validados durante mi entrevista. Tu conversación puede enfocarse en fit cultural y proyección estratégica con la compañía, sin necesidad de revalidar fundamentos."
+    : "";
+
   return (
     <>
+      {/* Story narrativa · arriba de todo · voz primera persona del recruiter */}
+      <section className="bg-gray-50 border-l-4 border-black p-5 rounded-r-lg">
+        <div className="text-[10px] uppercase tracking-[2.5px] font-bold text-gray-500 mb-2">
+          Resumen ejecutivo · Kelly Castañeda · Talent Acquisition Lead
+        </div>
+        <p className="text-sm text-gray-900 leading-relaxed mb-3">
+          {storyOpener}
+        </p>
+        {storyHighlight && (
+          <p className="text-sm text-gray-800 leading-relaxed mb-3">
+            <strong className="text-emerald-800">{storyHighlight.split(": ")[0]}:</strong>{" "}
+            {storyHighlight.split(": ").slice(1).join(": ")}
+          </p>
+        )}
+        {storyConcerns && (
+          <p className="text-sm text-gray-800 leading-relaxed mb-3">
+            <strong className="text-red-800">{storyConcerns.split(": ")[0]}:</strong>{" "}
+            {storyConcerns.split(": ").slice(1).join(": ")}
+          </p>
+        )}
+        {storyClosing && (
+          <p className="text-sm text-gray-700 italic leading-relaxed">
+            {storyClosing}
+          </p>
+        )}
+      </section>
+
       {/* Verdict box */}
       {vs && (
         <section className={`${vs.bg} border-2 ${vs.border} rounded-lg p-5 text-center`}>
@@ -429,7 +496,7 @@ function CWOHandoffSection({ assessment, candidateName }: { assessment: any; can
         {(assessment.pass_reasons?.length || 0) > 0 && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
             <div className="text-[10px] uppercase tracking-wide font-bold text-emerald-800 mb-2">
-              ✅ Pasa por · highlights del recruiter
+              ✅ Fortalezas observadas
             </div>
             <ul className="text-xs space-y-1.5 list-disc pl-4">
               {assessment.pass_reasons.map((r: string, i: number) => <li key={i}>{r}</li>)}
@@ -439,7 +506,7 @@ function CWOHandoffSection({ assessment, candidateName }: { assessment: any; can
         {(assessment.fail_reasons?.length || 0) > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="text-[10px] uppercase tracking-wide font-bold text-red-800 mb-2">
-              ⚠️ Concerns · que el recruiter detectó
+              ⚠️ Áreas a validar / reservas
             </div>
             <ul className="text-xs space-y-1.5 list-disc pl-4">
               {assessment.fail_reasons.map((r: string, i: number) => <li key={i}>{r}</li>)}
@@ -465,11 +532,10 @@ function CWOHandoffSection({ assessment, candidateName }: { assessment: any; can
       {probesForCWO.length > 0 && (
         <section className="bg-amber-50 border-2 border-amber-300 rounded-lg p-5">
           <div className="text-[11px] uppercase tracking-wide font-bold text-amber-800 mb-2">
-            🎯 Sugerencias para CWO · destrabar dudas
+            Áreas sugeridas para profundizar en CWO
           </div>
           <p className="text-xs text-gray-700 mb-3">
-            Estos {probesForCWO.length} mandatos quedaron en <strong>partial (◐)</strong> o <strong>no probado (?)</strong>.
-            Profundizar en la entrevista CWO para confirmar.
+            Los siguientes {probesForCWO.length} mandatos quedaron <strong>parcialmente validados</strong> o <strong>sin probar</strong> durante la entrevista con recruiter. Recomiendo profundizar en cada uno con las preguntas sugeridas.
           </p>
           <table className="w-full text-xs border-collapse">
             <thead>

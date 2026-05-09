@@ -44,14 +44,21 @@ export async function GET(
       .eq("candidate_id", candidateId)
       .order("created_at", { ascending: false });
 
-    // Eval previa de recruiter (si existe)
-    const { data: assessment } = await supabaseAdmin
+    // Evaluaciones previas (recruiter + cwo + hm) · separadas por stage
+    const { data: assessmentsRaw } = await supabaseAdmin
       .from("ts_recruiter_assessments")
       .select("*")
       .eq("candidate_id", candidateId)
-      .order("interview_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order("interview_date", { ascending: false });
+
+    const assessmentsByStage: Record<string, any> = {};
+    (assessmentsRaw || []).forEach((a: any) => {
+      const s = a.assessment_stage || "recruiter_interview";
+      if (!assessmentsByStage[s]) assessmentsByStage[s] = a; // tomamos la más reciente por stage
+    });
+
+    // Backwards-compat · `assessment` = recruiter por default
+    const assessment = assessmentsByStage["recruiter_interview"] || (assessmentsRaw || [])[0] || null;
 
     // ─── Strengths y red flags computados a partir del prefilter_data ───
     const pf = (cand.prefilter_data as any) || {};
@@ -184,6 +191,8 @@ export async function GET(
       },
       results: results || [],
       previous_assessment: assessment || null,
+      // Nuevo · todas las assessments por stage
+      assessments_by_stage: assessmentsByStage,
       strengths,
       red_flags: redFlags,
       tailored_questions: tailoredQuestions,

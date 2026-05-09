@@ -20,14 +20,40 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const candidateId = url.searchParams.get("candidate_id");
+  // stage opcional · si no viene, devuelve la última de cualquier stage (compat retro).
+  // Si viene, filtra por ese stage (recruiter_interview, cwo_interview, etc).
+  // Si "all", devuelve todas las evaluaciones del candidato.
+  const stage = url.searchParams.get("stage");
+
   if (!candidateId) {
     return NextResponse.json({ error: "Falta candidate_id" }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  // Modo "all" · útil para Compare view y CWO Handoff que necesita todas
+  if (stage === "all") {
+    const { data, error } = await supabaseAdmin
+      .from("ts_recruiter_assessments")
+      .select("*")
+      .eq("candidate_id", candidateId)
+      .order("interview_date", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ assessments: data || [] });
+  }
+
+  let q = supabaseAdmin
     .from("ts_recruiter_assessments")
     .select("*")
-    .eq("candidate_id", candidateId)
+    .eq("candidate_id", candidateId);
+
+  if (stage) {
+    q = q.eq("assessment_stage", stage);
+  } else {
+    // Default backwards-compat: la más reciente de cualquier stage
+    // pero priorizamos recruiter_interview cuando no se especifica
+    q = q.eq("assessment_stage", "recruiter_interview");
+  }
+
+  const { data, error } = await q
     .order("interview_date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -55,6 +81,7 @@ export async function POST(req: NextRequest) {
 
     const payload: Record<string, unknown> = {
       candidate_id: candidateId,
+      assessment_stage: body.assessment_stage || "recruiter_interview",
       interview_date: body.interview_date || new Date().toISOString(),
       interviewer_email: body.interviewer_email || "kcastaneda@tradingsolutions.com",
       duration_minutes: body.duration_minutes || null,

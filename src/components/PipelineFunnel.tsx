@@ -1111,7 +1111,12 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
 
           {/* Recruiter Assessment · 16 mandatos del CEO · visible desde recruiter_interview en adelante */}
           {["recruiter_interview","cwo_interview","touring","terna","oferta","contratado","rechazado"].includes(String(cand.stage || "")) && (
-            <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} />
+            <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} stage="recruiter_interview" />
+          )}
+
+          {/* CWO Assessment · 16 mandatos del CEO desde el lente de la CWO · visible desde cwo_interview en adelante */}
+          {["cwo_interview","touring","terna","oferta","contratado","rechazado"].includes(String(cand.stage || "")) && (
+            <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} stage="cwo_interview" />
           )}
 
           {/* Respuestas del prefiltro */}
@@ -1731,7 +1736,7 @@ function ElevareResultsBlock({
   const hasResult = !!result && (result.match_percentage > 0 || result.recommendation !== "PENDIENTE");
 
   return (
-    <Section title="🧠 Resultados Elevare">
+    <Section title="🧠 Resultado prueba virtual">
       {/* Resumen */}
       {hasResult ? (
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-100 rounded-lg p-3 mb-3">
