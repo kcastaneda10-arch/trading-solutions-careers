@@ -1678,16 +1678,25 @@ function DashboardStoryHeader({ vacancyFilter = 'all' }: { vacancyFilter?: strin
     const url = vacancyFilter && vacancyFilter !== 'all'
       ? `?vacancy_id=${encodeURIComponent(vacancyFilter)}`
       : '';
-    Promise.all([
-      fetch(`/api/dashboard/overview${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
-      fetch(`/api/dashboard/today${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
-    ]).then(([h, t]) => {
-      if (!alive) return;
-      setHero(h);
-      setToday(t);
-      setLoading(false);
-    });
-    return () => { alive = false; };
+    const load = () => {
+      Promise.all([
+        fetch(`/api/dashboard/overview${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+        fetch(`/api/dashboard/today${url}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null),
+      ]).then(([h, t]) => {
+        if (!alive) return;
+        setHero(h);
+        setToday(t);
+        setLoading(false);
+      });
+    };
+    load();
+    // Poll cada 30s · refresca también al volver la pestaña a visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && alive) load();
+    }, 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible' && alive) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { alive = false; clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, [vacancyFilter]);
 
   // Saludo según hora local
@@ -1825,6 +1834,8 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage: 'rechazado', create_rejection_draft: false }),
     });
+    // Refresh inmediato · no esperar al tick de 30s
+    refresh();
   };
 
   const advanceCandidate = async (id: string) => {
@@ -1842,6 +1853,7 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage: nextStage }),
     });
+    refresh();
   };
 
   if (loading) {
