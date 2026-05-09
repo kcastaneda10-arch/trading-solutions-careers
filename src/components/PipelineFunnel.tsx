@@ -8,6 +8,7 @@ import {
   User, Users,
 } from "lucide-react";
 import RejectionModal from "./RejectionModal";
+import RecruiterAssessmentCard from "./RecruiterAssessmentCard";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -1106,6 +1107,11 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
           {(cand.status === "completed" ||
             ["assessment_completado","entrevista_ia","recruiter_interview"].includes(String(cand.stage || ""))) && (
             <AIInterviewBlock candidateId={cand.id} candidateEmail={cand.email} />
+          )}
+
+          {/* Recruiter Assessment · 16 mandatos del CEO · visible desde recruiter_interview en adelante */}
+          {["recruiter_interview","cwo_interview","touring","terna","oferta","contratado","rechazado"].includes(String(cand.stage || "")) && (
+            <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} />
           )}
 
           {/* Respuestas del prefiltro */}
