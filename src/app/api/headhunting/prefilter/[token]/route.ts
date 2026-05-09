@@ -34,6 +34,28 @@ const SALARY_LOWER: Record<string, number> = {
   "8 M+": 8_000_000,
 };
 
+// Inglés mínimo · DEFAULT B2 para cualquier vacante, con overrides por vacante
+// específica (ej: Pricing Senior pide C1). Si el candidato declara un nivel
+// inferior → el prefilter lo marca rechazado con motivo "idioma_insuficiente".
+const DEFAULT_ENGLISH_MIN_RANK = 4; // B2
+
+const ENGLISH_MIN_RANK_OVERRIDES: Record<string, number> = {
+  "368006e7-98da-46a2-b871-6b741290821b": 5, // Pricing Senior · C1
+};
+
+function getEnglishMinRank(vacancyId: string): number {
+  return ENGLISH_MIN_RANK_OVERRIDES[vacancyId] ?? DEFAULT_ENGLISH_MIN_RANK;
+}
+
+const ENGLISH_RANK: Record<string, number> = {
+  "A1 (básico)": 1,
+  "A2 (elemental)": 2,
+  "B1 (intermedio)": 3,
+  "B2 (intermedio alto)": 4,
+  "C1 (avanzado)": 5,
+  "C2 (nativo / fluido)": 6,
+};
+
 type Decision = "pass" | "review" | "reject";
 
 function decideFromSalary(salaryRange: string, vacancyId: string): { decision: Decision; cap: number | null; lowerBound: number | null } {
@@ -46,6 +68,28 @@ function decideFromSalary(salaryRange: string, vacancyId: string): { decision: D
   if (lower <= cap) return { decision: "pass", cap, lowerBound: lower };
   if (lower <= cap + 1_000_000) return { decision: "review", cap, lowerBound: lower };
   return { decision: "reject", cap, lowerBound: lower };
+}
+
+/**
+ * Devuelve el sub-detalle de rechazo según el nivel del candidato vs requerido.
+ * null si el candidato cumple el mínimo.
+ */
+function checkEnglishLevel(englishLevel: string | undefined, vacancyId: string): { fails: boolean; sub_detail: string | null; minRank: number; candidateRank: number } {
+  const minRank = ENGLISH_MIN_RANK[vacancyId] ?? 0;
+  const candidateRank = ENGLISH_RANK[String(englishLevel || "")] ?? 0;
+  if (minRank === 0 || candidateRank === 0) {
+    return { fails: false, sub_detail: null, minRank, candidateRank };
+  }
+  if (candidateRank >= minRank) {
+    return { fails: false, sub_detail: null, minRank, candidateRank };
+  }
+  // Falla · pick sub_detail
+  let sub: string;
+  if (candidateRank <= 2) sub = "ingles_a1_a2";
+  else if (candidateRank === 3) sub = "ingles_b1";
+  else if (candidateRank === 4) sub = "ingles_b2_para_c1";
+  else sub = "ingles_b1";
+  return { fails: true, sub_detail: sub, minRank, candidateRank };
 }
 
 const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
@@ -146,16 +190,55 @@ export async function POST(
   }
 
   // ─── Calcular decisión por salario ─────────────────────────────────
-  const { decision, cap, lowerBound } = decideFromSalary(
+  const salaryResult = decideFromSalary(
     String(body.salary || ""),
     String(candidate.vacancy_id)
   );
 
+  // ─── Check de inglés mínimo por vacante ────────────────────────────
+  const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
+
+  // Decisión final · si el inglés no llega al mínimo → reject (sobrescribe pass)
+  // Si el inglés llega justo al mínimo pero salario está en review → review
+  // Si el inglés es menor → priorizamos rechazo por idioma sobre salario
+  let decision: Decision = salaryResult.decision;
+  let rejectionReason: { category: string; sub_detail: string } | null = null;
+
+  if (englishCheck.fails) {
+    decision = "reject";
+    rejectionReason = {
+      category: "idioma_insuficiente",
+      sub_detail: englishCheck.sub_detail || "ingles_b1",
+    };
+  } else if (decision === "reject") {
+    rejectionReason = {
+      category: "pretension_salarial",
+      sub_detail: "sobre_banda",
+    };
+  }
+
   const updates: Record<string, unknown> = {
-    prefilter_data: { ...body, _meta: { cap_used: cap, salary_lower_bound: lowerBound } },
+    prefilter_data: {
+      ...body,
+      _meta: {
+        cap_used: salaryResult.cap,
+        salary_lower_bound: salaryResult.lowerBound,
+        english_min_required_rank: englishCheck.minRank,
+        english_candidate_rank: englishCheck.candidateRank,
+        english_fails: englishCheck.fails,
+      },
+    },
     prefilter_decision: decision,
     prefilter_completed_at: new Date().toISOString(),
   };
+
+  // Si rechazo · escribir motivo clasificado para que aparezca en el Funnel
+  if (rejectionReason) {
+    updates.rejection_category = rejectionReason.category;
+    updates.rejection_sub_detail = rejectionReason.sub_detail;
+    updates.rejected_by = "prefilter_auto";
+    updates.rejected_at = new Date().toISOString();
+  }
 
   // Si decisión = reject → status='rejected' + crear draft de descarte
   if (decision === "reject") {
