@@ -280,9 +280,22 @@ function AssessmentModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, candidate_id: candidateId }),
       });
-      const j = await r.json();
+      // Si la respuesta no es JSON válido (HTML de timeout, error de Vercel) parseamos el texto
+      const rawText = await r.text();
+      let j: any;
+      try {
+        j = JSON.parse(rawText);
+      } catch {
+        if (r.status === 504 || rawText.includes("timeout") || rawText.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+          setError("⏱️ El transcript es muy largo · timeout en Vercel. Intenta con un transcript más corto o llama de nuevo.");
+        } else {
+          setError(`Error inesperado del servidor (${r.status}) · respuesta no es JSON. Mira la consola del browser.`);
+          console.error("Server returned non-JSON:", rawText.slice(0, 500));
+        }
+        return;
+      }
       if (!r.ok) {
-        setError(j.error || "Error parseando");
+        setError(j.error || `Error ${r.status}`);
         return;
       }
       setDraft({

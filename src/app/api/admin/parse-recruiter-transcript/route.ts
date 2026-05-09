@@ -14,7 +14,7 @@ import { getAnthropic } from "@/lib/anthropic";
 import { CEO_MANDATES } from "@/lib/ceo-mandates";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 min · transcripts largos + claude sonnet pueden tomar 60-90s
 
 const SYSTEM_PROMPT = `Eres un analista experto en talento que evalúa transcripts de entrevistas de recruiter contra los 16 mandatos del CEO de Trading Solutions. Tu trabajo es objetivo, preciso, y SIEMPRE basado en evidencia textual del transcript · NO inventas, NO asumes.
 
