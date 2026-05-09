@@ -250,6 +250,13 @@ export async function GET(req: NextRequest) {
       todaysInterviews = [];
     }
 
+    // Conteo único de candidatos pendientes (deduplicado entre aging y pending_decisions
+    // porque un mismo candidato puede estar en ambos arrays · ej: 22 días en
+    // assessment_completado cuenta como aging Y como decisión pendiente)
+    const uniqueCandidateIds = new Set<string>();
+    aging.forEach((c: any) => uniqueCandidateIds.add(c.candidate_id));
+    pendingDecisions.forEach((c: any) => uniqueCandidateIds.add(c.candidate_id));
+
     return NextResponse.json({
       generated_at: today.toISOString(),
       counts: {
@@ -260,6 +267,8 @@ export async function GET(req: NextRequest) {
         quick_wins: quickWins.length,
         todays_interviews: todaysInterviews.length,
         recent_movements: recentMovements.length,
+        // Conteo único · cuántos candidatos distintos requieren atención (sin doble-conteo)
+        unique_pending_candidates: uniqueCandidateIds.size,
       },
       aging,
       pending_decisions: pendingDecisions,

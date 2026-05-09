@@ -1881,7 +1881,11 @@ function TodayFocus({ vacancyFilter = 'all', onJumpToVacancy, onJumpToFunnel }: 
 
   if (!data) return null;
 
-  const totalAlerts = data.counts.aging + data.counts.pending_decisions + data.counts.urgent_vacancies + data.counts.stale_vacancies;
+  // Usar conteo único deduplicado (un candidato puede estar en aging Y pending_decisions a la vez)
+  // Si el endpoint todavía no devuelve unique_pending_candidates (deploy viejo), fallback a la suma cruda.
+  const uniquePending = (data.counts as any).unique_pending_candidates;
+  const candidatesPending = typeof uniquePending === 'number' ? uniquePending : (data.counts.aging + data.counts.pending_decisions);
+  const totalAlerts = candidatesPending + data.counts.urgent_vacancies + data.counts.stale_vacancies;
   const interviewsCount = data.counts.todays_interviews || 0;
   const noActionNeeded = totalAlerts === 0 && data.counts.quick_wins === 0 && interviewsCount === 0;
 
