@@ -62,6 +62,7 @@ import { factorXTS } from "@/data/assessments";
 import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
 import PipelineFunnel from "@/components/PipelineFunnel";
+import EntrevistasTab from "@/components/EntrevistasTab";
 import RejectionReasonsCard from "@/components/RejectionReasonsCard";
 import ReminderRulesEditor from "@/components/ReminderRulesEditor";
 
@@ -69,6 +70,7 @@ type Tab =
   | "dashboard"
   | "vacantes"
   | "funnel"
+  | "entrevistas"
   | "onboarding"
   | "cvbank"
   | "agentes"
@@ -78,13 +80,14 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
   { id: "funnel", label: "Funnel", icon: Kanban },
+  { id: "entrevistas", label: "Entrevistas", icon: Calendar },
   { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "agentes", label: "Agentes IA", icon: Bot },
   { id: "plantillas", label: "Plantillas", icon: SettingsIcon },
 ];
 
-const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "onboarding", "cvbank", "agentes", "plantillas"];
+const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "entrevistas", "onboarding", "cvbank", "agentes", "plantillas"];
 
 function getInitialTab(): Tab {
   if (typeof window === 'undefined') return 'dashboard';
@@ -328,6 +331,7 @@ export default function HRAdminPage() {
         {tab === "dashboard" && <Dashboard setTab={setTab} />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "funnel" && <PipelineFunnel />}
+        {tab === "entrevistas" && <EntrevistasTab />}
         {tab === "onboarding" && <OnboardingTab />}
         {tab === "cvbank" && <CVBank />}
         {tab === "agentes" && <Agentes />}
