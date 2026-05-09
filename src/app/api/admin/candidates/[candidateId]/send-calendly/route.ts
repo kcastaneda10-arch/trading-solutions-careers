@@ -92,7 +92,7 @@ export async function POST(
           const html = buildEmailHtml(firstName, vacancyTitle, calendlyUrl, customMessage);
           const draftRes = await createDraftViaGmail({
             to: candidate.email as string,
-            subject: `Trading Solutions · Elegí tu horario para la entrevista de ${vacancyTitle}`,
+            subject: `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
             html,
             fromName: "Kelly Castañeda",
             replyTo: "kcastaneda@tradingsolutions.com",
