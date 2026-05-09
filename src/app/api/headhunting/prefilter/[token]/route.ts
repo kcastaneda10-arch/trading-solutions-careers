@@ -75,9 +75,9 @@ function decideFromSalary(salaryRange: string, vacancyId: string): { decision: D
  * null si el candidato cumple el mínimo.
  */
 function checkEnglishLevel(englishLevel: string | undefined, vacancyId: string): { fails: boolean; sub_detail: string | null; minRank: number; candidateRank: number } {
-  const minRank = ENGLISH_MIN_RANK[vacancyId] ?? 0;
+  const minRank = getEnglishMinRank(vacancyId);
   const candidateRank = ENGLISH_RANK[String(englishLevel || "")] ?? 0;
-  if (minRank === 0 || candidateRank === 0) {
+  if (candidateRank === 0) {
     return { fails: false, sub_detail: null, minRank, candidateRank };
   }
   if (candidateRank >= minRank) {
