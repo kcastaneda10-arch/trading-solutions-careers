@@ -16,6 +16,22 @@
 import { useEffect, useState } from "react";
 import { X, AlertTriangle, BookmarkCheck, Mail } from "lucide-react";
 
+// Mensaje genérico · igual para todas las categorías de rechazo.
+// Política Kelly: nunca explicar el detalle al candidato a menos que el candidato
+// llame directamente. El detalle queda en la nota privada / clasificación interna.
+const GENERIC_REJECTION_TEMPLATE = `Hola {firstName},
+
+Gracias por tomarte el tiempo de aplicar a la posición de {vacancy} en Trading Solutions. Después de revisar tu aplicación, hemos decidido avanzar con otros candidatos cuyo perfil se ajusta más a la posición en este momento. Sin embargo, Trading Solutions sigue creciendo y nos encantaría mantenernos en contacto.
+
+Tu información queda en nuestra base de datos para futuras oportunidades. También te invitamos a seguirnos en LinkedIn para enterarte de nuevas vacantes: https://www.linkedin.com/company/trading-sol/
+
+Apreciamos tu interés en Trading Solutions y te deseamos mucho éxito en tus próximos pasos.
+
+Un abrazo,
+Kelly Castañeda
+Talent Acquisition and Development Lead
+Trading Solutions`;
+
 type SubDetail = { key: string; label: string };
 type Category = {
   category_key: string;
@@ -64,8 +80,10 @@ export default function RejectionModal({ candidateId, candidateName, vacancyTitl
   function pickCategory(cat: Category) {
     setSelectedCategory(cat);
     setSelectedSubDetail("");
-    // Pre-rellenar nota pública con el template editable
-    const rendered = (cat.public_message_template || "")
+    // Pre-rellenar nota pública con el mensaje genérico · mismo para todas las
+    // categorías. Kelly nunca explica el motivo al candidato (a menos que él
+    // llame y pida feedback en vivo).
+    const rendered = GENERIC_REJECTION_TEMPLATE
       .replace(/\{firstName\}/g, firstName)
       .replace(/\{vacancy\}/g, vacancyTitle);
     setNotePublic(rendered);
@@ -246,7 +264,8 @@ export default function RejectionModal({ candidateId, candidateName, vacancyTitl
                   className="mt-2 w-full border border-[var(--ts-gray-10)] focus:border-[var(--ts-black)] px-3 py-2 text-[13px] leading-relaxed outline-none"
                 />
                 <p className="text-[10px] text-[var(--ts-gray-60)] mt-1">
-                  El template viene pre-llenado con la regla "menos agresivo, más invitación". Ajustá si querés.
+                  Mensaje genérico estándar · igual para todas las categorías. El detalle del motivo queda interno
+                  (no se le explica al candidato a menos que llame).
                 </p>
               </div>
 
