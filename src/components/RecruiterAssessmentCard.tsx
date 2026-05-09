@@ -87,12 +87,22 @@ export default function RecruiterAssessmentCard({ candidateId, candidateName }: 
           Recruiter Assessment · 16 Mandatos del CEO
         </div>
         {assessment && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="text-[11px] font-semibold text-gray-600 hover:text-black underline"
-          >
-            Editar
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/hr-admin/prep/${candidateId}?mode=cwo`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 underline inline-flex items-center gap-1"
+            >
+              👔 CWO Handoff →
+            </a>
+            <button
+              onClick={() => setShowModal(true)}
+              className="text-[11px] font-semibold text-gray-600 hover:text-black underline"
+            >
+              Editar
+            </button>
+          </div>
         )}
       </div>
 

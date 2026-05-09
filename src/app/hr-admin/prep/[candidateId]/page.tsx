@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * Página de Interview Prep · printable, on-demand, para Kelly antes de cada
- * entrevista con recruiter. Pull de TODA la data del candidato + 16 mandatos +
- * English fluency test scenarios + tailored questions.
+ * Página de Interview Prep · printable, on-demand.
  *
- * URL: /hr-admin/prep/[candidateId]
+ * URLs:
+ *   /hr-admin/prep/[candidateId]              → modo recruiter (Kelly antes de entrevista)
+ *   /hr-admin/prep/[candidateId]?mode=cwo     → modo CWO Handoff (después de recruiter eval)
+ *
  * Imprimir: Cmd+P · estilos optimizados con @media print.
  */
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { CEO_MANDATES } from "@/lib/ceo-mandates";
+import { useParams, useSearchParams } from "next/navigation";
+import { CEO_MANDATES, MANDATE_SCORE_SYMBOLS, MANDATE_SCORE_LABELS, MANDATE_SCORE_COLORS, MandateScore } from "@/lib/ceo-mandates";
 
 const ENGLISH_SCENARIOS = [
   {
@@ -37,7 +38,9 @@ const ENGLISH_SCENARIOS = [
 
 export default function InterviewPrepPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const candidateId = params?.candidateId as string;
+  const mode = searchParams?.get("mode") === "cwo" ? "cwo" : "recruiter";
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,8 @@ export default function InterviewPrepPage() {
   const c = data.candidate;
   const pf = c.prefilter_data || {};
   const firstName = (c.name || "").split(" ")[0];
+  const assessment = data.previous_assessment;
+  const isCWOMode = mode === "cwo" && !!assessment;
 
   return (
     <div className="prep-page bg-white text-gray-900 min-h-screen">
@@ -77,9 +82,25 @@ export default function InterviewPrepPage() {
       {/* Toolbar (no print) */}
       <div className="no-print sticky top-0 z-10 bg-black text-white px-6 py-3 flex items-center justify-between">
         <div className="text-[10px] uppercase tracking-[2.5px] font-bold opacity-80">
-          Interview Prep · {c.name}
+          {isCWOMode ? "CWO Handoff" : "Interview Prep"} · {c.name}
         </div>
         <div className="flex gap-2">
+          {!isCWOMode && assessment && (
+            <a
+              href={`/hr-admin/prep/${candidateId}?mode=cwo`}
+              className="text-xs font-bold px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              👔 Modo CWO Handoff
+            </a>
+          )}
+          {isCWOMode && (
+            <a
+              href={`/hr-admin/prep/${candidateId}`}
+              className="text-xs font-medium px-4 py-1.5 border border-white/40 rounded hover:bg-white/10"
+            >
+              ← Modo Recruiter
+            </a>
+          )}
           <button
             onClick={() => window.print()}
             className="text-xs font-bold px-4 py-1.5 bg-white text-black rounded hover:bg-gray-200"
@@ -99,14 +120,27 @@ export default function InterviewPrepPage() {
         {/* Header */}
         <header className="border-b-2 border-black pb-4">
           <div className="text-[10px] uppercase tracking-[2.5px] font-bold text-gray-500 mb-1">
-            Trading Solutions · Recruiter Interview Prep
+            {isCWOMode
+              ? "Trading Solutions · CWO Handoff · Post Recruiter Interview"
+              : "Trading Solutions · Recruiter Interview Prep"}
           </div>
           <h1 className="text-3xl font-extrabold leading-tight">{c.name}</h1>
           <div className="text-sm text-gray-700 mt-1">
             {c.vacancy_title} · {pf.city || "—"}
             {pf.availability && <> · Disponibilidad: <strong>{pf.availability}</strong></>}
           </div>
+          {isCWOMode && assessment && (
+            <div className="text-[11px] text-gray-600 mt-2 italic">
+              Recruiter eval: {assessment.interviewer_email || "Kelly Castañeda"} ·
+              {assessment.interview_date ? new Date(assessment.interview_date).toLocaleDateString("es-CO") : "—"}
+            </div>
+          )}
         </header>
+
+        {/* CWO Handoff section · solo en modo CWO */}
+        {isCWOMode && assessment && (
+          <CWOHandoffSection assessment={assessment} candidateName={c.name} />
+        )}
 
         {/* Quick header stats */}
         <section className="grid grid-cols-4 gap-3 text-xs">
@@ -189,7 +223,8 @@ export default function InterviewPrepPage() {
           </section>
         )}
 
-        {/* Tailored questions */}
+        {/* Tailored questions · solo modo recruiter */}
+        {!isCWOMode && (
         <section className="page-break">
           <SectionTitle>Preguntas tailored para {firstName}</SectionTitle>
           <p className="text-xs text-gray-600 mb-3 italic">
@@ -214,8 +249,10 @@ export default function InterviewPrepPage() {
             </tbody>
           </table>
         </section>
+        )}
 
-        {/* English Fluency Test */}
+        {/* English Fluency Test · solo modo recruiter */}
+        {!isCWOMode && (
         <section>
           <SectionTitle>English Fluency Test · 3 minutos</SectionTitle>
           <p className="text-xs text-gray-600 mb-2">
@@ -245,41 +282,21 @@ export default function InterviewPrepPage() {
             <strong>Rúbrica express:</strong> ✅ B2+ vocabulario técnico, errores menores · ◐ B1 comunica básico falta técnico · ❌ A2 no sostiene business
           </div>
         </section>
+        )}
 
-        {/* 16 Mandatos */}
+        {/* 16 Mandatos · llenos en modo CWO con datos del assessment, vacíos en modo recruiter */}
         <section className="page-break">
-          <SectionTitle>Rúbrica · 16 Mandatos del CEO</SectionTitle>
+          <SectionTitle>{isCWOMode ? "16 Mandatos · evaluación del recruiter" : "Rúbrica · 16 Mandatos del CEO"}</SectionTitle>
           <p className="text-xs text-gray-600 mb-3 italic">
-            Marca durante o justo después de la entrevista. Si no se probó, marca "?" y agenda follow-up.
+            {isCWOMode
+              ? "Scores y evidencia de la entrevista con recruiter. Los marcados ◐ partial o ? not_probed son los que conviene profundizar."
+              : "Marca durante o justo después de la entrevista. Si no se probó, marca \"?\" y agenda follow-up."}
           </p>
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="bg-black text-white">
-                <th className="border border-gray-300 px-1.5 py-1.5 text-center w-[5%]">#</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-left w-[20%]">Mandato</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-left w-[45%]">Pregunta sugerida</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-center w-[10%]">✅◐❌?</th>
-                <th className="border border-gray-300 px-2 py-1.5 text-left w-[20%]">Evidencia</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CEO_MANDATES.map((m, i) => (
-                <tr key={m.num} className={i % 2 === 0 ? "bg-gray-50" : ""}>
-                  <td className="border border-gray-300 px-1.5 py-1.5 text-center font-bold">{m.num}</td>
-                  <td className="border border-gray-300 px-2 py-1.5 align-top">
-                    <div className="font-bold">{m.label}</div>
-                    <div className="text-[10px] text-gray-600 italic">{m.description}</div>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-1.5 align-top italic text-gray-800">{m.probe}</td>
-                  <td className="border border-gray-300 px-2 py-1.5 text-center"></td>
-                  <td className="border border-gray-300 px-2 py-1.5"></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <MandatesTable assessment={isCWOMode ? assessment : null} />
         </section>
 
-        {/* Decisión final */}
+        {/* Decisión final · solo modo recruiter */}
+        {!isCWOMode && (
         <section>
           <SectionTitle>Decisión final</SectionTitle>
           <div className="grid grid-cols-3 gap-2 text-xs">
@@ -302,9 +319,10 @@ export default function InterviewPrepPage() {
             <div className="border border-gray-300 rounded p-2 min-h-[60px] text-xs"></div>
           </div>
         </section>
+        )}
 
-        {/* Eval previa si existe */}
-        {data.previous_assessment && (
+        {/* Eval previa si existe · solo en modo recruiter (en CWO mode ya está arriba) */}
+        {!isCWOMode && data.previous_assessment && (
           <section className="page-break">
             <SectionTitle>⚠️ Evaluación previa · ya entrevistada antes</SectionTitle>
             <div className="bg-amber-50 border border-amber-300 rounded p-3 text-xs">
@@ -368,5 +386,166 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
       <div className="text-[9px] uppercase font-bold tracking-wider text-gray-600">{label}</div>
       <div className="text-sm font-bold text-gray-900 mt-0.5 truncate">{value}</div>
     </div>
+  );
+}
+
+/* ──────── CWO Handoff · sección con verdict + razones + probes ──────── */
+function CWOHandoffSection({ assessment, candidateName }: { assessment: any; candidateName: string }) {
+  const verdict = assessment.verdict as "strong_yes" | "maybe" | "no" | null;
+  const verdictStyles: Record<string, { bg: string; fg: string; border: string; label: string }> = {
+    strong_yes: { bg: "bg-emerald-50", fg: "text-emerald-800", border: "border-emerald-500", label: "✅ STRONG YES · avanzar a CWO" },
+    maybe: { bg: "bg-amber-50", fg: "text-amber-800", border: "border-amber-500", label: "◐ MAYBE · necesita más data" },
+    no: { bg: "bg-red-50", fg: "text-red-800", border: "border-red-500", label: "❌ NO · descartar" },
+  };
+  const vs = verdict ? verdictStyles[verdict] : null;
+
+  // Generar suggested probes para el CWO basado en partial / not_probed
+  const scores = (assessment.mandate_scores || {}) as Record<string, MandateScore>;
+  const probesForCWO = CEO_MANDATES.filter(m => {
+    const s = scores[String(m.num)] || "not_probed";
+    return s === "partial" || s === "not_probed";
+  }).map(m => ({
+    num: m.num,
+    label: m.label,
+    score: scores[String(m.num)] || "not_probed",
+    probe: m.probe,
+    evidence: assessment.mandate_evidence?.[String(m.num)] || "",
+  }));
+
+  return (
+    <>
+      {/* Verdict box */}
+      {vs && (
+        <section className={`${vs.bg} border-2 ${vs.border} rounded-lg p-5 text-center`}>
+          <div className={`text-2xl font-extrabold ${vs.fg}`}>{vs.label}</div>
+          {assessment.verdict_summary && (
+            <div className={`text-sm mt-2 italic ${vs.fg}`}>{assessment.verdict_summary}</div>
+          )}
+        </section>
+      )}
+
+      {/* Pasa por · bloqueadores · próximas pruebas */}
+      <section className="grid grid-cols-2 gap-4">
+        {(assessment.pass_reasons?.length || 0) > 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <div className="text-[10px] uppercase tracking-wide font-bold text-emerald-800 mb-2">
+              ✅ Pasa por · highlights del recruiter
+            </div>
+            <ul className="text-xs space-y-1.5 list-disc pl-4">
+              {assessment.pass_reasons.map((r: string, i: number) => <li key={i}>{r}</li>)}
+            </ul>
+          </div>
+        )}
+        {(assessment.fail_reasons?.length || 0) > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="text-[10px] uppercase tracking-wide font-bold text-red-800 mb-2">
+              ⚠️ Concerns · que el recruiter detectó
+            </div>
+            <ul className="text-xs space-y-1.5 list-disc pl-4">
+              {assessment.fail_reasons.map((r: string, i: number) => <li key={i}>{r}</li>)}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      {/* Inglés assessment summary */}
+      {assessment.english_real && (
+        <section className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs">
+          <div className="text-[10px] uppercase tracking-wide font-bold text-blue-800 mb-1">English assessment · recruiter</div>
+          <div className="text-gray-800">
+            <strong>Declarado:</strong> {assessment.english_declared || "—"} ·{" "}
+            <strong>Real:</strong> {assessment.english_real} ·{" "}
+            <strong>Verdict:</strong> {assessment.english_verdict || "—"}
+          </div>
+          {assessment.english_evidence && <div className="mt-1 italic text-gray-700">{assessment.english_evidence}</div>}
+        </section>
+      )}
+
+      {/* Suggested probes para CWO */}
+      {probesForCWO.length > 0 && (
+        <section className="bg-amber-50 border-2 border-amber-300 rounded-lg p-5">
+          <div className="text-[11px] uppercase tracking-wide font-bold text-amber-800 mb-2">
+            🎯 Sugerencias para CWO · destrabar dudas
+          </div>
+          <p className="text-xs text-gray-700 mb-3">
+            Estos {probesForCWO.length} mandatos quedaron en <strong>partial (◐)</strong> o <strong>no probado (?)</strong>.
+            Profundizar en la entrevista CWO para confirmar.
+          </p>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-amber-200/50 text-amber-900">
+                <th className="border border-amber-300 px-2 py-1.5 text-center w-[6%]">#</th>
+                <th className="border border-amber-300 px-2 py-1.5 text-left w-[18%]">Mandato</th>
+                <th className="border border-amber-300 px-2 py-1.5 text-center w-[10%]">Score actual</th>
+                <th className="border border-amber-300 px-2 py-1.5 text-left w-[36%]">Pregunta sugerida</th>
+                <th className="border border-amber-300 px-2 py-1.5 text-left w-[30%]">Lo que ya se sabe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {probesForCWO.map((p, i) => (
+                <tr key={p.num} className={i % 2 === 0 ? "bg-white" : "bg-amber-50/50"}>
+                  <td className="border border-amber-200 px-2 py-1.5 text-center font-bold">{p.num}</td>
+                  <td className="border border-amber-200 px-2 py-1.5 align-top font-bold">{p.label}</td>
+                  <td className="border border-amber-200 px-2 py-1.5 text-center">
+                    {MANDATE_SCORE_SYMBOLS[p.score]} {MANDATE_SCORE_LABELS[p.score]}
+                  </td>
+                  <td className="border border-amber-200 px-2 py-1.5 italic text-gray-800">{p.probe}</td>
+                  <td className="border border-amber-200 px-2 py-1.5 text-gray-600 text-[11px]">{p.evidence || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </>
+  );
+}
+
+/* ──────── Tabla 16 mandatos · vacía para recruiter, llena para CWO ──────── */
+function MandatesTable({ assessment }: { assessment: any | null }) {
+  return (
+    <table className="w-full text-xs border-collapse">
+      <thead>
+        <tr className="bg-black text-white">
+          <th className="border border-gray-300 px-1.5 py-1.5 text-center w-[5%]">#</th>
+          <th className="border border-gray-300 px-2 py-1.5 text-left w-[18%]">Mandato</th>
+          <th className="border border-gray-300 px-2 py-1.5 text-left w-[35%]">{assessment ? "Pregunta sugerida" : "Pregunta sugerida"}</th>
+          <th className="border border-gray-300 px-2 py-1.5 text-center w-[10%]">Score</th>
+          <th className="border border-gray-300 px-2 py-1.5 text-left w-[32%]">Evidencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        {CEO_MANDATES.map((m, i) => {
+          const score = (assessment?.mandate_scores?.[String(m.num)] || "not_probed") as MandateScore;
+          const evidence = assessment?.mandate_evidence?.[String(m.num)] || "";
+          const quote = assessment?.mandate_quotes?.[String(m.num)] || "";
+          const colors = MANDATE_SCORE_COLORS[score];
+          return (
+            <tr key={m.num} className={i % 2 === 0 ? "bg-gray-50" : ""}>
+              <td className="border border-gray-300 px-1.5 py-1.5 text-center font-bold">{m.num}</td>
+              <td className="border border-gray-300 px-2 py-1.5 align-top">
+                <div className="font-bold">{m.label}</div>
+                <div className="text-[10px] text-gray-600 italic">{m.description}</div>
+              </td>
+              <td className="border border-gray-300 px-2 py-1.5 align-top italic text-gray-800">{m.probe}</td>
+              <td
+                className="border border-gray-300 px-2 py-1.5 text-center font-bold"
+                style={assessment ? { backgroundColor: colors.bg, color: colors.fg } : {}}
+              >
+                {assessment ? `${MANDATE_SCORE_SYMBOLS[score]} ${MANDATE_SCORE_LABELS[score]}` : ""}
+              </td>
+              <td className="border border-gray-300 px-2 py-1.5 align-top">
+                {assessment ? (
+                  <>
+                    <div className="text-[11px]">{evidence || "—"}</div>
+                    {quote && <div className="text-[10px] italic text-gray-500 mt-1">"{quote}"</div>}
+                  </>
+                ) : null}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
