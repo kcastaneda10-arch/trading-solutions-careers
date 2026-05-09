@@ -31,7 +31,7 @@ function buildPrefillUrl(name: string, email: string, vacancyTitle: string): str
 }
 
 function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: string, customMessage?: string): string {
-  const messageBody = customMessage || `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong> · me encantaría conocerte en una conversación de ~45 minutos por video.`;
+  const messageBody = customMessage || `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong> y me encantaría conocerte en una conversación de ~45 minutos por video.`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
@@ -43,9 +43,9 @@ function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: st
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
     <p>${messageBody}</p>
-    <p>Elegí el horario que mejor te calce desde acá · vas a ver mi disponibilidad y podés reservar el slot que prefieras:</p>
+    <p>Elige el mejor horario de acuerdo a tu disponibilidad · vas a ver mi calendario y puedes reservar el espacio que prefieras:</p>
     <p style="text-align:center"><a href="${calendlyUrl}" class="cta">Elegir horario</a></p>
-    <p>Si ninguno de los horarios disponibles te funciona, contestame este correo y buscamos juntos.</p>
+    <p>Si ninguno de los horarios disponibles te funciona, regálame una respuesta a este correo y buscamos juntos.</p>
     <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
     <div class="footer">El enlace genera la videollamada de Google Meet automáticamente al confirmar.</div>
   </div>
@@ -118,7 +118,7 @@ export async function POST(
     }
 
     // WhatsApp link · pre-llenado para click-to-send
-    const waMessage = `Hola ${firstName}, soy Kelly Castañeda de Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle} · me encantaría conocerte en una conversación de ~45 minutos por video.\n\nElegí el horario que mejor te calce desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, contestame y buscamos juntos.\n\nUn abrazo,\nKelly`;
+    const waMessage = `Hola ${firstName}, soy Kelly Castañeda de Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle} y me encantaría conocerte en una conversación de ~45 minutos por video.\n\nElige el mejor horario de acuerdo a tu disponibilidad desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\nKelly`;
     const cleanPhone = (candidate.phone || "").replace(/[^0-9]/g, "");
     const finalPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
     const waLink = finalPhone
