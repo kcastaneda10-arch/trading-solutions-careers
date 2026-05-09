@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     const anthropic = getAnthropic();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-5",
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       candidate_id: candidate_id || null,
-      ai_model_version: "claude-sonnet-4-5-20250929",
+      ai_model_version: "claude-sonnet-4-5",
       ...parsed,
     });
   } catch (err: any) {
