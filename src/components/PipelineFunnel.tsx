@@ -1011,6 +1011,42 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
 
           {!isTerminal && (
             <button
+              onClick={async () => {
+                if (busy) return;
+                setBusy(true);
+                setFeedback("Generando Calendly…");
+                try {
+                  const r = await fetch(`/api/admin/candidates/${cand.id}/send-calendly`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  });
+                  const j = await r.json();
+                  if (j.success) {
+                    setFeedback("✅ Draft Gmail listo · WhatsApp link copiado");
+                    if (j.wa_link) {
+                      try { await navigator.clipboard.writeText(j.wa_link); } catch {}
+                    }
+                    setTimeout(() => setFeedback(""), 4000);
+                  } else {
+                    setFeedback(`❌ ${j.error || "Error"}`);
+                  }
+                } catch (e) {
+                  setFeedback(`❌ ${(e as Error).message}`);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full border-2 border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              title="Genera draft Gmail con link Calendly + copia link WhatsApp al portapapeles"
+            >
+              📅 Enviar Calendly
+            </button>
+          )}
+
+          {!isTerminal && (
+            <button
               onClick={reject}
               disabled={busy}
               className="text-xs font-bold px-4 py-2 rounded-full border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
