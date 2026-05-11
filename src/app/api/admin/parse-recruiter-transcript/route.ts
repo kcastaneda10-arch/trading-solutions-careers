@@ -37,15 +37,52 @@ Para cada uno de los 16, asigna un score:
 2. Para cada mandato (excepto not_probed), incluye:
    - **evidence**: 1-2 frases con qué dijo o demostró el candidato (en tus palabras).
    - **quote**: cita literal del transcript que respalda la evaluación, máximo 200 caracteres.
-3. Para el mandato 3 (English), DEBES analizar específicamente la sección donde el recruiter pidió respuestas en inglés. Si las respuestas en inglés son agramaticales o muy cortas, es "fail" aunque el candidato declarara B1+.
+
+3. **REGLAS ESPECIALES MANDATO 3 (English)** · sé CONSERVADOR · el recruiter ESCUCHÓ al candidato en vivo, tú solo lees texto.
+
+   **NO penalizar:**
+   - Tag questions ("right?", "you know", "well") · son nativo/conversacional, NO errores
+   - Brevedad cuando es apropiada para la pregunta
+   - Casual speech y contracciones ("gonna", "wanna", "kinda") · son nativo
+   - Errores menores de preposición (in/on/at) si el significado es claro
+   - Acentos regionales · NO puedes inferir acento desde texto
+
+   **NUNCA INVENTES:**
+   - Pausas largas, hesitaciones, "buscando palabras" · NO puedes medir esto desde solo texto sin timestamps
+   - Pronunciación · no la escuchas
+   - Confianza/nervios · solo se ven en lo no-verbal
+
+   **Default a "pass" si:**
+   - Sostuvo conversación en inglés sin pedir constantemente cambio a español
+   - Las frases son comprensibles (aunque sean cortas o casuales)
+   - Respondió a varias preguntas en inglés con sentido coherente
+
+   **Marca "partial" SOLO si:**
+   - Tuvo que volver a español varias veces porque no entendió
+   - Frases fragmentarias que NO transmiten significado completo
+   - Vocabulario técnico ausente cuando la pregunta era explícitamente técnica
+
+   **Marca "fail" SOLO si:**
+   - No pudo sostener ni 2-3 frases coherentes en inglés
+   - Respondió en español a preguntas hechas en inglés (sin intentar EN)
+   - Frases incomprensibles tipo "I'm responsibility, I'm strong, I'm easy communication" (palabras sueltas sin gramática)
+
+   **Si el verdict es ambiguo · siempre defer a "pass" o "partial" antes que "fail"** · porque el recruiter es quien tiene el ground truth oral.
+
 4. Para el mandato 12 (Religiosa) · si surge orgánico, score = "data"; si no, "not_probed". NUNCA es pass/partial/fail.
+
 5. **Verdict global** debe ser uno de:
    - "strong_yes" · 9+ pass, 0-1 fail crítico, mandatos clave (English, No víctima, Comunicador, Agency) en pass
    - "maybe" · mezcla de pass/partial, 1-2 fails NO bloqueadores, requiere validación adicional
    - "no" · 3+ fails o un fail bloqueador (ej: English fail para rol con clientes internacionales, victimismo, comunicación deficiente)
+
 6. **pass_reasons** y **fail_reasons** deben ser frases concretas con nombre de mandato y evidencia, no genéricas.
+
 7. **next_filter_probes** · qué validar en la siguiente etapa (CWO interview), 2-4 puntos accionables.
-8. Tu output debe ser SOLO un JSON válido, sin markdown, sin explicación adicional.
+
+8. **Recordá que el recruiter es la fuente de verdad** · tu output es un primer draft que el recruiter va a revisar y ajustar. Si tienes duda entre dos scores adyacentes, elige el más generoso · es mejor que el recruiter baje un score a que lo suba (porque si lo bajas mal, queda sesgo guardado).
+
+9. Tu output debe ser SOLO un JSON válido, sin markdown, sin explicación adicional.
 
 # Formato de output (JSON estricto)
 
