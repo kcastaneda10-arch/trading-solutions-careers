@@ -27,9 +27,20 @@ ${CEO_MANDATES.map(m => `${m.num}. **${m.label}** · ${m.description}${m.dataOnl
 Para cada uno de los 16, asigna un score:
 - **"pass"** · evidencia clara y reciente del transcript de que cumple.
 - **"partial"** · señal pero falta profundidad o consistencia. Respuesta de manual sin ejemplo concreto cuenta como parcial.
-- **"fail"** · evidencia explícita de que NO cumple, o respuesta que contradice el mandato.
+- **"fail"** · evidencia explícita de que NO cumple, o respuesta que CONTRADICE el mandato (ej: "siempre pido permiso" cuando se pregunta por Agency).
 - **"data"** · solo aplica al mandato 12 (Religiosa) si surge orgánico · es solo data, no criterio.
 - **"not_probed"** · el tema no se tocó en el transcript · no se puede evaluar.
+
+**REGLA CRÍTICA · diferencia entre "fail" y "not_probed":**
+- "fail" = el candidato DIJO algo que contradice el mandato O respondió a la pregunta sin alcanzar el estándar.
+- "not_probed" = el recruiter NO preguntó por este mandato O el candidato no tuvo oportunidad de responder.
+
+**Si tu evidencia es "no hay evidencia de X" o "no se exploró Y" o no podés citar nada literal del transcript · es "not_probed", NUNCA "fail".** Ausencia de evidencia NO es contra-evidencia.
+
+Ejemplos:
+- Si el recruiter NO preguntó si vendió cosas de joven → "not_probed", NO "fail"
+- Si el candidato dijo "no me gustan las ventas, nunca vendí nada" → "fail" (contradice explícitamente)
+- Si el candidato pivoteó la respuesta sin contestar → "partial" (intentó pero superficial)
 
 # Reglas críticas
 
