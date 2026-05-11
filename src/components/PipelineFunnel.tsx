@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import RejectionModal from "./RejectionModal";
 import RecruiterAssessmentCard from "./RecruiterAssessmentCard";
+import JointSchedulingModal from "./JointSchedulingModal";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -937,6 +938,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string>("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showJointScheduling, setShowJointScheduling] = useState(false);
   const currentStage = cand.stage || "aplico";
   const nextStage = NEXT_STAGE[currentStage];
   const isTerminal = currentStage === "rechazado" || currentStage === "contratado";
@@ -1057,6 +1059,17 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
               title="Genera draft Gmail con link Calendly + copia link WhatsApp al portapapeles"
             >
               📅 Enviar Calendly
+            </button>
+          )}
+
+          {!isTerminal && (
+            <button
+              onClick={() => setShowJointScheduling(true)}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full border-2 border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+              title="Agendar entrevista conjunta con varios entrevistadores (CWO + Hiring Manager) · sin Calendly"
+            >
+              📅 Agendar conjunta
             </button>
           )}
 
@@ -1222,6 +1235,17 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             onClose();
           }, 1200);
         }}
+      />
+    )}
+
+    {showJointScheduling && (
+      <JointSchedulingModal
+        candidateId={cand.id}
+        candidateName={cand.name || ""}
+        candidateEmail={cand.email || ""}
+        vacancyTitle={cand.ht_vacancies?.title || "la posición"}
+        onClose={() => setShowJointScheduling(false)}
+        onCreated={() => setFeedback("✅ Sesión de agendamiento conjunto creada · revisa el link en el modal")}
       />
     )}
     </>

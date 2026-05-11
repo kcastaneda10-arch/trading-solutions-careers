@@ -19,6 +19,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",  // crear drafts + send
   "https://www.googleapis.com/auth/gmail.readonly",  // leer inbox para audit (Round 3 #3)
   "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/calendar",       // leer/crear eventos · Joint Scheduling
 ];
 
 export async function GET() {
