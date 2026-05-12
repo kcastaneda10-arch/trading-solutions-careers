@@ -39,14 +39,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Seed data vacío" }, { status: 500 });
     }
 
-    // 1. Get existing emails para dedup
-    const emails = cands.map(c => c.email.toLowerCase());
-    const { data: existing } = await supabaseAdmin
-      .from("ht_candidates")
-      .select("email")
-      .in("email", emails);
+    // 1. Get existing emails para dedup · case-insensitive
+    // Antes usaba .in() exact-match · si email guardado tenía mayúsculas
+    // mezcladas, no detectaba dupe y creaba registro nuevo (caso Carlos).
+    const emails = cands.map(c => c.email.toLowerCase().trim()).filter(Boolean);
+    let existing: any[] = [];
+    if (emails.length > 0) {
+      const orFilter = emails.map(e => `email.ilike.${e}`).join(',');
+      const { data } = await supabaseAdmin
+        .from("ht_candidates")
+        .select("email")
+        .or(orFilter);
+      existing = data || [];
+    }
 
-    const existingSet = new Set((existing || []).map((c: any) => (c.email || '').toLowerCase()));
+    const existingSet = new Set(existing.map((c: any) => (c.email || '').toLowerCase().trim()));
 
     // 2. Probe schema: chequear qué columnas opcionales existen
     // Nota: current_role es palabra reservada en Postgres, usamos current_job_role

@@ -148,7 +148,7 @@ export async function GET(
 ) {
   const { data: candidate, error } = await supabaseAdmin
     .from("ht_candidates")
-    .select("id, name, email, prefilter_token_expires_at, prefilter_completed_at, ht_vacancies(title), ht_clients(name)")
+    .select("id, name, email, prefilter_token_expires_at, prefilter_completed_at, ht_vacancies(title, form_template_key), ht_clients(name)")
     .eq("prefilter_token", params.token)
     .single();
 
@@ -176,8 +176,12 @@ export async function GET(
 
   return NextResponse.json({
     candidate: { id: candidate.id, name: candidate.name, email: candidate.email },
-    // @ts-expect-error supabase relation
-    vacancy: { title: candidate.ht_vacancies?.title || "la vacante" },
+    vacancy: {
+      // @ts-expect-error supabase relation
+      title: candidate.ht_vacancies?.title || "la vacante",
+      // @ts-expect-error supabase relation
+      form_template_key: candidate.ht_vacancies?.form_template_key || "comex",
+    },
     // @ts-expect-error supabase relation
     client: { name: candidate.ht_clients?.name || "Trading Solutions" },
   });

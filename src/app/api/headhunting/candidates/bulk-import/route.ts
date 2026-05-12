@@ -91,18 +91,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Máximo 500 candidatos por batch" }, { status: 400 });
     }
 
-    // Get all existing emails (filter out internos)
+    // Get all existing emails · case-insensitive · usa OR ilike por chunks
+    // para evitar el problema de mixed-case en storage que causó duplicados.
     const emails = cands.map(c => (c.email || '').toLowerCase().trim()).filter(Boolean);
-    const { data: existing } = emails.length > 0
-      ? await supabaseAdmin
-          .from("ht_candidates")
-          .select("id, email, name, vacancy_id, stage, status")
-          .in("email", emails)
-      : { data: [] };
+    let existing: any[] = [];
+    if (emails.length > 0) {
+      // PostgREST acepta `email.ilike.X,email.ilike.Y` con .or()
+      // Pero con 100s de emails sería frágil · mejor traer todos y filtrar en JS
+      // por (a) email exact match lowercase O (b) email ilike de uno por uno.
+      const orFilter = emails.map(e => `email.ilike.${e}`).join(',');
+      const { data } = await supabaseAdmin
+        .from("ht_candidates")
+        .select("id, email, name, vacancy_id, stage, status")
+        .or(orFilter);
+      existing = data || [];
+    }
 
     const existingByEmail: Record<string, any> = {};
-    (existing || []).forEach((c: any) => {
-      existingByEmail[(c.email || '').toLowerCase()] = c;
+    existing.forEach((c: any) => {
+      existingByEmail[(c.email || '').toLowerCase().trim()] = c;
     });
 
     // Get vacancy info for richer reporting

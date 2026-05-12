@@ -67,16 +67,24 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const { data: cand } = await supabaseAdmin
+      // Buscar todos los registros con ese email · si hay dupes (caso Carlos)
+      // priorizar el más reciente con stage prefiltro o assessment activo.
+      const { data: matches } = await supabaseAdmin
         .from("ht_candidates")
-        .select("id, name, email, stage, vacancy_id, prefilter_token, assessment_token, ht_vacancies(title)")
+        .select("id, name, email, stage, vacancy_id, prefilter_token, assessment_token, created_at, ht_vacancies(title)")
         .ilike("email", email)
-        .maybeSingle();
+        .order("created_at", { ascending: false });
 
-      if (!cand) {
+      if (!matches || matches.length === 0) {
         results.push({ email, status: "not_found" });
         continue;
       }
+
+      // Preferir el más reciente que esté en prefiltro_* o assessment_*
+      const cand = matches.find(m => {
+        const s = (m.stage || "") as string;
+        return s.startsWith("prefiltro_") || s.startsWith("assessment_");
+      }) || matches[0];
 
       const stage = (cand.stage || "") as string;
       const isPrefilterStage = stage.startsWith("prefiltro_");

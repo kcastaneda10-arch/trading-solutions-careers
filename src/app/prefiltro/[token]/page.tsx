@@ -12,7 +12,7 @@ type Phase = "loading" | "habeas" | "form" | "submitting" | "done" | "error";
 
 type CandidateData = {
   candidate: { id: string; name: string; email: string };
-  vacancy: { title: string };
+  vacancy: { title: string; form_template_key?: string };
   client: { name: string };
 };
 
@@ -20,8 +20,13 @@ const SALARY_RANGES = ["< 3 M", "3 – 4 M", "4 – 5 M", "5 – 6 M", "6 – 7 
 const AVAILABILITY = ["Inmediato", "15 días", "30 días", "60+ días"];
 const RELOCATE = ["Ya vivo en Barranquilla", "Sí, dispuesto a mudarme", "No me puedo mudar"];
 const ENGLISH = ["A1 (básico)", "A2 (elemental)", "B1 (intermedio)", "B2 (intermedio alto)", "C1 (avanzado)", "C2 (nativo / fluido)"];
-const ENG_TYPE = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
+// Education options · varían según template
+const EDU_COMEX = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
+const EDU_HR = ["Psicología", "Administración / Negocios", "Recursos Humanos", "Comunicación / Mercadeo", "Otra carrera", "Estudiante últimos semestres"];
+const EDU_FINANCE = ["Contaduría Pública", "Administración Financiera", "Economía", "Ingeniería Industrial", "Otra carrera", "Estudiante últimos semestres"];
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
+const ATS_TOOLS = ["LinkedIn Recruiter", "Greenhouse", "Lever", "Workday", "BambooHR", "HiBob", "Otro ATS", "Ninguno"];
+const ACCOUNTING_SYSTEMS = ["SAP", "Oracle NetSuite", "QuickBooks", "Microsoft Dynamics", "Siigo", "World Office", "Otro", "Ninguno"];
 const DOC_TYPES = [
   { label: "Cédula de Ciudadanía", value: "CC" },
   { label: "Cédula de Extranjería", value: "CE" },
@@ -45,13 +50,14 @@ export default function PrefiltroForm() {
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
 
-  // Form state (existing)
+  // Form state · comunes
   const [salary, setSalary] = useState("");
   const [availability, setAvailability] = useState("");
   const [relocate, setRelocate] = useState("");
   const [englishLevel, setEnglishLevel] = useState("");
   const [englishCert, setEnglishCert] = useState("");
   const [eduType, setEduType] = useState("");
+  // Comex
   const [yearsLogistics, setYearsLogistics] = useState("");
   const [intlClients, setIntlClients] = useState<string>("");
   const [excelLevel, setExcelLevel] = useState("");
@@ -60,9 +66,27 @@ export default function PrefiltroForm() {
   const [pricingExp, setPricingExp] = useState("");
   const [leadership, setLeadership] = useState("");
   const [teamSize, setTeamSize] = useState("");
+  // HR Lead
+  const [yearsHR, setYearsHR] = useState("");
+  const [atsTools, setAtsTools] = useState<string[]>([]);
+  const [pipelineFromScratch, setPipelineFromScratch] = useState("");
+  const [teamSizeLed, setTeamSizeLed] = useState("");
+  const [hrFocus, setHrFocus] = useState("");
+  // Finance
+  const [yearsFinance, setYearsFinance] = useState("");
+  const [accountingSystems, setAccountingSystems] = useState<string[]>([]);
+  const [ifrsFamiliar, setIfrsFamiliar] = useState("");
+  const [auditExp, setAuditExp] = useState("");
+  // Comunes
   const [whyTs, setWhyTs] = useState("");
   const [nextRole, setNextRole] = useState("");
   const [extra, setExtra] = useState("");
+
+  // Template seleccionado (default comex si no hay info)
+  const templateKey = data?.vacancy?.form_template_key || "comex";
+  const isComex = templateKey === "comex";
+  const isHR = templateKey === "hr_lead";
+  const isFinance = templateKey === "finance";
 
   useEffect(() => {
     fetch(`/api/headhunting/prefilter/${token}`)
@@ -92,13 +116,30 @@ export default function PrefiltroForm() {
   function toggleCrm(c: string) {
     setCrms((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   }
+  function toggleAts(t: string) {
+    setAtsTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
+  function toggleAcct(s: string) {
+    setAccountingSystems((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  }
 
   function isFormValid() {
-    return (
+    // Comunes a todos los templates
+    const commonOk = !!(
       docType && docNumber.trim().length >= 6 && phone.trim().length >= 7 && city.trim().length >= 3 &&
-      salary && availability && relocate && englishLevel && eduType &&
-      yearsLogistics !== "" && intlClients && excelLevel && yearsSales !== "" &&
-      pricingExp && leadership && whyTs.trim().length >= 20
+      salary && availability && relocate && englishLevel && eduType && whyTs.trim().length >= 20
+    );
+    if (!commonOk) return false;
+    if (isHR) {
+      return !!(yearsHR !== "" && atsTools.length > 0 && pipelineFromScratch);
+    }
+    if (isFinance) {
+      return !!(yearsFinance !== "" && accountingSystems.length > 0 && ifrsFamiliar);
+    }
+    // Comex (default)
+    return !!(
+      yearsLogistics !== "" && intlClients && excelLevel &&
+      yearsSales !== "" && pricingExp && leadership
     );
   }
 
@@ -108,7 +149,7 @@ export default function PrefiltroForm() {
       return;
     }
     setPhase("submitting");
-    const payload = {
+    const basePayload = {
       // Personal
       doc_type: docType,
       doc_number: docNumber.trim(),
@@ -116,23 +157,48 @@ export default function PrefiltroForm() {
       city: city.trim(),
       habeas_accepted: true,
       habeas_accepted_at: new Date().toISOString(),
-      // Form
+      // Comunes
       salary, availability, relocate,
       english_level: englishLevel, english_cert: englishCert,
       edu_type: eduType,
-      years_logistics: parseInt(yearsLogistics) || 0,
-      intl_clients: intlClients === "si",
-      excel_level: parseInt(excelLevel) || 0,
-      crms,
-      years_sales: parseInt(yearsSales) || 0,
-      pricing_exp: pricingExp === "si",
-      leadership: leadership === "si",
-      team_size: leadership === "si" ? (parseInt(teamSize) || 0) : 0,
       why_ts: whyTs.trim(),
       next_role: nextRole.trim(),
       extra: extra.trim(),
+      template_key: templateKey,
       submitted_at: new Date().toISOString(),
     };
+    let payload: Record<string, unknown> = { ...basePayload };
+    if (isHR) {
+      payload = {
+        ...payload,
+        years_hr: parseInt(yearsHR) || 0,
+        ats_tools_used: atsTools,
+        pipeline_from_scratch: pipelineFromScratch === "si",
+        team_size_led: parseInt(teamSizeLed) || 0,
+        hr_focus: hrFocus.trim(),
+      };
+    } else if (isFinance) {
+      payload = {
+        ...payload,
+        years_finance: parseInt(yearsFinance) || 0,
+        accounting_systems: accountingSystems,
+        ifrs_familiar: ifrsFamiliar === "si",
+        audit_exp: auditExp.trim(),
+      };
+    } else {
+      // Comex default
+      payload = {
+        ...payload,
+        years_logistics: parseInt(yearsLogistics) || 0,
+        intl_clients: intlClients === "si",
+        excel_level: parseInt(excelLevel) || 0,
+        crms,
+        years_sales: parseInt(yearsSales) || 0,
+        pricing_exp: pricingExp === "si",
+        leadership: leadership === "si",
+        team_size: leadership === "si" ? (parseInt(teamSize) || 0) : 0,
+      };
+    }
     try {
       const res = await fetch(`/api/headhunting/prefilter/${token}`, {
         method: "POST",
@@ -309,46 +375,100 @@ export default function PrefiltroForm() {
           </Q>
         </Section>
 
-        <Section title="4 · Formación y experiencia">
+        {/* Sección 4 · Formación · varía según template */}
+        <Section title="4 · Formación">
           <Q label="Tu formación principal">
-            <SelectChips value={eduType} onChange={setEduType} options={ENG_TYPE} />
-          </Q>
-          <Q label="Años de experiencia en logística o comercio exterior">
-            <input type="number" min={0} max={50} value={yearsLogistics} onChange={(e) => setYearsLogistics(e.target.value)} style={inputStyle} placeholder="0" />
-          </Q>
-          <Q label="¿Has manejado clientes internacionales (USA, Europa, Asia)?">
-            <SelectChips value={intlClients} onChange={setIntlClients} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
-          </Q>
-          <Q label="Tu nivel de Excel (1 = básico, 5 = experto con macros/PowerQuery)">
-            <SelectChips value={excelLevel} onChange={setExcelLevel} options={["1","2","3","4","5"]} />
-          </Q>
-          <Q label="¿Cuáles CRMs / plataformas has usado? (selecciona todos los que apliquen)">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {CRMS.map((c) => (
-                <button key={c} type="button" onClick={() => toggleCrm(c)} style={chipStyle(crms.includes(c))}>{c}</button>
-              ))}
-            </div>
+            <SelectChips
+              value={eduType}
+              onChange={setEduType}
+              options={isHR ? EDU_HR : isFinance ? EDU_FINANCE : EDU_COMEX}
+            />
           </Q>
         </Section>
 
-        <Section title="5 · Ventas, pricing, liderazgo">
-          <Q label="Años de experiencia en ventas / B2B / atención comercial">
-            <input type="number" min={0} max={50} value={yearsSales} onChange={(e) => setYearsSales(e.target.value)} style={inputStyle} placeholder="0" />
-          </Q>
-          <Q label="¿Has trabajado en pricing, cotización, análisis tarifario o procurement?">
-            <SelectChips value={pricingExp} onChange={setPricingExp} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
-          </Q>
-          <Q label="¿Has liderado equipos directamente?">
-            <SelectChips value={leadership} onChange={setLeadership} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
-          </Q>
-          {leadership === "si" && (
-            <Q label="¿Cuántas personas tenías a cargo?">
-              <input type="number" min={1} max={500} value={teamSize} onChange={(e) => setTeamSize(e.target.value)} style={inputStyle} placeholder="0" />
+        {/* Sección 5 · Experiencia específica por template */}
+        {isHR ? (
+          <Section title="5 · Experiencia en HR · Talent Acquisition">
+            <Q label="Años de experiencia en HR / Talent Acquisition / Learning & Development">
+              <input type="number" min={0} max={50} value={yearsHR} onChange={(e) => setYearsHR(e.target.value)} style={inputStyle} placeholder="0" />
             </Q>
-          )}
-        </Section>
+            <Q label="¿Qué herramientas de ATS / sourcing has usado? (selecciona todas las que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {ATS_TOOLS.map((t) => (
+                  <button key={t} type="button" onClick={() => toggleAts(t)} style={chipStyle(atsTools.includes(t))}>{t}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="¿Has construido pipelines de reclutamiento desde cero o liderado búsquedas estratégicas?">
+              <SelectChips value={pipelineFromScratch} onChange={setPipelineFromScratch} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+            </Q>
+            <Q label="¿Cuántas personas has liderado directamente? (escribe 0 si nunca)">
+              <input type="number" min={0} max={500} value={teamSizeLed} onChange={(e) => setTeamSizeLed(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="¿Cuál es tu foco preferido: atracción · desarrollo · cultura · todos? (opcional)">
+              <input value={hrFocus} onChange={(e) => setHrFocus(e.target.value)} style={inputStyle} placeholder="Ej. atracción senior + desarrollo de líderes" />
+            </Q>
+          </Section>
+        ) : isFinance ? (
+          <Section title="5 · Experiencia en finanzas · contabilidad">
+            <Q label="Años de experiencia en finanzas / contabilidad / FP&A">
+              <input type="number" min={0} max={50} value={yearsFinance} onChange={(e) => setYearsFinance(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="¿Qué sistemas contables has usado? (selecciona todos los que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {ACCOUNTING_SYSTEMS.map((s) => (
+                  <button key={s} type="button" onClick={() => toggleAcct(s)} style={chipStyle(accountingSystems.includes(s))}>{s}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="¿Tienes familiaridad con NIIF / IFRS y cierres mensuales?">
+              <SelectChips value={ifrsFamiliar} onChange={setIfrsFamiliar} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+            </Q>
+            <Q label="¿Has manejado auditorías externas? (opcional, breve)">
+              <textarea value={auditExp} onChange={(e) => setAuditExp(e.target.value.slice(0, 300))} rows={2} style={inputStyle} placeholder="Ej. 3 ciclos con KPMG en cliente multinacional" />
+            </Q>
+          </Section>
+        ) : (
+          <>
+            <Section title="5 · Experiencia en comex · operaciones">
+              <Q label="Años de experiencia en logística o comercio exterior">
+                <input type="number" min={0} max={50} value={yearsLogistics} onChange={(e) => setYearsLogistics(e.target.value)} style={inputStyle} placeholder="0" />
+              </Q>
+              <Q label="¿Has manejado clientes internacionales (USA, Europa, Asia)?">
+                <SelectChips value={intlClients} onChange={setIntlClients} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+              </Q>
+              <Q label="Tu nivel de Excel (1 = básico, 5 = experto con macros/PowerQuery)">
+                <SelectChips value={excelLevel} onChange={setExcelLevel} options={["1","2","3","4","5"]} />
+              </Q>
+              <Q label="¿Cuáles CRMs / plataformas has usado? (selecciona todos los que apliquen)">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {CRMS.map((c) => (
+                    <button key={c} type="button" onClick={() => toggleCrm(c)} style={chipStyle(crms.includes(c))}>{c}</button>
+                  ))}
+                </div>
+              </Q>
+            </Section>
 
-        <Section title="6 · Sobre ti">
+            <Section title="6 · Ventas, pricing, liderazgo">
+              <Q label="Años de experiencia en ventas / B2B / atención comercial">
+                <input type="number" min={0} max={50} value={yearsSales} onChange={(e) => setYearsSales(e.target.value)} style={inputStyle} placeholder="0" />
+              </Q>
+              <Q label="¿Has trabajado en pricing, cotización, análisis tarifario o procurement?">
+                <SelectChips value={pricingExp} onChange={setPricingExp} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+              </Q>
+              <Q label="¿Has liderado equipos directamente?">
+                <SelectChips value={leadership} onChange={setLeadership} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+              </Q>
+              {leadership === "si" && (
+                <Q label="¿Cuántas personas tenías a cargo?">
+                  <input type="number" min={1} max={500} value={teamSize} onChange={(e) => setTeamSize(e.target.value)} style={inputStyle} placeholder="0" />
+                </Q>
+              )}
+            </Section>
+          </>
+        )}
+
+        <Section title={`${isComex ? "7" : "6"} · Sobre ti`}>
           <Q label={`¿Por qué Trading Solutions específicamente? (mín. 20 caracteres) — ${whyTs.length}/500`}>
             <textarea value={whyTs} onChange={(e) => setWhyTs(e.target.value.slice(0, 500))} rows={4} style={inputStyle} placeholder="Cuéntanos qué te llamó la atención de la empresa, no de la vacante…" />
           </Q>
