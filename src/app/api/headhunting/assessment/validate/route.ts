@@ -20,16 +20,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Token inválido' }, { status: 404 });
     }
 
-    // Check token expiry
-    if (candidate.token_expires_at && new Date(candidate.token_expires_at) < new Date()) {
-      await supabaseAdmin
-        .from('ht_candidates')
-        .update({ status: 'expired' })
-        .eq('id', candidate.id);
-      return NextResponse.json({ error: 'Token expirado' }, { status: 410 });
+    // Token evergreen · si el candidato hace click, extendemos 7 días más.
+    // Razón: drafts de Gmail pueden sentarse días antes de enviar · si el link
+    // expira en el camino, candidato recibe link muerto sin culpa. Cada click
+    // del candidato vivo re-activa el reloj.
+    if (candidate.token_expires_at) {
+      const expires = new Date(candidate.token_expires_at);
+      const now = new Date();
+      if (expires < now || (expires.getTime() - now.getTime()) < 3 * 24 * 60 * 60 * 1000) {
+        const fresh = new Date();
+        fresh.setDate(fresh.getDate() + 7);
+        await supabaseAdmin
+          .from('ht_candidates')
+          .update({ token_expires_at: fresh.toISOString() })
+          .eq('id', candidate.id);
+      }
     }
 
-    // Check candidate status
+    // Check candidate status — pero permitir reactivar si status quedó 'expired'
+    // por un check antiguo · ya no expiramos, así que volvemos a 'invited'.
+    if (candidate.status === 'expired') {
+      await supabaseAdmin
+        .from('ht_candidates')
+        .update({ status: 'invited' })
+        .eq('id', candidate.id);
+      candidate.status = 'invited';
+    }
     if (!['invited', 'in_progress'].includes(candidate.status)) {
       return NextResponse.json(
         { error: 'Evaluación no disponible', status: candidate.status },

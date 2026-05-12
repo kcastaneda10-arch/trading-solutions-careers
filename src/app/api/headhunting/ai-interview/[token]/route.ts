@@ -30,12 +30,24 @@ export async function GET(
     return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }
 
-  if (new Date(interview.token_expires_at) < new Date()) {
-    return NextResponse.json({ error: "expired_token" }, { status: 410 });
-  }
-
   if (interview.status === "completed") {
     return NextResponse.json({ error: "already_completed" }, { status: 409 });
+  }
+
+  // Token evergreen · si el candidato hace click, extendemos 7 días más.
+  // Razón: drafts de Gmail pueden sentarse días antes de enviar · si el link
+  // expira en el camino, candidato recibe link muerto sin culpa.
+  if (interview.token_expires_at) {
+    const expires = new Date(interview.token_expires_at);
+    const now = new Date();
+    if (expires < now || (expires.getTime() - now.getTime()) < 3 * 24 * 60 * 60 * 1000) {
+      const fresh = new Date();
+      fresh.setDate(fresh.getDate() + 7);
+      await supabaseAdmin
+        .from("ht_ai_interviews")
+        .update({ token_expires_at: fresh.toISOString() })
+        .eq("id", interview.id);
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -153,11 +153,25 @@ export async function GET(
     .single();
 
   if (error || !candidate) return NextResponse.json({ error: "invalid_token" }, { status: 401 });
-  if (candidate.prefilter_token_expires_at && new Date(candidate.prefilter_token_expires_at as string) < new Date()) {
-    return NextResponse.json({ error: "expired_token" }, { status: 410 });
-  }
   if (candidate.prefilter_completed_at) {
     return NextResponse.json({ error: "already_completed" }, { status: 409 });
+  }
+
+  // Token evergreen · si el candidato hace click, extendemos 7 días más.
+  // Razón: drafts de Gmail pueden sentarse días antes de enviar · si el link
+  // expira en el camino, candidato recibe link muerto sin culpa. Cada click
+  // del candidato vivo re-activa el reloj.
+  if (candidate.prefilter_token_expires_at) {
+    const expires = new Date(candidate.prefilter_token_expires_at as string);
+    const now = new Date();
+    if (expires < now || (expires.getTime() - now.getTime()) < 3 * 24 * 60 * 60 * 1000) {
+      const fresh = new Date();
+      fresh.setDate(fresh.getDate() + 7);
+      await supabaseAdmin
+        .from("ht_candidates")
+        .update({ prefilter_token_expires_at: fresh.toISOString() })
+        .eq("id", candidate.id);
+    }
   }
 
   return NextResponse.json({
@@ -182,9 +196,9 @@ export async function POST(
     .single();
 
   if (error || !candidate) return NextResponse.json({ error: "invalid_token" }, { status: 401 });
-  if (candidate.prefilter_token_expires_at && new Date(candidate.prefilter_token_expires_at as string) < new Date()) {
-    return NextResponse.json({ error: "expired_token" }, { status: 410 });
-  }
+  // Token evergreen · ya no chequeamos expiración en POST · si el candidato
+  // alcanzó a llegar al form vivo, debe poder submitir. completed_at sigue
+  // bloqueando duplicados.
   if (candidate.prefilter_completed_at) {
     return NextResponse.json({ error: "already_completed" }, { status: 409 });
   }
