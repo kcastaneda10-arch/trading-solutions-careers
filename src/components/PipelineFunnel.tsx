@@ -321,6 +321,54 @@ export default function PipelineFunnel() {
                 type="button"
                 onClick={async () => {
                   if (bulkRunning) return;
+                  const vacancyParam = vacFilter !== "all" ? [vacFilter] : null;
+                  const msg = vacancyParam
+                    ? `Descargar Excel COMPLETO de la vacante filtrada para Yohanna?\n\nIncluye: candidatos en todas las etapas + rechazados (con razón) + tus revisiones · listo para filtrar/ordenar en Excel.`
+                    : `Descargar Excel COMPLETO de TODAS las vacantes activas para Yohanna?\n\nIncluye: candidatos en todas las etapas + rechazados + tus revisiones · listo para filtrar/ordenar.`;
+                  if (!confirm(msg)) return;
+                  setBulkRunning(true);
+                  try {
+                    const r = await fetch(`/api/admin/export-pipeline-yohanna-excel`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        vacancy_ids: vacancyParam,
+                        include_rejected: true,
+                      }),
+                    });
+                    if (!r.ok) {
+                      const j = await r.json().catch(() => ({}));
+                      alert(`❌ ${j.error || "Error generando Excel"}`);
+                      return;
+                    }
+                    // Descargar el archivo
+                    const blob = await r.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    const today = new Date().toISOString().slice(0, 10);
+                    a.download = `handoff-pipeline-yohanna-${today}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch (e) {
+                    alert(`❌ ${(e as Error).message}`);
+                  } finally {
+                    setBulkRunning(false);
+                  }
+                }}
+                disabled={bulkRunning}
+                className="text-xs font-bold px-3 py-2.5 border-2 border-blue-400 bg-blue-50 text-blue-900 hover:bg-blue-100 transition-colors whitespace-nowrap disabled:opacity-50"
+                style={{ borderRadius: 0 }}
+                title="Descarga Excel con todos los candidatos · una fila por candidato con columnas para Vacante, Etapa, Nombre, Cédula, Contacto, LinkedIn, CV, Verdict tuyo, Fortalezas, Reservas, Razón rechazo · listo para filtrar/ordenar"
+              >
+                📊 Excel a Yohanna
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (bulkRunning) return;
                   const queueCount = filtered.filter(c => (c.stage || "aplico") === "bateria_psicometrica").length;
                   if (queueCount === 0) {
                     alert("No hay candidatos en cola de Pruebas Psicométricas.");
