@@ -35,17 +35,24 @@ type Cand = {
   phone: string | null;
   vacancy_id: string | null;
   ht_vacancies: { title: string } | null;
-  metadata: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  prefilter_data?: Record<string, unknown> | null;
+  prefilter_form_data?: Record<string, unknown> | null;
 };
 
 function pickCedula(c: Cand): string {
-  const meta = (c.metadata || {}) as Record<string, unknown>;
-  return (
-    (meta["cedula"] as string) ||
-    (meta["identification"] as string) ||
-    (meta["document_number"] as string) ||
-    ""
-  );
+  const sources: Record<string, unknown>[] = [
+    (c.metadata || {}) as Record<string, unknown>,
+    (c.prefilter_data || {}) as Record<string, unknown>,
+    (c.prefilter_form_data || {}) as Record<string, unknown>,
+  ];
+  const keys = ["cedula", "identification", "document_number", "document"];
+  for (const src of sources) {
+    for (const k of keys) {
+      if (src[k]) return String(src[k]);
+    }
+  }
+  return "";
 }
 
 function buildEmailHtml(cands: Cand[]): string {
@@ -124,7 +131,7 @@ export async function POST(req: NextRequest) {
 
     let q = supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, phone, vacancy_id, metadata, ht_vacancies(title)")
+      .select("*, ht_vacancies(title)")
       .eq("stage", "bateria_psicometrica")
       .order("created_at", { ascending: true });
 

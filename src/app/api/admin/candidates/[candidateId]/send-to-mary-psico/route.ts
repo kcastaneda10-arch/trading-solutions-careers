@@ -112,25 +112,25 @@ export async function POST(
       return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
     }
 
-    // 2. Cédula · puede vivir en varios campos según la fuente de import.
-    //    Intentamos cargar el último valor de cualquier campo común.
+    // 2. Cédula · puede vivir en varios JSONB según la fuente de import.
+    //    Usamos wildcard para no romper si alguna columna no existe en el schema.
     let cedula = "";
     try {
       const { data: prefData } = await supabaseAdmin
         .from("ht_candidates")
-        .select("metadata, prefilter_form_data")
+        .select("*")
         .eq("id", candidateId)
         .single();
       const meta = (prefData?.metadata || {}) as Record<string, unknown>;
       const form = (prefData?.prefilter_form_data || {}) as Record<string, unknown>;
-      cedula =
-        (meta["cedula"] as string) ||
-        (meta["identification"] as string) ||
-        (meta["document"] as string) ||
-        (form["cedula"] as string) ||
-        (form["identification"] as string) ||
-        (form["document_number"] as string) ||
-        "";
+      const pf = (prefData?.prefilter_data || {}) as Record<string, unknown>;
+      const keys = ["cedula", "identification", "document", "document_number"];
+      for (const src of [meta, form, pf]) {
+        for (const k of keys) {
+          if (src[k]) { cedula = String(src[k]); break; }
+        }
+        if (cedula) break;
+      }
     } catch {
       // ignorar · cédula queda vacía y el draft pide pedirla
     }

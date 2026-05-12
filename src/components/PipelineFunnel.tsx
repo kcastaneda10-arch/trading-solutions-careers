@@ -283,22 +283,24 @@ export default function PipelineFunnel() {
                 type="button"
                 onClick={async () => {
                   if (bulkRunning) return;
-                  const stage = "recruiter_interview";
-                  const vacancyParam = vacFilter !== "all" ? vacFilter : null;
+                  const vacancyParam = vacFilter !== "all" ? [vacFilter] : null;
                   const msg = vacancyParam
-                    ? `Generar listado de candidatos en Recruiter Interview de la vacante filtrada para Yohanna?`
-                    : `Generar listado COMPLETO de candidatos en Recruiter Interview para Yohanna? (todas las vacantes)`;
+                    ? `Generar handoff COMPLETO de la vacante filtrada para Yohanna?\n\nIncluye: candidatos en prefiltro, recruiter interview, hiring lead, CWO+HM, pruebas, rechazados (con razón) y tus revisiones.`
+                    : `Generar handoff COMPLETO de TODAS las vacantes activas para Yohanna?\n\nIncluye: candidatos en todas las etapas pendientes + rechazados (con razón) + tus revisiones.`;
                   if (!confirm(msg)) return;
                   setBulkRunning(true);
                   try {
                     const r = await fetch(`/api/admin/export-pipeline-to-yohanna`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ stage, vacancy_id: vacancyParam }),
+                      body: JSON.stringify({
+                        vacancy_ids: vacancyParam,
+                        include_rejected: true,
+                      }),
                     });
                     const j = await r.json();
                     if (j.success) {
-                      alert(`✅ Draft listo en Gmail · ${j.candidates_count} candidatos listados\n\nTo: ${j.to}\nRevisa el draft y envíalo cuando estés ready.`);
+                      alert(`✅ Draft listo en Gmail · ${j.candidates_count} candidatos · ${j.vacancies_count} vacante${j.vacancies_count !== 1 ? "s" : ""}\n\nTo: ${j.to}\nIncluye: revisiones tuyas + rechazados con razón.\nRevisa el draft (podés editar lista de destinatarios o el contenido) y envíalo.`);
                     } else {
                       alert(`❌ ${j.error || "Error generando draft"}`);
                     }
@@ -311,9 +313,9 @@ export default function PipelineFunnel() {
                 disabled={bulkRunning}
                 className="text-xs font-bold px-3 py-2.5 border-2 border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors whitespace-nowrap disabled:opacity-50"
                 style={{ borderRadius: 0 }}
-                title="Genera draft Gmail a Yohanna con TODOS los candidatos en Recruiter Interview · incluye CV, LinkedIn, contacto y prefilter. Si tenés una vacante filtrada, solo manda los de esa vacante."
+                title="Genera handoff COMPLETO a Yohanna · todas las etapas activas + rechazados con razón + tus revisiones recruiter. Si tenés una vacante filtrada, solo manda los de esa vacante."
               >
-                📋 Exportar a Yohanna
+                📋 Handoff a Yohanna
               </button>
               <button
                 type="button"
