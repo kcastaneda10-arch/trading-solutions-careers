@@ -15,17 +15,20 @@ export type StageCode =
   | 'prefiltro_revision'
   | 'prefiltro_pasado'
   | 'prefiltro_rechazado'
-  | 'assessment_invitado'
-  | 'assessment_en_progreso'
-  | 'assessment_completado'
-  | 'entrevista_ia'
-  | 'bateria_psicometrica'
+  | 'assessment_invitado'        // LEGACY · solo candidatos pre-mayo 2026
+  | 'assessment_en_progreso'     // LEGACY
+  | 'assessment_completado'      // LEGACY
+  | 'entrevista_ia'              // LEGACY
   | 'recruiter_interview'
+  | 'hiring_lead_interview'
   | 'cwo_interview'
-  | 'touring'
+  | 'bateria_psicometrica'       // cola Pruebas Psicométricas
+  | 'solicitud_enviada_mary'     // batch enviado · Mary trabajando
+  | 'touring'                    // Máquina de Turing
   | 'terna'
   | 'oferta'
   | 'contratado'
+  | 'onboarding'
   | 'rechazado';
 
 /** Etiqueta corta humana — para chips y tablas */
@@ -39,13 +42,16 @@ export const STAGE_LABEL_SHORT: Record<string, string> = {
   assessment_en_progreso: 'Integridad en curso',
   assessment_completado: 'Integridad ✓',
   entrevista_ia: 'Entrevista IA',
+  recruiter_interview: 'Recruiter Interview',
+  hiring_lead_interview: 'Hiring Lead Interview',
+  cwo_interview: 'CWO + Hiring Manager',
   bateria_psicometrica: 'Pruebas Psicométricas',
-  recruiter_interview: 'Recruiter interview',
-  cwo_interview: 'Entrevista CWO',
-  touring: 'Touring',
+  solicitud_enviada_mary: 'Solicitud a HR Specialist',
+  touring: 'Máquina de Turing',
   terna: 'Terna',
   oferta: 'Oferta enviada',
   contratado: 'Contratado',
+  onboarding: 'Onboarding',
   rechazado: 'Rechazado',
 };
 
@@ -56,17 +62,20 @@ export const STAGE_LABEL_LONG: Record<string, string> = {
   prefiltro_revision: 'Esperando revisión del prefiltro',
   prefiltro_pasado: 'Prefiltro aprobado',
   prefiltro_rechazado: 'Prefiltro rechazado',
-  assessment_invitado: 'Invitado a prueba de integridad',
-  assessment_en_progreso: 'Tomando prueba de integridad',
-  assessment_completado: 'Prueba de integridad completada',
-  entrevista_ia: 'Entrevista con IA',
-  bateria_psicometrica: 'Pruebas Psicométricas',
-  recruiter_interview: 'Entrevista con reclutador',
-  cwo_interview: 'Entrevista con CWO',
-  touring: 'Touring de instalaciones',
+  assessment_invitado: 'Invitado a prueba de integridad (legacy)',
+  assessment_en_progreso: 'Tomando prueba de integridad (legacy)',
+  assessment_completado: 'Prueba de integridad completada (legacy)',
+  entrevista_ia: 'Entrevista con IA (legacy)',
+  recruiter_interview: 'Entrevista con Recruiter',
+  hiring_lead_interview: 'Entrevista con Hiring Lead',
+  cwo_interview: 'Entrevista con CWO + Hiring Manager',
+  bateria_psicometrica: 'Pruebas Psicométricas · cola de envío a HR Specialist',
+  solicitud_enviada_mary: 'Solicitud enviada a HR Specialist · Mary aplicando pruebas',
+  touring: 'Máquina de Turing · prueba propia del matemático interno',
   terna: 'En terna final',
   oferta: 'Oferta enviada · esperando respuesta',
   contratado: 'Contratado',
+  onboarding: 'En proceso de onboarding',
   rechazado: 'Rechazado',
 };
 
@@ -91,20 +100,24 @@ export const STAGE_ACTION: Record<string, string> = {
  * Inspirado en best practices ATS (Ashby, Greenhouse) + ajustado al ritmo TS.
  */
 export const STAGE_SLA_DAYS: Record<string, number> = {
-  aplico: 3,                    // 3d para mandar prefiltro
-  prefiltro_enviado: 5,         // 5d para que candidato responda
-  prefiltro_revision: 2,        // 2d para que reclutador revise
-  prefiltro_pasado: 2,          // 2d para invitar a Elevare
-  assessment_invitado: 5,       // 5d para que candidato tome Elevare
-  assessment_en_progreso: 3,    // 3d para terminar Elevare
-  assessment_completado: 3,     // 3d para agendar recruiter interview
-  entrevista_ia: 3,             // 3d para revisar resultado
-  bateria_psicometrica: 5,      // 5d para revisar batería
-  recruiter_interview: 5,       // 5d para completar scorecard + decidir
-  cwo_interview: 5,             // 5d para que CWO decida
-  touring: 5,                   // 5d para programar/realizar touring
-  terna: 7,                     // 7d para selección final
-  oferta: 7,                    // 7d para que candidato responda
+  aplico: 3,                       // 3d para mandar prefiltro
+  prefiltro_enviado: 5,            // 5d para que candidato responda
+  prefiltro_revision: 2,           // 2d para que reclutador revise
+  prefiltro_pasado: 2,             // 2d para agendar recruiter interview
+  // Legacy (Elevare / AI) — solo aplica a candidatos pre-mayo 2026
+  assessment_invitado: 5,
+  assessment_en_progreso: 3,
+  assessment_completado: 3,
+  entrevista_ia: 3,
+  // Pipeline activo v3
+  recruiter_interview: 5,          // 5d para completar scorecard + decidir
+  hiring_lead_interview: 5,        // 5d para que Hiring Lead complete
+  cwo_interview: 5,                // 5d para que CWO + HM completen
+  bateria_psicometrica: 1,         // 1d en cola · debería irse en el próximo batch (mañana o tarde)
+  solicitud_enviada_mary: 7,       // 7d para que Mary aplique pruebas y devuelva
+  touring: 5,                      // 5d para programar/realizar Máquina de Turing
+  terna: 7,                        // 7d para selección final
+  oferta: 7,                       // 7d para que candidato responda
 };
 
 /**
