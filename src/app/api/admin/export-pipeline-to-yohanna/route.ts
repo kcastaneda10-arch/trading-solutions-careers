@@ -284,6 +284,22 @@ function buildEmailHtml(
         en la cola de prefilter podés priorizar quién avanza.
       </p>
 
+      <div style="margin:24px 0;padding:18px;background:#f8fafc;border-left:4px solid #0a0a0a">
+        <div style="font-size:11px;color:#737373;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:8px;font-weight:600">
+          Flujo recomendado para estos candidatos
+        </div>
+        <ol style="margin:0;padding-left:20px;font-size:13px;color:#0a0a0a;line-height:1.8">
+          <li><strong>Entrevista Wellness</strong> · primera conversación · valida match cultural + 16 mandatos básicos (~45 min)</li>
+          <li><strong>Entrevista Hiring Lead + Prueba Técnica</strong> · validación técnica del rol con quien va a liderar la posición</li>
+          <li><strong>Entrevista CWO + Hiring Manager</strong> · cierre con dueños del rol · validan ajuste estratégico</li>
+          <li><strong>Pruebas Psicométricas</strong> · Mary Banquez aplica batería completa (DISC, MBTI, Big5, IQ, Turing si aplica)</li>
+          <li><strong>Terna</strong> · selección final entre quienes pasaron todo</li>
+        </ol>
+        <div style="font-size:12px;color:#525252;margin-top:10px;font-style:italic">
+          Como yo salgo, vos decidís quién entrevista en cada paso · pero te recomiendo mantener este orden de filtros.
+        </div>
+      </div>
+
       ${vacancySections}
 
       <p style="margin-top:28px;font-size:14px">
