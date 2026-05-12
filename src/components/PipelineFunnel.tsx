@@ -104,7 +104,7 @@ const STAGES: Array<{ id: string; label: string; category: StageCategory; owner:
   { id: "assessment_en_progreso", label: "Integridad en progreso",  category: "assessment", owner: "candidate" },
   { id: "assessment_completado",  label: "Integridad completada",   category: "assessment", owner: "recruiter" },
   { id: "entrevista_ia",          label: "Entrevista IA",           category: "interview",  owner: "candidate" },
-  { id: "bateria_psicometrica",   label: "Batería Psicométrica",    category: "assessment", owner: "candidate" },
+  { id: "bateria_psicometrica",   label: "Pruebas Psicométricas",   category: "assessment", owner: "candidate" },
   { id: "recruiter_interview",    label: "Entrevista Recruiter",    category: "interview",  owner: "recruiter" },
   { id: "cwo_interview",          label: "CWO + Hiring",            category: "interview",  owner: "recruiter" },
   { id: "touring",                label: "Touring",                 category: "interview",  owner: "shared" },
@@ -452,17 +452,19 @@ export default function PipelineFunnel() {
 }
 
 // Mapa de transiciones naturales (avanzar al siguiente stage)
-// 2026-05: Entrevista IA pausada — post-Elevare salta directo a recruiter_interview.
-// Entrevista IA y Batería Psicométrica se mantienen como stages opcionales para compatibilidad
-// con candidatos legacy o casos especiales (RYS Phase 3 sub-batería 2 / 3).
+// 2026-05 v2: Pipeline simplificado · NO pasa por Elevare ni Entrevista IA.
+// Flujo nuevo:  Prefiltro → Recruiter Interview → Pruebas Psicométricas (Mary) → CWO + Hiring
+// Etapas legacy (assessment_*, entrevista_ia) se mantienen para candidatos ya en esos stages.
 const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> = {
   aplico: { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" },
-  prefiltro_pasado: { id: "assessment_invitado", label: "Invitar a prueba de integridad", emoji: "📨" },
-  prefiltro_revision: { id: "assessment_invitado", label: "Invitar a integridad (override)", emoji: "📨" },
+  prefiltro_pasado: { id: "recruiter_interview", label: "Agendar Entrevista Recruiter", emoji: "💬" },
+  prefiltro_revision: { id: "recruiter_interview", label: "Agendar Entrevista Recruiter (override)", emoji: "💬" },
+  // Legacy · candidatos que ya estaban en Elevare/IA salen igual a recruiter_interview
   assessment_completado: { id: "recruiter_interview", label: "Agendar Entrevista Recruiter", emoji: "💬" },
   entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
-  bateria_psicometrica: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
-  recruiter_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
+  // Flujo nuevo · post-recruiter va a pruebas psicométricas (Mary) · usar botón "Enviar a Mary"
+  recruiter_interview: { id: "bateria_psicometrica", label: "Pasar a Pruebas Psicométricas", emoji: "🧪" },
+  bateria_psicometrica: { id: "cwo_interview", label: "Pasar a CWO + Hiring", emoji: "👔" },
   cwo_interview: { id: "touring", label: "Pasar a Prueba Touring", emoji: "🏢" },
   touring: { id: "terna", label: "Pasar a Terna", emoji: "🏆" },
   terna: { id: "oferta", label: "Pasar a Oferta", emoji: "📨" },
@@ -619,13 +621,14 @@ function BulkActionBar({
 
   const stageActions: Record<string, { label: string; emoji: string; endpoint: (id: string) => string; method: "POST" }> = {
     aplico: { label: "Enviar prefiltro", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-prefilter`, method: "POST" },
-    prefiltro_pasado: { label: "Invitar a prueba de integridad", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    prefiltro_revision: { label: "Invitar a prueba de integridad", emoji: "📨", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    // Post-Elevare: salta directo a Recruiter Interview (Entrevista IA pausada 2026-05)
+    // 2026-05 v2: post-prefiltro va directo a recruiter_interview (sin Elevare ni IA)
+    prefiltro_pasado: { label: "Agendar Entrevista Recruiter", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    prefiltro_revision: { label: "Agendar Entrevista Recruiter (override)", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    // Legacy · candidatos ya en Elevare/IA salen igual a Recruiter Interview
     assessment_completado: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    // Stages legacy mantenidos por compatibilidad — también avanzan a Recruiter
     entrevista_ia: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    bateria_psicometrica: { label: "Pasar a Recruiter Interview", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
+    // Post-pruebas-psicométricas (Mary terminó) → CWO + Hiring
+    bateria_psicometrica: { label: "Pasar a CWO + Hiring", emoji: "👔", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     rechazado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
     contratado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
   };
@@ -647,14 +650,17 @@ function BulkActionBar({
           url = stageAction.endpoint(c.id);
           // For stage transitions: incluir el target stage en el body
           if (dominantStage === "prefiltro_pasado" || dominantStage === "prefiltro_revision") {
-            body = { stage: "assessment_invitado" };
+            // 2026-05 v2: post-prefiltro → recruiter_interview directo (sin Elevare ni IA)
+            body = { stage: "recruiter_interview" };
           } else if (
             dominantStage === "assessment_completado" ||
-            dominantStage === "entrevista_ia" ||
-            dominantStage === "bateria_psicometrica"
+            dominantStage === "entrevista_ia"
           ) {
-            // Post-Elevare → recruiter_interview directo (Entrevista IA pausada 2026-05)
+            // Legacy candidates en Elevare/IA → siguen a recruiter_interview
             body = { stage: "recruiter_interview" };
+          } else if (dominantStage === "bateria_psicometrica") {
+            // Post-Mary psico → CWO + Hiring (entrevista final)
+            body = { stage: "cwo_interview" };
           }
         } else if (action === "advance") {
           const next = NEXT_STAGE[c.stage || "aplico"];
@@ -1059,6 +1065,41 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
               title="Genera draft Gmail con link Calendly + copia link WhatsApp al portapapeles"
             >
               📅 Enviar Calendly
+            </button>
+          )}
+
+          {!isTerminal && currentStage === "recruiter_interview" && (
+            <button
+              onClick={async () => {
+                if (busy) return;
+                setBusy(true);
+                setFeedback("Generando draft para Mary…");
+                try {
+                  const r = await fetch(`/api/admin/candidates/${cand.id}/send-to-mary-psico`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  });
+                  const j = await r.json();
+                  if (j.success) {
+                    // Mueve a Pruebas Psicométricas después del draft
+                    await moveToStage("bateria_psicometrica", "Enviado a Mary · Pruebas Psicométricas");
+                    setFeedback("✅ Draft Gmail para Mary listo · candidato en Pruebas Psicométricas");
+                    setTimeout(() => setFeedback(""), 4000);
+                  } else {
+                    setFeedback(`❌ ${j.error || "Error"}`);
+                  }
+                } catch (e) {
+                  setFeedback(`❌ ${(e as Error).message}`);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full border-2 border-emerald-400 text-emerald-800 bg-white hover:bg-emerald-50 disabled:opacity-50"
+              title="Genera draft Gmail a Mary Banquez con datos del candidato + resumen recruiter · mueve a Pruebas Psicométricas"
+            >
+              🧪 Enviar a Mary · Pruebas
             </button>
           )}
 

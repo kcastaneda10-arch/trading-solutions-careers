@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -11,6 +11,9 @@ import { ArrowLeft, MapPin, Check, ArrowUpRight, Upload, X, CheckCircle } from "
 
 export default function JobDetailPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  // ?ref=interno · cuando llegan desde el newsletter interno
+  const ref = searchParams?.get("ref") || null;
   const job = jobs.find((j) => j.id === Number(id));
   const { t, locale } = useLanguage();
   const [showApply, setShowApply] = useState(false);
@@ -70,6 +73,7 @@ export default function JobDetailPage() {
           ...formData,
           cv_filename,
           cv_data,
+          ref, // ?ref=interno cuando viene del newsletter interno
         }),
       });
       if (!res.ok) throw new Error('Failed to submit');

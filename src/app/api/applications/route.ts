@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     await ensureDB();
 
     const body = await request.json();
-    const { job_id, job_title, full_name, email, phone, linkedin, cv_filename, cv_data, why_ts } = body;
+    const { job_id, job_title, full_name, email, phone, linkedin, cv_filename, cv_data, why_ts, ref } = body;
 
     if (!job_id || !full_name || !email) {
       return NextResponse.json(
@@ -27,6 +27,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // ─── Detectar candidato INTERNO ────────────────────────────────────
+    // Criterios (cualquiera dispara internal):
+    //   1. Email termina en @tradingsolutions.com (más robusto · no se puede falsear)
+    //   2. URL param ?ref=interno (vino del newsletter interno)
+    // El flag se guarda en prefilter_data.is_internal para que el ATS
+    // muestre un badge "INTERNO" y priorice estos candidatos.
+    const emailLower = (email || "").toLowerCase().trim();
+    const isInternal =
+      emailLower.endsWith("@tradingsolutions.com") ||
+      String(ref || "").toLowerCase() === "interno";
 
     // ─── PREFILTER 16 Mandamientos (aplica a TODA aplicación) ────────────
     const pf = prefilter({
@@ -39,7 +50,11 @@ export async function POST(request: NextRequest) {
       job_id,
     });
     const initialStatus = pf.decision; // 'reviewing' | 'new' | 'rejected'
-    const prefilterPayload = toPrefilterData(pf);
+    const prefilterPayload = toPrefilterData(pf) as Record<string, unknown>;
+    if (isInternal) {
+      prefilterPayload.is_internal = true;
+      prefilterPayload.internal_source = ref || "email_domain";
+    }
 
     const result = await sql`
       INSERT INTO applications (

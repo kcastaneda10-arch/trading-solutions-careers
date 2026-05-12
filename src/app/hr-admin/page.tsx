@@ -4460,6 +4460,35 @@ function Vacantes() {
                     </>
                   )}
                   <Pill color="black">id={v.id}</Pill>
+                  {tab === 'active' && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (actionBusy === `post-internal-${v.id}`) return;
+                        if (!confirm(`Crear draft de Gmail para newsletter@ con la vacante "${title}"? El correo queda en Drafts · vos lo revisás y lo enviás.`)) return;
+                        setActionBusy(`post-internal-${v.id}`);
+                        try {
+                          const r = await fetch(`/api/admin/vacancies/${v.id}/post-internal`, { method: 'POST' });
+                          const j = await r.json();
+                          if (j.success) {
+                            alert(`✅ Draft listo en Gmail · revisalo y enviá cuando estés ready.\n\nTo: ${j.newsletter_email}\nLink que verán: ${j.apply_link}`);
+                          } else {
+                            alert(`❌ Error: ${j.error || 'no se pudo crear el draft'}`);
+                          }
+                        } catch (err) {
+                          alert(`❌ ${(err as Error).message}`);
+                        } finally {
+                          setActionBusy(null);
+                        }
+                      }}
+                      disabled={actionBusy === `post-internal-${v.id}`}
+                      className="text-[10px] font-bold px-2 py-1 rounded border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+                      title="Crea draft de Gmail a newsletter@tradingsolutions.com con la vacante · queda en Drafts para revisar antes de enviar"
+                    >
+                      {actionBusy === `post-internal-${v.id}` ? '…' : '📢 Interno'}
+                    </button>
+                  )}
                   {v.linkedin_url && (
                     <a
                       href={v.linkedin_url}
