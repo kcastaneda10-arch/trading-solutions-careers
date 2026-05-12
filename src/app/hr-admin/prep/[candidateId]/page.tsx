@@ -139,7 +139,7 @@ export default function InterviewPrepPage() {
 
         {/* CWO Handoff section · solo en modo CWO */}
         {isCWOMode && assessment && (
-          <CWOHandoffSection assessment={assessment} candidateName={c.name} />
+          <CWOHandoffSection assessment={assessment} candidate={c} />
         )}
 
         {/* Quick header stats · si hay assessment usa el inglés real, sino el declarado */}
@@ -401,7 +401,20 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
 }
 
 /* ──────── CWO Handoff · sección con verdict + razones + probes ──────── */
-function CWOHandoffSection({ assessment, candidateName }: { assessment: any; candidateName: string }) {
+function CWOHandoffSection({ assessment, candidate }: { assessment: any; candidate: any }) {
+  const candidateName = candidate?.name || "";
+  const pf = candidate?.prefilter_data || {};
+  const meta = candidate?.metadata || {};
+  // Cédula puede vivir en metadata o en prefilter_data
+  const cedula =
+    meta.cedula || meta.identification || meta.document_number ||
+    pf.cedula || pf.identification || pf.document_number || "";
+  const linkedinUrl = candidate?.linkedin_url || pf.linkedin_url || pf.linkedin || "";
+  const cvUrl = candidate?.cv_url || (candidate?.cv_filename ? `/api/cv/${candidate.id}` : "");
+  const phone = candidate?.phone || "";
+  const email = candidate?.email || "";
+  const currentRole = candidate?.current_job_role || pf.current_job_role || pf.current_role || "";
+  const city = pf.city || pf.ciudad || "";
   const verdict = assessment.verdict as "strong_yes" | "maybe" | "no" | null;
   const verdictStyles: Record<string, { bg: string; fg: string; border: string; label: string }> = {
     strong_yes: { bg: "bg-emerald-50", fg: "text-emerald-800", border: "border-emerald-500", label: "✅ STRONG YES · avanzar a CWO" },
@@ -454,6 +467,70 @@ function CWOHandoffSection({ assessment, candidateName }: { assessment: any; can
 
   return (
     <>
+      {/* Datos del Candidato · primer bloque · clave para que el CWO tenga todo en un vistazo */}
+      <section className="bg-white border-2 border-black rounded-lg p-5">
+        <div className="text-[10px] uppercase tracking-[2.5px] font-bold text-gray-500 mb-3">
+          Datos del Candidato
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <div>
+            <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Nombre completo:</span>{" "}
+            <strong className="text-gray-900">{candidateName || "—"}</strong>
+          </div>
+          <div>
+            <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Cédula:</span>{" "}
+            <span className="text-gray-900">{cedula || <em className="text-gray-400">pendiente</em>}</span>
+          </div>
+          <div>
+            <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Email:</span>{" "}
+            {email ? <a href={`mailto:${email}`} className="text-blue-700 hover:underline">{email}</a> : "—"}
+          </div>
+          <div>
+            <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Teléfono:</span>{" "}
+            <span className="text-gray-900">{phone || "—"}</span>
+          </div>
+          {currentRole && (
+            <div className="col-span-2">
+              <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Cargo actual:</span>{" "}
+              <span className="text-gray-900 italic">{currentRole}</span>
+            </div>
+          )}
+          {city && (
+            <div className="col-span-2">
+              <span className="text-gray-500 font-semibold text-[11px] uppercase tracking-wide">Ciudad:</span>{" "}
+              <span className="text-gray-900">{city}</span>
+            </div>
+          )}
+          <div className="col-span-2 mt-2 pt-2 border-t border-gray-200 flex gap-3 flex-wrap">
+            {linkedinUrl && (
+              <a
+                href={linkedinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-[#0a66c2] text-white rounded hover:bg-[#084d92] transition-colors"
+              >
+                🔗 LinkedIn ↗
+              </a>
+            )}
+            {cvUrl && (
+              <a
+                href={cvUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-black text-white rounded hover:bg-gray-800 transition-colors"
+              >
+                📄 Ver CV ↗
+              </a>
+            )}
+            {!linkedinUrl && !cvUrl && (
+              <span className="text-xs text-gray-400 italic">
+                Sin LinkedIn ni CV cargados · pedirlos al candidato si los necesitas
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Story narrativa · arriba de todo · voz primera persona del recruiter */}
       <section className="bg-gray-50 border-l-4 border-black p-5 rounded-r-lg">
         <div className="text-[10px] uppercase tracking-[2.5px] font-bold text-gray-500 mb-2">
