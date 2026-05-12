@@ -1062,7 +1062,11 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             </button>
           )}
 
-          {!isTerminal && (
+          {/* Botón "Agendar conjunta" oculto · usar "Enviar Calendly" que ya dispara
+              el Calendly Collective (Kelly + Yohanna) para la vacante TAL.
+              El código backend del joint-scheduling sigue disponible si el sucesor
+              quiere arreglar bugs de TZ/almuerzo y revivirlo. */}
+          {false && !isTerminal && (
             <button
               onClick={() => setShowJointScheduling(true)}
               disabled={busy}
