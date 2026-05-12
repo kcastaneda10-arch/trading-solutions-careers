@@ -18,10 +18,35 @@ type Props = {
   onCreated?: (link: string) => void;
 };
 
+// Líderes de Trading Solutions · 22 cargos con gente a cargo
+// Cuando se agreguen al modal, sus calendarios deben estar compartidos con
+// kcastaneda@tradingsolutions.com (mínimo "See only free/busy").
 const COMMON_INTERVIEWERS = [
-  { email: "cwo@tradingsolutions.com", name: "Yohanna Franco" },
-  { email: "coo@tradingsolutions.com", name: "COO" },
-  { email: "kcastaneda@tradingsolutions.com", name: "Kelly Castañeda" },
+  // C-Suite
+  { email: "manager@tradingsolutions.com", name: "Andres Consuegra · CEO" },
+  { email: "coo@tradingsolutions.com", name: "Jaime Ahumada · COO" },
+  { email: "cwo@tradingsolutions.com", name: "Yohanna Franco · CWO" },
+  { email: "cfo@tradingsolutions.com", name: "Manuel Perez · CFO" },
+  { email: "cos@tradingsolutions.com", name: "Yisel Contreras · COS" },
+  // Heads y Leads
+  { email: "design@tradingsolutions.com", name: "Mauricio Cañaveras · Head of Design" },
+  { email: "icarrascal@tradingsolutions.com", name: "Ivan Carrascal · Lead Customer Doc" },
+  { email: "finances2@tradingsolutions.com", name: "Juan Farelo · Lead Accounting" },
+  { email: "compliance@tradingsolutions.com", name: "Eliana Fontalvo · Líder Compliance" },
+  { email: "coordinator@tradingsolutions.com", name: "Meissy Gonzalez · Líder Operations" },
+  { email: "operations8@tradingsolutions.com", name: "Mario Hernandez · Líder Operations" },
+  { email: "pricing2@tradingsolutions.com", name: "Nicole Molinares · Líder Pricing" },
+  { email: "sperez@tradingsolutions.com", name: "Sergio Perez · Lead Finances" },
+  { email: "jsanchez@tradingsolutions.com", name: "Juan Sanchez · Líder Tecnología" },
+  // Managers y Coordinators
+  { email: "customer8@tradingsolutions.com", name: "Jessica Real · Customer Manager" },
+  { email: "customer@tradingsolutions.com", name: "Wendy Todaro · Customer Manager" },
+  { email: "ims@tradingsolutions.com", name: "Maykol Blanco · MGT Systems Coord" },
+  { email: "j.rubio@tradingsolutions.com", name: "Jennifer Rubio · Account Manager" },
+  { email: "hr.specialist@tradingsolutions.com", name: "Maria Banquez · HR Specialist" },
+  { email: "sales3@tradingsolutions.com", name: "Jhonny Farah · Sales · Hiring Lead" },
+  { email: "trainer@tradingsolutions.com", name: "Maria Alvarez · Coord Customer" },
+  { email: "insidesales@tradingsolutions.com", name: "Ana Silva · Coord Customer" },
 ];
 
 export default function JointSchedulingModal({ candidateId, candidateName, candidateEmail, vacancyTitle, onClose, onCreated }: Props) {
