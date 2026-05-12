@@ -19,19 +19,41 @@ import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 
 export const runtime = "nodejs";
 
-const CALENDLY_URL = process.env.CALENDLY_BASE_URL || "https://calendly.com/kcastaneda-tradingsolutions/30min";
-const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
+// URL por defecto · Calendly individual de Kelly (Entrevista Recruiter solo).
+const CALENDLY_URL_DEFAULT = process.env.CALENDLY_BASE_URL || "https://calendly.com/kcastaneda-tradingsolutions/30min";
 
-function buildPrefillUrl(name: string, email: string, vacancyTitle: string): string {
+// URLs especiales por vacancy_id · usadas cuando la entrevista requiere
+// m\u00faltiples hosts (Collective Calendly).
+const CALENDLY_URL_BY_VACANCY: Record<string, string> = {
+  // Talent Acquisition and Development Lead · Kelly + Yohanna (CWO)
+  "70c39cab-adaf-49a0-b137-29d0ff9b56b0": "https://calendly.com/d/cvxv-9wj-wz3/entrevista-colectiva-trading-solutions",
+};
+
+function getCalendlyUrl(vacancyId: string | null | undefined): string {
+  if (vacancyId && CALENDLY_URL_BY_VACANCY[vacancyId]) {
+    return CALENDLY_URL_BY_VACANCY[vacancyId];
+  }
+  return CALENDLY_URL_DEFAULT;
+}
+
+function buildPrefillUrl(baseUrl: string, name: string, email: string, vacancyTitle: string): string {
   const params = new URLSearchParams();
   if (name) params.set("name", name);
   if (email) params.set("email", email);
   if (vacancyTitle) params.set("a1", vacancyTitle);
-  return `${CALENDLY_URL}?${params.toString()}`;
+  return `${baseUrl}?${params.toString()}`;
 }
 
-function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: string, customMessage?: string): string {
-  const messageBody = customMessage || `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong> y me encantaría conocerte en una conversación de ~45 minutos por video.`;
+function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: string, isCollective: boolean, customMessage?: string): string {
+  const hostsText = isCollective
+    ? "Yohanna Franco (CWO) y Kelly Casta\u00f1eda"
+    : "Kelly Casta\u00f1eda";
+  const messageBody = customMessage || (isCollective
+    ? `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong>. La pr\u00f3xima conversaci\u00f3n es con <strong>${hostsText}</strong> \u00b7 va a durar alrededor de 45 minutos por video.`
+    : `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong> y me encantar\u00eda conocerte en una conversaci\u00f3n de ~45 minutos por video.`);
+  const slotText = isCollective
+    ? "Elige el horario que mejor te funcione \u00b7 solo vas a ver opciones donde las dos estamos disponibles al mismo tiempo:"
+    : "Elige el mejor horario de acuerdo a tu disponibilidad \u00b7 vas a ver mi calendario y puedes reservar el espacio que prefieras:";
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
@@ -43,11 +65,11 @@ function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: st
   <div class="container">
     <p>Hola <strong>${firstName}</strong>,</p>
     <p>${messageBody}</p>
-    <p>Elige el mejor horario de acuerdo a tu disponibilidad · vas a ver mi calendario y puedes reservar el espacio que prefieras:</p>
+    <p>${slotText}</p>
     <p style="text-align:center"><a href="${calendlyUrl}" class="cta">Elegir horario</a></p>
-    <p>Si ninguno de los horarios disponibles te funciona, regálame una respuesta a este correo y buscamos juntos.</p>
-    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
-    <div class="footer">El enlace genera la videollamada de Google Meet automáticamente al confirmar.</div>
+    <p>Si ninguno de los horarios disponibles te funciona, reg\u00e1lame una respuesta a este correo y buscamos juntos.</p>
+    <p>Un abrazo,<br><strong>Kelly Casta\u00f1eda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
+    <div class="footer">El enlace genera la videollamada de Google Meet autom\u00e1ticamente al confirmar.</div>
   </div>
 </body></html>`;
 }
@@ -66,7 +88,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, phone, ht_vacancies(title)")
+      .select("id, name, email, phone, vacancy_id, ht_vacancies(title)")
       .eq("id", candidateId)
       .single();
 
@@ -78,18 +100,22 @@ export async function POST(
     // @ts-expect-error supabase relation
     const vacancyTitle: string = candidate.ht_vacancies?.title || "la posición";
 
+    // Elige Collective URL si la vacante lo requiere · sino solo Kelly
+    const baseCalendlyUrl = getCalendlyUrl(candidate.vacancy_id as string | null);
     const calendlyUrl = buildPrefillUrl(
+      baseCalendlyUrl,
       candidate.name as string,
       candidate.email as string,
       vacancyTitle
     );
 
+    const isCollective = baseCalendlyUrl !== CALENDLY_URL_DEFAULT;
     let draftId: string | null = null;
     if (candidate.email) {
       try {
         const gmail = await isGmailConnected();
         if (gmail.connected) {
-          const html = buildEmailHtml(firstName, vacancyTitle, calendlyUrl, customMessage);
+          const html = buildEmailHtml(firstName, vacancyTitle, calendlyUrl, isCollective, customMessage);
           const draftRes = await createDraftViaGmail({
             to: candidate.email as string,
             subject: `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
@@ -118,7 +144,9 @@ export async function POST(
     }
 
     // WhatsApp link · pre-llenado para click-to-send
-    const waMessage = `Hola ${firstName}, soy Kelly Castañeda de Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle} y me encantaría conocerte en una conversación de ~45 minutos por video.\n\nElige el mejor horario de acuerdo a tu disponibilidad desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\nKelly`;
+    const waMessage = isCollective
+      ? `Hola ${firstName}, soy Kelly Casta\u00f1eda de Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle}. La pr\u00f3xima conversaci\u00f3n es con Yohanna Franco (CWO) y yo \u00b7 45 minutos por video.\n\nElige el horario que mejor te funcione \u00b7 solo ver\u00e1s opciones donde las dos estamos disponibles: ${calendlyUrl}\n\nSi ninguno te funciona, reg\u00e1lame una respuesta y buscamos juntos.\n\nUn abrazo,\nKelly`
+      : `Hola ${firstName}, soy Kelly Casta\u00f1eda de Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle} y me encantar\u00eda conocerte en una conversaci\u00f3n de ~45 minutos por video.\n\nElige el mejor horario de acuerdo a tu disponibilidad desde ac\u00e1: ${calendlyUrl}\n\nSi ninguno te funciona, reg\u00e1lame una respuesta y buscamos juntos.\n\nUn abrazo,\nKelly`;
     const cleanPhone = (candidate.phone || "").replace(/[^0-9]/g, "");
     const finalPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
     const waLink = finalPhone
