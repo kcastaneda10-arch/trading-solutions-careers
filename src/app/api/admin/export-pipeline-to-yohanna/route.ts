@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 
 export const runtime = "nodejs";
@@ -141,13 +142,36 @@ function pickRejectionReason(c: Cand): string {
   return pickFromAny(c, ["rejection_reason", "rejection_notes", "reject_reason"]);
 }
 
-function renderCandidateCard(c: Cand, a: Assessment | null, idx: number): string {
-  const cedula = pickCedula(c);
-  const cvHref = pickCvUrl(c);
-  const linkedinHref = pickLinkedIn(c);
-  const currentRole = pickCurrentRole(c);
-  const prefScore = pickPrefilterScore(c);
-  const prefNotes = pickPrefilterNotes(c);
+type AppRow = {
+  id: number;
+  email: string;
+  linkedin: string | null;
+  cv_filename: string | null;
+  why_ts: string | null;
+  prefilter_data: Record<string, unknown> | null;
+  score: number | null;
+};
+
+function renderCandidateCard(
+  c: Cand,
+  a: Assessment | null,
+  idx: number,
+  app: AppRow | undefined,
+): string {
+  const appPref = (app?.prefilter_data || {}) as Record<string, unknown>;
+  const cedula = pickCedula(c)
+    || (appPref["cedula"] as string)
+    || (appPref["identification"] as string)
+    || "";
+  // CV · prioriza la application (Neon) que sí tiene cv_data
+  const cvHref = app?.cv_filename && app?.id
+    ? `${APP_URL}/api/admin/cv/${app.id}`
+    : pickCvUrl(c);
+  const linkedinHref = pickLinkedIn(c) || app?.linkedin || "";
+  const currentRole = pickCurrentRole(c) || (appPref["current_job_role"] as string) || "";
+  const prefScoreStr = pickPrefilterScore(c);
+  const prefScore = prefScoreStr === "—" && app?.score != null ? `${app.score}/100` : prefScoreStr;
+  const prefNotes = pickPrefilterNotes(c) || app?.why_ts || "";
   const applied = c.created_at ? new Date(c.created_at).toISOString().slice(0, 10) : "—";
 
   // Asses block
@@ -233,13 +257,19 @@ function renderCandidateCard(c: Cand, a: Assessment | null, idx: number): string
 function buildEmailHtml(
   groups: Array<{ vacancyTitle: string; byStage: Record<string, { cands: Cand[]; assessments: Map<string, Assessment> }> }>,
   totalCount: number,
+  appByEmail: Map<string, AppRow>,
 ): string {
   const vacancySections = groups.map(g => {
     const stageSections = Object.entries(g.byStage)
       .filter(([, payload]) => payload.cands.length > 0)
       .map(([stage, payload]) => {
         const cardsHtml = payload.cands
-          .map((c, i) => renderCandidateCard(c, payload.assessments.get(c.id) || null, i))
+          .map((c, i) => renderCandidateCard(
+            c,
+            payload.assessments.get(c.id) || null,
+            i,
+            c.email ? appByEmail.get(c.email.toLowerCase().trim()) : undefined,
+          ))
           .join("");
         const stageColor = stage === "rechazado" ? "#b91c1c" : "#0a0a0a";
         return `
@@ -398,6 +428,26 @@ export async function POST(req: NextRequest) {
       console.warn("No se pudieron cargar recruiter assessments:", e);
     }
 
+    // 3b. Cargar applications (Neon) por email · trae CV + LinkedIn del flujo público
+    const appByEmail = new Map<string, AppRow>();
+    try {
+      const emails = Array.from(new Set(cands.map(c => (c.email || "").toLowerCase().trim()).filter(Boolean)));
+      if (emails.length > 0) {
+        const appRows = await sql`
+          SELECT id, email, linkedin, cv_filename, why_ts, prefilter_data, score
+          FROM applications
+          WHERE LOWER(email) = ANY(${emails})
+          ORDER BY created_at DESC
+        ` as unknown as AppRow[];
+        for (const a of appRows) {
+          const k = (a.email || "").toLowerCase().trim();
+          if (!appByEmail.has(k)) appByEmail.set(k, a);
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudieron cargar applications de Neon:", e);
+    }
+
     // 4. Agrupar por vacante y por etapa
     const groupsMap = new Map<string, { vacancyTitle: string; byStage: Record<string, { cands: Cand[]; assessments: Map<string, Assessment> }> }>();
     for (const c of cands) {
@@ -442,7 +492,7 @@ export async function POST(req: NextRequest) {
       if (!gmail.connected) {
         return NextResponse.json({ error: "Gmail no conectado" }, { status: 503 });
       }
-      const html = buildEmailHtml(sortedGroups, totalCount);
+      const html = buildEmailHtml(sortedGroups, totalCount, appByEmail);
       const vacancyTitles = sortedGroups.map(g => g.vacancyTitle).join(" + ");
       const draftRes = await createDraftViaGmail({
         to: toEmail,

@@ -20,17 +20,22 @@ const VALID_STAGES = [
   "prefiltro_enviado",
   "prefiltro_pasado",
   "prefiltro_revision",
+  // Legacy · candidatos pre-mayo 2026
   "assessment_invitado",
   "assessment_en_progreso",
   "assessment_completado",
   "entrevista_ia",
-  "bateria_psicometrica",
+  // Pipeline activo v3
   "recruiter_interview",
+  "hiring_lead_interview",
   "cwo_interview",
+  "bateria_psicometrica",
+  "solicitud_enviada_mary",
   "touring",
   "terna",
   "oferta",
   "contratado",
+  "onboarding",
   "rechazado",
 ];
 

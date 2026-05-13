@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
@@ -176,17 +177,85 @@ export async function POST(req: NextRequest) {
       console.warn("No se pudieron cargar recruiter assessments:", e);
     }
 
+    // 3b. Cargar applications (Neon) por email · trae CV + LinkedIn del flujo público
+    type AppRow = {
+      id: number;
+      email: string;
+      linkedin: string | null;
+      cv_filename: string | null;
+      why_ts: string | null;
+      prefilter_data: Record<string, unknown> | null;
+      score: number | null;
+    };
+    const appByEmail = new Map<string, AppRow>();
+    try {
+      const emails = Array.from(new Set(cands.map(c => (c.email || "").toLowerCase().trim()).filter(Boolean)));
+      if (emails.length > 0) {
+        const appRows = await sql`
+          SELECT id, email, linkedin, cv_filename, why_ts, prefilter_data, score
+          FROM applications
+          WHERE LOWER(email) = ANY(${emails})
+          ORDER BY created_at DESC
+        ` as unknown as AppRow[];
+        // Mantener la aplicación más reciente por email
+        for (const a of appRows) {
+          const k = (a.email || "").toLowerCase().trim();
+          if (!appByEmail.has(k)) appByEmail.set(k, a);
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudieron cargar applications de Neon:", e);
+    }
+
     // 4. Armar las filas
     const rows = cands.map((c, idx) => {
       const a = assessmentMap.get(c.id);
-      const cedula = pickFromAny(c, ["cedula", "identification", "document_number", "document"]);
-      const linkedin = c.linkedin_url || pickFromAny(c, ["linkedin_url", "linkedin"]);
-      const cv = c.cv_url || (c.cv_filename ? `${APP_URL}/api/cv/${c.id}` : pickFromAny(c, ["cv_url", "cv_link"]));
-      const currentRole = c.current_job_role || pickFromAny(c, ["current_job_role", "current_role", "current_position"]);
-      const city = pickFromAny(c, ["city", "ciudad"]);
-      const prefScore = c.prefilter_score != null ? c.prefilter_score : (pickFromAny(c, ["prefilter_score", "score"]) || "");
-      const prefNotes = c.prefilter_notes || pickFromAny(c, ["prefilter_notes", "notes", "why_ts"]);
-      const rejectionReason = c.rejection_reason || pickFromAny(c, ["rejection_reason", "rejection_notes", "reject_reason"]);
+      const app = c.email ? appByEmail.get(c.email.toLowerCase().trim()) : undefined;
+      // PrefData del flujo público (Neon) · puede tener más data que el snapshot en Supabase
+      const appPref = (app?.prefilter_data || {}) as Record<string, unknown>;
+
+      const cedula = pickFromAny(c, ["cedula", "identification", "document_number", "document"])
+        || (appPref["cedula"] as string)
+        || (appPref["identification"] as string)
+        || "";
+
+      // LinkedIn · primero ht_candidates, después applications.linkedin
+      const linkedin =
+        c.linkedin_url ||
+        pickFromAny(c, ["linkedin_url", "linkedin"]) ||
+        app?.linkedin ||
+        (appPref["linkedin"] as string) ||
+        "";
+
+      // CV · si applications tiene cv_filename, construye URL al endpoint admin
+      let cv = "";
+      let cvFilename = "";
+      if (app?.cv_filename && app?.id) {
+        cv = `${APP_URL}/api/admin/cv/${app.id}`;
+        cvFilename = app.cv_filename;
+      } else if (c.cv_url) {
+        cv = c.cv_url;
+      } else if (c.cv_filename) {
+        cv = `${APP_URL}/api/cv/${c.id}`;
+        cvFilename = c.cv_filename;
+      } else {
+        cv = pickFromAny(c, ["cv_url", "cv_link"]);
+      }
+
+      const currentRole = c.current_job_role
+        || pickFromAny(c, ["current_job_role", "current_role", "current_position"])
+        || (appPref["current_job_role"] as string)
+        || (appPref["current_role"] as string)
+        || "";
+      const city = pickFromAny(c, ["city", "ciudad"]) || (appPref["city"] as string) || "";
+      const prefScore = c.prefilter_score != null
+        ? c.prefilter_score
+        : (pickFromAny(c, ["prefilter_score", "score"]) || (app?.score ?? "") || "");
+      const prefNotes = c.prefilter_notes
+        || pickFromAny(c, ["prefilter_notes", "notes", "why_ts"])
+        || (app?.why_ts || "");
+      const rejectionReason = c.rejection_reason
+        || pickFromAny(c, ["rejection_reason", "rejection_notes", "reject_reason"]);
       const verdict = a?.verdict ? (VERDICT_LABEL[a.verdict] || a.verdict) : "";
       const englishCombined = a?.english_real
         ? `${a.english_real}${a.english_verdict ? ` (${a.english_verdict})` : ""}`
@@ -201,7 +270,8 @@ export async function POST(req: NextRequest) {
         "Email": c.email || "",
         "Teléfono": c.phone || "",
         "LinkedIn": linkedin || "",
-        "CV (URL)": cv || "",
+        "Archivo CV": cvFilename || "",
+        "Ver CV (URL)": cv || "",
         "Cargo actual": currentRole,
         "Ciudad": city,
         "Aplicó": c.created_at ? new Date(c.created_at).toISOString().slice(0, 10) : "",
