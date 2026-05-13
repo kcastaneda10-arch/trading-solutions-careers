@@ -97,10 +97,10 @@ export async function POST(
       return NextResponse.json({ error: "vacancyId inválido" }, { status: 400 });
     }
 
-    // 1. Cargar la vacante desde live_vacancies (lo que usa la página pública)
+    // 1. Cargar la vacante desde `vacancies` (Neon · misma tabla que usa /api/vacancies)
     let vacancyRow: Record<string, unknown> | null = null;
     try {
-      const rows = await sql`SELECT * FROM live_vacancies WHERE id = ${vid} LIMIT 1`;
+      const rows = await sql`SELECT * FROM vacancies WHERE id = ${vid} LIMIT 1`;
       vacancyRow = rows[0] || null;
     } catch (e) {
       console.error("Error cargando vacante:", e);
@@ -118,7 +118,7 @@ export async function POST(
     const location =
       String(vacancyRow.location_es || vacancyRow.location || "Barranquilla");
     const mode =
-      String(vacancyRow.mode_es || vacancyRow.mode || "");
+      String(vacancyRow.work_mode || vacancyRow.mode_es || vacancyRow.mode || "");
     const description =
       String(vacancyRow.description_es || vacancyRow.description || "");
     const responsibilities =
@@ -160,7 +160,7 @@ export async function POST(
 
     // 4. Tracking opcional · si la columna existe, registra
     try {
-      await sql`UPDATE live_vacancies SET internal_posted_at = NOW() WHERE id = ${vid}`;
+      await sql`UPDATE vacancies SET internal_posted_at = NOW() WHERE id = ${vid}`;
     } catch {
       // columna probablemente no existe — no bloquear
     }
