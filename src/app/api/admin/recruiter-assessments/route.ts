@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       candidate_id: candidateId,
       assessment_stage: body.assessment_stage || "recruiter_interview",
       interview_date: body.interview_date || new Date().toISOString(),
-      interviewer_email: body.interviewer_email || "kcastaneda@tradingsolutions.com",
+      interviewer_email: body.interviewer_email || "jointheteam@tradingsolutions.com",
       duration_minutes: body.duration_minutes || null,
       mandate_scores: body.mandate_scores || {},
       mandate_evidence: body.mandate_evidence || {},

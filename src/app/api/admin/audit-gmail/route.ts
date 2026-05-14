@@ -1,7 +1,7 @@
 /**
  * POST /api/admin/audit-gmail
  *
- * Cruza candidatos del ATS con su historial de Gmail (kcastaneda@tradingsolutions.com)
+ * Cruza candidatos del ATS con su historial de Gmail (jointheteam@tradingsolutions.com)
  * para detectar inconsistencias entre stage en ATS vs último intercambio en email.
  *
  * Detecta señales como:

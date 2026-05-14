@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
       subject,
       html,
       fromName: 'Kelly Castañeda',
-      replyTo: 'kcastaneda@tradingsolutions.com',
+      replyTo: 'jointheteam@tradingsolutions.com',
     });
 
     if (!draftRes.ok) {

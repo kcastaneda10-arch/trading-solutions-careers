@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
         subject: `Pruebas psicométricas · batch de ${cands.length} candidatos · ${new Date().toLocaleDateString("es-CO")}`,
         html,
         fromName: "Trading Solutions · Talento",
-        replyTo: "kcastaneda@tradingsolutions.com",
+        replyTo: "jointheteam@tradingsolutions.com",
       });
       if (draftRes.ok) draftId = draftRes.draft_id;
     } catch (e: any) {

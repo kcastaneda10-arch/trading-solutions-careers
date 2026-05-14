@@ -66,7 +66,7 @@ export default function AiInterviewPage() {
           const j = await r.json().catch(() => ({}));
           if (!cancelled) {
             setError(
-              j.error === "expired_token" ? "Este enlace expiró. Contacta a kcastaneda@tradingsolutions.com" :
+              j.error === "expired_token" ? "Este enlace expiró. Contacta a jointheteam@tradingsolutions.com" :
               j.error === "already_completed" ? "Ya completaste esta entrevista. Te contactaremos pronto." :
               j.error === "invalid_token" ? "Enlace inválido. Verifica que copiaste la URL completa." :
               "Error: " + (j.error || r.status)
@@ -79,7 +79,7 @@ export default function AiInterviewPage() {
         if (!cancelled) {
           setConfig(j);
           if (!j.agent_id) {
-            setError("Configuración del agente incompleta. Contacta a kcastaneda@tradingsolutions.com");
+            setError("Configuración del agente incompleta. Contacta a jointheteam@tradingsolutions.com");
             setPhase("error");
           } else {
             setPhase("welcome");
@@ -306,8 +306,8 @@ export default function AiInterviewPage() {
               con la finalidad de evaluar mi candidatura para la posición de{" "}
               <strong>{config?.vacancy?.title}</strong>. Los datos serán almacenados de forma segura, no se compartirán con terceros sin mi consentimiento expreso, y podré ejercer mis derechos de
               acceso, rectificación, actualización y supresión escribiendo a{" "}
-              <a href="mailto:kcastaneda@tradingsolutions.com" style={{ color: "#2C64ED" }}>
-                kcastaneda@tradingsolutions.com
+              <a href="mailto:jointheteam@tradingsolutions.com" style={{ color: "#2C64ED" }}>
+                jointheteam@tradingsolutions.com
               </a>.
             </p>
             <label style={checkboxLabel}>

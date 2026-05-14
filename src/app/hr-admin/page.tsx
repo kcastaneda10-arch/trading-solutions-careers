@@ -4932,7 +4932,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               type="email"
               value={replyToDraft}
               onChange={(e) => setReplyToDraft(e.target.value)}
-              placeholder="kcastaneda@tradingsolutions.com"
+              placeholder="jointheteam@tradingsolutions.com"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
             <div className="text-xs text-gray-500 mt-1">
@@ -4948,7 +4948,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               type="email"
               value={bccDraft}
               onChange={(e) => setBccDraft(e.target.value)}
-              placeholder="kcastaneda@tradingsolutions.com"
+              placeholder="jointheteam@tradingsolutions.com"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
             <div className="text-xs text-gray-500 mt-1">

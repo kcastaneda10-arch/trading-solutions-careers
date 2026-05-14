@@ -82,7 +82,7 @@ export async function POST(
       : "https://trading-solutions-careers.vercel.app";
     const surveyLink = `${baseUrl}/encuesta/${token}`;
 
-    // Send email via Gmail · sale desde kcastaneda@tradingsolutions.com con buena entregabilidad
+    // Send email via Gmail · sale desde jointheteam@tradingsolutions.com con buena entregabilidad
     let emailResult = null;
     if (send && cand.email) {
       try {
@@ -124,7 +124,7 @@ export async function POST(
             subject,
             html,
             fromName: "Kelly Castañeda",
-            replyTo: "kcastaneda@tradingsolutions.com",
+            replyTo: "jointheteam@tradingsolutions.com",
           });
 
           if (r.ok) {

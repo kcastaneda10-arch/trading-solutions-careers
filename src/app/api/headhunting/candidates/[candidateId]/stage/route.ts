@@ -243,7 +243,7 @@ export async function POST(
             subject: `Bienvenida/o a Trading Solutions, ${firstName}`,
             html: welcomeHtml,
             fromName: "Kelly Castañeda",
-            replyTo: "kcastaneda@tradingsolutions.com",
+            replyTo: "jointheteam@tradingsolutions.com",
           });
           if (welcomeRes.ok) {
             welcomeDraftId = welcomeRes.draft_id;

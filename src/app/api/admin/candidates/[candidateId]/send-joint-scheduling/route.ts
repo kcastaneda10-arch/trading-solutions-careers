@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { candidateId
       subject: `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
       html,
       fromName: "Kelly Castañeda",
-      replyTo: "kcastaneda@tradingsolutions.com",
+      replyTo: "jointheteam@tradingsolutions.com",
     });
 
     if (!draftRes.ok) return NextResponse.json({ error: draftRes.error }, { status: 500 });

@@ -499,7 +499,7 @@ export async function POST(req: NextRequest) {
         subject: `Handoff pipeline · ${totalCount} candidatos · ${vacancyTitles.slice(0, 80)}`,
         html,
         fromName: "Kelly Castañeda",
-        replyTo: "kcastaneda@tradingsolutions.com",
+        replyTo: "jointheteam@tradingsolutions.com",
       });
       if (draftRes.ok) draftId = draftRes.draft_id;
     } catch (e: any) {

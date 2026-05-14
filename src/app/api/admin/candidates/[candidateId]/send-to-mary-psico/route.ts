@@ -191,7 +191,7 @@ export async function POST(
           subject: `Pruebas psicométricas · ${candidate.name} · ${vacancyTitle}`,
           html,
           fromName: "Kelly Castañeda",
-          replyTo: "kcastaneda@tradingsolutions.com",
+          replyTo: "jointheteam@tradingsolutions.com",
         });
         if (draftRes.ok) draftId = draftRes.draft_id;
       } else {

@@ -1,6 +1,6 @@
 /**
  * Gmail API helper — envía correos desde la cuenta Google Workspace de Kelly
- * (kcastaneda@tradingsolutions.com). Una sola fila singleton en
+ * (jointheteam@tradingsolutions.com). Una sola fila singleton en
  * `google_oauth_tokens` (id=1) guarda refresh_token + access_token + expiry.
  *
  * Flujo:

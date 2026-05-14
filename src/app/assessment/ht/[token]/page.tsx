@@ -1111,7 +1111,7 @@ export default function AssessmentPage() {
 
                 <p className="font-semibold" style={{ color: TS_COLORS.black }}>6. Encargado y canales de atención</p>
                 <p>
-                  El tratamiento de datos es realizado a través de la plataforma de evaluación de <strong>TRADING SOLUTIONS S.A.S.</strong>, que actúa también como Encargado del Tratamiento. Para ejercer sus derechos como titular, puede comunicarse al correo del área de Talento Humano: <strong>kcastaneda@tradingsolutions.com</strong>.
+                  El tratamiento de datos es realizado a través de la plataforma de evaluación de <strong>TRADING SOLUTIONS S.A.S.</strong>, que actúa también como Encargado del Tratamiento. Para ejercer sus derechos como titular, puede comunicarse al correo del área de Talento Humano: <strong>jointheteam@tradingsolutions.com</strong>.
                 </p>
 
                 <p className="font-semibold" style={{ color: TS_COLORS.black }}>7. Carácter facultativo</p>

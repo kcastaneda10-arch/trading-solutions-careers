@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const payload: Record<string, unknown> = {
       token,
-      created_by_email: body.created_by_email || "kcastaneda@tradingsolutions.com",
+      created_by_email: body.created_by_email || "jointheteam@tradingsolutions.com",
       candidate_id: cand.id,
       candidate_name: cand.name,
       candidate_email: cand.email,

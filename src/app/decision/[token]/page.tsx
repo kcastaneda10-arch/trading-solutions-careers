@@ -128,7 +128,7 @@ export default function DecisionPage() {
             <h2 className="text-2xl font-bold tracking-tight mb-2">{decisionLabel[decision || ''] || decision}</h2>
             <p className="text-sm text-gray-600 leading-relaxed">
               Gracias por responder. El stage del candidato se actualizó automáticamente.
-              Si necesitás cambiar la decisión, escribí a kcastaneda@tradingsolutions.com.
+              Si necesitás cambiar la decisión, escribí a jointheteam@tradingsolutions.com.
             </p>
             {state.candidate && (
               <p className="text-xs text-gray-400 mt-4">

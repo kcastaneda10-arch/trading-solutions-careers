@@ -7,7 +7,7 @@
  * Scopes solicitados:
  *   - gmail.compose: crear drafts (incluye gmail.send implícito) — para que HR
  *     pueda revisar el correo antes de enviar
- *   - email: identificar su correo (kcastaneda@tradingsolutions.com)
+ *   - email: identificar su correo (jointheteam@tradingsolutions.com)
  *
  * Después del consent, Google redirige a /api/google/callback?code=...
  */

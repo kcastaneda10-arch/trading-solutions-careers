@@ -225,7 +225,7 @@ export async function GET(req: NextRequest) {
           subject: rendered.email_subject,
           html: rendered.email_body.replace(/\n/g, "<br>"),
           fromName: "Kelly Castañeda",
-          replyTo: "kcastaneda@tradingsolutions.com",
+          replyTo: "jointheteam@tradingsolutions.com",
         });
 
         if (draftRes.ok) {

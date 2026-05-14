@@ -7,7 +7,7 @@
  *   - Aging crítico
  *   - Quick wins
  *
- * Recipient: kcastaneda@tradingsolutions.com (configurable vía env DIGEST_RECIPIENT).
+ * Recipient: jointheteam@tradingsolutions.com (configurable vía env DIGEST_RECIPIENT).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "gmail_not_connected" }, { status: 503 });
     }
 
-    const recipient = process.env.DIGEST_RECIPIENT || "kcastaneda@tradingsolutions.com";
+    const recipient = process.env.DIGEST_RECIPIENT || "jointheteam@tradingsolutions.com";
 
     // 1. Drafts de recordatorio creados en las últimas 24h
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

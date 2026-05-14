@@ -317,7 +317,7 @@ export async function POST(
       const decisionLabel = decision === "pass" ? "PASS" : decision === "review" ? "REVIEW" : "REJECT";
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
       await sendViaGmail({
-        to: "kcastaneda@tradingsolutions.com",
+        to: "jointheteam@tradingsolutions.com",
         subject: `[Prefiltro ${decisionLabel}] ${candidate.name} · ${vacancyTitle}`,
         html: `<!DOCTYPE html><html><body style="font-family: Inter, sans-serif; padding: 16px; color: #1a1a1a;">
           <p>Kelly, <strong>${candidate.name}</strong> acaba de completar el prefiltro.</p>

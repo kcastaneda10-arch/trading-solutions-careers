@@ -287,7 +287,7 @@ export default function PrefiltroForm() {
               <li>Tus datos serán almacenados de forma segura en nuestra base de candidatos.</li>
               <li>No serán compartidos con terceros sin tu autorización expresa.</li>
               <li>Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos en cualquier momento.</li>
-              <li>Para ejercer tus derechos puedes escribirnos a <strong>kcastaneda@tradingsolutions.com</strong>.</li>
+              <li>Para ejercer tus derechos puedes escribirnos a <strong>jointheteam@tradingsolutions.com</strong>.</li>
             </ul>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 16, border: `2px solid ${habeasAccepted ? TS_BLACK : TS_BORDER}`, borderRadius: 12, cursor: "pointer", background: habeasAccepted ? "#F9FAFB" : "white" }}>
               <input

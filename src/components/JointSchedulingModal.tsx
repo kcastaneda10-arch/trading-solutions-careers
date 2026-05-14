@@ -20,7 +20,7 @@ type Props = {
 
 // Líderes de Trading Solutions · 22 cargos con gente a cargo
 // Cuando se agreguen al modal, sus calendarios deben estar compartidos con
-// kcastaneda@tradingsolutions.com (mínimo "See only free/busy").
+// jointheteam@tradingsolutions.com (mínimo "See only free/busy").
 const COMMON_INTERVIEWERS = [
   // C-Suite
   { email: "manager@tradingsolutions.com", name: "Andres Consuegra · CEO" },
@@ -195,7 +195,7 @@ sales-lead@tradingsolutions.com : Jhonny Farah"
                   className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-xs font-mono focus:outline-none focus:border-black"
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Formato: <code>email : Nombre</code> (uno por línea). Sus calendarios deben estar compartidos con kcastaneda@tradingsolutions.com (mínimo "free/busy access").
+                  Formato: <code>email : Nombre</code> (uno por línea). Sus calendarios deben estar compartidos con jointheteam@tradingsolutions.com (mínimo "free/busy access").
                 </p>
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {COMMON_INTERVIEWERS.map(i => (

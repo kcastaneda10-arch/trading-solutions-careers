@@ -138,8 +138,8 @@ export default function HRLoginPage() {
           <div className="mt-8 pt-6 border-t border-gray-100">
             <p className="text-[11px] text-gray-400 text-center leading-relaxed">
               ¿Sin acceso? Contacta a{" "}
-              <a className="text-black hover:underline font-medium" href="mailto:kcastaneda@tradingsolutions.com">
-                kcastaneda@tradingsolutions.com
+              <a className="text-black hover:underline font-medium" href="mailto:jointheteam@tradingsolutions.com">
+                jointheteam@tradingsolutions.com
               </a>
             </p>
           </div>

@@ -150,7 +150,7 @@ export async function POST(
         subject: `Oportunidad interna · ${title}`,
         html,
         fromName: "Trading Solutions · Talento",
-        replyTo: "kcastaneda@tradingsolutions.com",
+        replyTo: "jointheteam@tradingsolutions.com",
       });
       if (draftRes.ok) draftId = draftRes.draft_id;
     } catch (e: any) {

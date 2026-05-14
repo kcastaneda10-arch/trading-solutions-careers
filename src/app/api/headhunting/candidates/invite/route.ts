@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     // Get client info for branding
     const clientName = candidate.ht_clients?.name || 'Trading Solutions';
     const vacancyTitle = candidate.ht_vacancies?.title || 'la vacante';
-    const senderEmail = candidate.ht_clients?.sender_email || 'kcastaneda@tradingsolutions.com';
+    const senderEmail = candidate.ht_clients?.sender_email || 'jointheteam@tradingsolutions.com';
 
     // ── Construir el HTML del correo (compartido por draft y send) ───────
     const emailSubject = `Trading Solutions · Evaluación para ${vacancyTitle}`;
