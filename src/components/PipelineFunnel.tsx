@@ -1177,6 +1177,39 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             <option value={REJECTED_STAGE.id}>{REJECTED_STAGE.label}</option>
           </select>
 
+          {!isTerminal && (currentStage === "prefiltro_enviado" || currentStage === "aplico") && (
+            <button
+              onClick={async () => {
+                if (busy) return;
+                setBusy(true);
+                setFeedback("Regenerando link de prefiltro…");
+                try {
+                  const r = await fetch(`/api/headhunting/candidates/${cand.id}/send-prefilter`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                  });
+                  const j = await r.json();
+                  if (j.success) {
+                    setFeedback(j.channel === "gmail-draft" ? "✅ Draft Gmail listo con link nuevo" : `⚠️ ${j.note || j.channel}`);
+                    setTimeout(() => setFeedback(""), 4000);
+                  } else {
+                    setFeedback(`❌ ${j.error || "Error"}`);
+                  }
+                } catch (e) {
+                  setFeedback(`❌ ${(e as Error).message}`);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              className="text-xs font-bold px-4 py-2 rounded-full border-2 border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+              title="Regenera el token del cuestionario y crea un nuevo draft en tu Gmail con el link"
+            >
+              🔄 Reenviar Prefiltro
+            </button>
+          )}
+
           {!isTerminal && (
             <button
               onClick={async () => {
