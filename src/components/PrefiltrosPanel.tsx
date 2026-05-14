@@ -303,7 +303,17 @@ export default function PrefiltrosPanel() {
                       ) : c.prefilter_completed_at ? (
                         <span className="text-xs text-gray-500">{new Date(c.prefilter_completed_at).toLocaleDateString()}</span>
                       ) : (
-                        <span className="text-xs text-gray-500">Esperando respuesta</span>
+                        <div className="flex items-center gap-2 justify-end">
+                          <span className="text-xs text-gray-500">Esperando respuesta</span>
+                          <button
+                            onClick={() => sendOne(c)}
+                            disabled={busy.has(c.id)}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-full border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:bg-gray-100 disabled:text-gray-400"
+                            title="Regenerar token y crear nuevo draft de Gmail"
+                          >
+                            {busy.has(c.id) ? "…" : "🔄 Reenviar"}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
