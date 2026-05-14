@@ -125,6 +125,7 @@ export const translations = {
       Corporate: "Corporate",
       Comercial: "Comercial",
       People: "People",
+      Talento: "Talento",
       Finanzas: "Finanzas"
     },
     modeNames: {
@@ -257,6 +258,7 @@ export const translations = {
       Corporate: "Corporate",
       Comercial: "Commercial",
       People: "People",
+      Talento: "Talent",
       Finanzas: "Finance"
     },
     modeNames: {
