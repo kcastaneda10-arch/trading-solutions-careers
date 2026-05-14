@@ -4,6 +4,17 @@ import { prefilter, toPrefilterData } from "@/lib/agent/prefilter";
 import { generatePortalToken } from "@/lib/portal-token";
 import { getResend, EMAIL_FROM } from "@/lib/resend";
 import { sendViaGmail, isGmailConnected } from "@/lib/gmail";
+import { supabaseAdmin } from "@/lib/supabase";
+
+// Mapping job_id (jobs.ts) → vacancy_id (Supabase ht_vacancies)
+// Mantener sincronizado con /api/admin/sync-applications-to-funnel
+const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+const VACANCY_MAP: Record<number, string> = {
+  2: "c25ce70b-9244-4393-aea6-75372a99a6ef", // Inside Sales Support
+  3: "6e4838dd-8aea-4426-bd26-ea588f0f493a", // Customer Documentation Specialist
+  4: "d354c55a-eb1c-4aee-bd02-b0a20162e1f1", // Pricing Junior
+  5: "70c39cab-adaf-49a0-b137-29d0ff9b56b0", // Talent Acquisition and Development Lead
+};
 
 let dbInitialized = false;
 
@@ -70,6 +81,47 @@ export async function POST(request: NextRequest) {
     `;
 
     const newId = result[0].id as number;
+
+    // ─── Auto-sync al funnel del ATS (Supabase ht_candidates) ──
+    // Cada nueva aplicación entra directo al funnel en stage 'aplico'
+    // sin necesidad de correr sync manual. Idempotente · si ya existe el email
+    // solo actualiza el updated_at.
+    try {
+      const vacancyId = VACANCY_MAP[job_id];
+      if (vacancyId) {
+        const emailNormalized = emailLower;
+        const { data: existing } = await supabaseAdmin
+          .from("ht_candidates")
+          .select("id")
+          .ilike("email", emailNormalized)
+          .maybeSingle();
+
+        if (existing?.id) {
+          await supabaseAdmin
+            .from("ht_candidates")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+        } else {
+          await supabaseAdmin
+            .from("ht_candidates")
+            .insert({
+              client_id: TS_CLIENT_ID,
+              vacancy_id: vacancyId,
+              name: full_name,
+              email: emailNormalized,
+              phone: phone || null,
+              stage: "aplico",
+              source: isInternal ? "public_form_internal" : "public_form",
+              notes: why_ts ? `[Public form] ${why_ts}` : `[Public form] · application_id=${newId}`,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+        }
+      }
+    } catch (syncErr) {
+      // No bloquear el flujo de aplicación si el sync falla · queda para sync manual posterior
+      console.error("auto-sync to ht_candidates failed:", syncErr);
+    }
 
     // ─── Email automático: confirmación de aplicación recibida con link al portal ──
     // Solo cuando la aplicación viene de la web pública (no de import bulk)
