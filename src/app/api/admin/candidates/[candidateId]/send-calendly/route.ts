@@ -22,29 +22,45 @@ export const runtime = "nodejs";
 // URL por defecto · Calendly individual de Kelly (Entrevista Recruiter solo).
 const CALENDLY_URL_DEFAULT = process.env.CALENDLY_BASE_URL || "https://calendly.com/kcastaneda-tradingsolutions/30min";
 
+// Yohanna Franco · Chief Wellness Officer
+const YOHANNA_CALENDLY = "https://calendly.com/cwo-tradingsolutions/new-meeting";
+const YOHANNA_HOST = {
+  firstName: "Yohanna",
+  fullName: "Yohanna Franco",
+  role: "Chief Wellness Officer · Trading Solutions",
+};
+
 // URLs especiales por vacancy_id · personalizadas según quién hace la entrevista recruiter
 const CALENDLY_URL_BY_VACANCY: Record<string, string> = {
   // Talent Acquisition and Development Lead · Yohanna Franco (CWO) es la recruiter
-  "70c39cab-adaf-49a0-b137-29d0ff9b56b0": "https://calendly.com/cwo-tradingsolutions/new-meeting",
+  "70c39cab-adaf-49a0-b137-29d0ff9b56b0": YOHANNA_CALENDLY,
 };
 
 // Hosts/firmas por vacancy_id · para personalizar el copy y firma del email
 const CALENDLY_HOST_BY_VACANCY: Record<string, { firstName: string; fullName: string; role: string }> = {
-  "70c39cab-adaf-49a0-b137-29d0ff9b56b0": {
-    firstName: "Yohanna",
-    fullName: "Yohanna Franco",
-    role: "Chief Wellness Officer · Trading Solutions",
-  },
+  "70c39cab-adaf-49a0-b137-29d0ff9b56b0": YOHANNA_HOST,
 };
 
-function getCalendlyUrl(vacancyId: string | null | undefined): string {
+// Stages en los que Yohanna es siempre la host (independiente de la vacante)
+const YOHANNA_STAGES = new Set(["cwo_interview"]);
+
+function getCalendlyUrl(vacancyId: string | null | undefined, stage: string | null | undefined): string {
+  // 1. Si el stage es de Yohanna (ej. cwo_interview) · siempre Yohanna
+  if (stage && YOHANNA_STAGES.has(stage)) {
+    return YOHANNA_CALENDLY;
+  }
+  // 2. Si la vacante tiene un host personalizado (ej. Talent → Yohanna)
   if (vacancyId && CALENDLY_URL_BY_VACANCY[vacancyId]) {
     return CALENDLY_URL_BY_VACANCY[vacancyId];
   }
+  // 3. Default · Kelly
   return CALENDLY_URL_DEFAULT;
 }
 
-function getHost(vacancyId: string | null | undefined): { firstName: string; fullName: string; role: string } {
+function getHost(vacancyId: string | null | undefined, stage: string | null | undefined): { firstName: string; fullName: string; role: string } {
+  if (stage && YOHANNA_STAGES.has(stage)) {
+    return YOHANNA_HOST;
+  }
   if (vacancyId && CALENDLY_HOST_BY_VACANCY[vacancyId]) {
     return CALENDLY_HOST_BY_VACANCY[vacancyId];
   }
@@ -98,7 +114,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, phone, vacancy_id, ht_vacancies(title)")
+      .select("id, name, email, phone, vacancy_id, stage, ht_vacancies(title)")
       .eq("id", candidateId)
       .single();
 
@@ -110,8 +126,12 @@ export async function POST(
     // @ts-expect-error supabase relation
     const vacancyTitle: string = candidate.ht_vacancies?.title || "la posición";
 
-    // Elige Collective URL si la vacante lo requiere · sino solo Kelly
-    const baseCalendlyUrl = getCalendlyUrl(candidate.vacancy_id as string | null);
+    // Selección de host según stage y vacante:
+    //   1. Stage cwo_interview → siempre Yohanna (en cualquier vacante)
+    //   2. Vacante Talent Acquisition → Yohanna como recruiter
+    //   3. Default → Kelly
+    const candidateStage = candidate.stage as string | null;
+    const baseCalendlyUrl = getCalendlyUrl(candidate.vacancy_id as string | null, candidateStage);
     const calendlyUrl = buildPrefillUrl(
       baseCalendlyUrl,
       candidate.name as string,
@@ -119,7 +139,7 @@ export async function POST(
       vacancyTitle
     );
 
-    const host = getHost(candidate.vacancy_id as string | null);
+    const host = getHost(candidate.vacancy_id as string | null, candidateStage);
     const isCustomHost = baseCalendlyUrl !== CALENDLY_URL_DEFAULT;
     let draftId: string | null = null;
     if (candidate.email) {
