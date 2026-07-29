@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useLanguage } from "@/i18n/context";
-import { jobs, departments, modes } from "@/data/jobs";
+import { fetchOpenJobs, deriveDepartments, deriveModes, type Job } from "@/lib/vacancies-adapter";
 import { Search, MapPin, Briefcase, ArrowUpRight, ArrowLeft } from "lucide-react";
 
 function VacantesContent() {
@@ -14,9 +14,28 @@ function VacantesContent() {
   const initialDept = searchParams.get("dept") || "all";
   const { t, locale } = useLanguage();
 
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState(initialDept);
   const [modeFilter, setModeFilter] = useState("all");
+
+  useEffect(() => {
+    let active = true;
+    fetchOpenJobs()
+      .then((list) => {
+        if (active) setJobs(list);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const departments = useMemo(() => deriveDepartments(jobs), [jobs]);
+  const modes = useMemo(() => deriveModes(jobs), [jobs]);
 
   const filtered = useMemo(() => {
     return jobs.filter((j) => {
@@ -29,7 +48,7 @@ function VacantesContent() {
       }
       return true;
     });
-  }, [search, deptFilter, modeFilter, locale]);
+  }, [jobs, search, deptFilter, modeFilter, locale]);
 
   const resetFilters = () => {
     setSearch("");
@@ -117,6 +136,13 @@ function VacantesContent() {
               </div>
             </div>
 
+            {/* Loading */}
+            {loading ? (
+              <div className="text-center py-16">
+                <p className="text-gray-400 text-lg">{locale === "es" ? "Cargando vacantes..." : "Loading positions..."}</p>
+              </div>
+            ) : (
+            <>
             {/* Count */}
             <p className="text-sm text-gray-500 mb-6">
               {filtered.length} {filtered.length === 1 ? t.jobs.resultsSingular : t.jobs.resultsPlural}
@@ -169,6 +195,8 @@ function VacantesContent() {
                   {t.jobs.clearFilters}
                 </button>
               </div>
+            )}
+            </>
             )}
           </div>
         </section>
