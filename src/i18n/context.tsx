@@ -13,7 +13,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("es");
+  const [locale, setLocaleState] = useState<Locale>("en");
 
   const setLocale = useCallback((l: Locale) => setLocaleState(l), []);
   const toggleLocale = useCallback(() => setLocaleState((prev) => (prev === "es" ? "en" : "es")), []);
