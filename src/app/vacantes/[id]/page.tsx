@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useLanguage } from "@/i18n/context";
-import { jobs } from "@/data/jobs";
+import { fetchOpenJobs, type Job } from "@/lib/vacancies-adapter";
 import { ArrowLeft, MapPin, Check, ArrowUpRight, Upload, X, CheckCircle } from "lucide-react";
 
 export default function JobDetailPage() {
@@ -14,7 +14,8 @@ export default function JobDetailPage() {
   const searchParams = useSearchParams();
   // ?ref=interno · cuando llegan desde el newsletter interno
   const ref = searchParams?.get("ref") || null;
-  const job = jobs.find((j) => j.id === Number(id));
+  const [job, setJob] = useState<Job | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
   const { t, locale } = useLanguage();
   const [showApply, setShowApply] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -28,12 +29,38 @@ export default function JobDetailPage() {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    fetchOpenJobs()
+      .then((list) => {
+        if (active) setJob(list.find((j) => j.id === Number(id)));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   const modeName = (m: string) => (t.modeNames as Record<string, string>)[m] || m;
   const deptName = (d: string) => (t.deptNames as Record<string, string>)[d] || d;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="pt-40 pb-20 text-center min-h-screen bg-white">
+          <p className="text-gray-400 text-lg">{locale === "es" ? "Cargando..." : "Loading..."}</p>
+        </div>
+        <Footer />
+      </>
+    );
+  }
 
   if (!job) {
     return (
