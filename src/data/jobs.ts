@@ -16,7 +16,7 @@ export interface Job {
   postedAt: string;
 }
 
-export const departments = ["Comercial", "Operaciones", "Talento", "Finanzas"] as const;
+export const departments = ["Comercial", "Operaciones", "Finanzas", "Pricing"] as const;
 export const modes = ["Presencial", "Híbrido", "Remoto"] as const;
 
 /**
@@ -91,198 +91,245 @@ export const jobs: Job[] = [
     postedAt: "2026-04-14",
   },
   {
-    id: 3,
-    slug: "customer-documentation-specialist",
-    linkedinUrl: "https://www.linkedin.com/jobs/view/4403956946/",
+    id: 6,
+    slug: "china-customer-documentation",
+    linkedinUrl: "",
     title: {
-      es: "Customer Documentation Specialist",
-      en: "Customer Documentation Specialist",
+      es: "Customer Documentation and Support",
+      en: "Customer Documentation and Support",
+    },
+    dept: "Finanzas",
+    location: "Shanghai / Shenzhen / Guangzhou, China",
+    mode: "Presencial",
+    level: "Junior",
+    salary: "A convenir",
+    tags: ["China", "Finance", "Documentation", "Freight Forwarding", "Builder Team"],
+    description: {
+      es: `📢 We're building our Builder Team in China! Looking for a Customer Documentation & Support professional to be the administrative and financial backbone of our expansion across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will be the bridge between our Commercial, Operations, Pricing, and Finance teams — making sure every shipment has its complete financial and logistical "resume," and that billing flows without friction.`,
+      en: `📢 We're building our Builder Team in China! Looking for a Customer Documentation & Support professional to be the administrative and financial backbone of our expansion across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will be the bridge between our Commercial, Operations, Pricing, and Finance teams — making sure every shipment has its complete financial and logistical "resume," and that billing flows without friction.`,
+    },
+    responsibilities: {
+      es: [
+        "Verify and register received and issued invoices, making sure they match contracts and purchase orders",
+        "Consolidate costs, sales, and profitability by client or service, flagging risks along the way",
+        "Register and update rates on the Federal Maritime Commission platform",
+        "Handle the physical onboarding of new team members and keep the workspace (WeWork) organized",
+        "Provide cross-functional support across Sales, Operations, and Procurement during this fast-paced launch phase",
+        "Keep records organized with proper digital backups and report any inconsistencies to your supervisor",
+      ],
+      en: [
+        "Verify and register received and issued invoices, making sure they match contracts and purchase orders",
+        "Consolidate costs, sales, and profitability by client or service, flagging risks along the way",
+        "Register and update rates on the Federal Maritime Commission platform",
+        "Handle the physical onboarding of new team members and keep the workspace (WeWork) organized",
+        "Provide cross-functional support across Sales, Operations, and Procurement during this fast-paced launch phase",
+        "Keep records organized with proper digital backups and report any inconsistencies to your supervisor",
+      ],
+    },
+    requirements: {
+      es: [
+        "Professional or technologist degree in Foreign Trade, International Business, Administration, or related fields",
+        "Advanced English (B2-C1)",
+        "1 to 2 years of experience in document management",
+      ],
+      en: [
+        "Professional or technologist degree in Foreign Trade, International Business, Administration, or related fields",
+        "Advanced English (B2-C1)",
+        "1 to 2 years of experience in document management",
+      ],
+    },
+    applyEmail: "jointheteam@tradingsolutions.com",
+    postedAt: "2026-07-29",
+  },
+  {
+    id: 7,
+    slug: "china-operations-executive",
+    linkedinUrl: "",
+    title: {
+      es: "Operations Executive and Support",
+      en: "Operations Executive and Support",
     },
     dept: "Operaciones",
-    location: "Barranquilla, Atlántico, Colombia",
+    location: "Shanghai / Shenzhen / Guangzhou, China",
     mode: "Presencial",
     level: "Junior",
-    salary: "Competitivo según experiencia + beneficios",
-    tags: ["Compliance", "Documentación Aduanera", "Bill of Lading", "Incoterms", "Freight Forwarding"],
+    salary: "A convenir",
+    tags: ["China", "Operations", "Freight Forwarding", "Track and Trace", "Builder Team"],
     description: {
-      es: "Únete a nuestro equipo de Documentación y conviértete en la columna vertebral del compliance comercial y la precisión de cada embarque · donde la precisión se encuentra con el impacto global.",
-      en: "Join our Documentation team and become the backbone of our trade compliance and shipment accuracy — where precision meets global impact.",
+      es: `📢 We're building our Builder Team in China! Looking for an Operations Executive & Support professional to keep our shipments moving flawlessly across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will own end-to-end shipment execution — coordinating bookings, suppliers, and logistics partners, and solving operational challenges so every client gets an on-time, on-spec experience.`,
+      en: `📢 We're building our Builder Team in China! Looking for an Operations Executive & Support professional to keep our shipments moving flawlessly across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will own end-to-end shipment execution — coordinating bookings, suppliers, and logistics partners, and solving operational challenges so every client gets an on-time, on-spec experience.`,
     },
     responsibilities: {
       es: [
-        "Preparar, revisar y procesar toda la documentación de embarque: Bills of Lading, facturas comerciales, packing lists, certificados de origen y declaraciones aduaneras",
-        "Asegurar pleno cumplimiento de regulaciones de comercio internacional, requerimientos aduaneros y estándares de documentación específicos de carrier",
-        "Coordinar con carriers, freight forwarders, agentes aduaneros y agentes en el exterior para garantizar entrega documental a tiempo y sin errores",
-        "Gestionar flujos documentales de múltiples embarques simultáneamente, manteniendo deadlines estrictos para cut-offs de buque y despacho aduanero",
-        "Identificar y resolver discrepancias documentales antes de que impacten tiempos o generen penalidades",
-        "Mantener registros digitales organizados de todos los documentos comerciales según políticas de retención y requerimientos de auditoría",
-        "Apoyar a los equipos de Operaciones y Ventas proporcionando actualizaciones precisas de estado documental y resolución proactiva de problemas",
-        "Mejorar continuamente los procesos de documentación para reducir tiempos de respuesta y minimizar errores",
+        "Execute bookings per client and assignment instructions, ensuring confirmations land within SLA",
+        "Coordinate cargo with shipping lines, airlines, customs agents, and warehouses, keeping full traceability",
+        "Keep Track & Trace data accurate and proactively flag delays or schedule changes",
+        "Prepare and review HBL/MBL, handle Switch BL, and submit AMS/ISF to U.S. Customs",
+        "Transmit House/Master BLs to customs portals and coordinate smooth clearance",
+        "Provide cross-functional support across Pricing and Sales during this fast-paced launch phase",
       ],
       en: [
-        "Prepare, review, and process all shipping documentation including Bills of Lading, commercial invoices, packing lists, certificates of origin, and customs declarations",
-        "Ensure full compliance with international trade regulations, customs requirements, and carrier-specific documentation standards",
-        "Coordinate with carriers, freight forwarders, customs brokers, and overseas agents to guarantee timely and error-free document submission",
-        "Manage document workflows across multiple shipments simultaneously, maintaining strict deadlines for vessel cut-offs and customs clearance",
-        "Identify and resolve documentation discrepancies before they impact shipment timelines or incur penalties",
-        "Maintain organized digital records of all trade documents in compliance with company retention policies and audit requirements",
-        "Support the Operations and Sales teams by providing accurate documentation status updates and proactive issue resolution",
-        "Continuously improve documentation processes to reduce turnaround times and minimize errors",
+        "Execute bookings per client and assignment instructions, ensuring confirmations land within SLA",
+        "Coordinate cargo with shipping lines, airlines, customs agents, and warehouses, keeping full traceability",
+        "Keep Track & Trace data accurate and proactively flag delays or schedule changes",
+        "Prepare and review HBL/MBL, handle Switch BL, and submit AMS/ISF to U.S. Customs",
+        "Transmit House/Master BLs to customs portals and coordinate smooth clearance",
+        "Provide cross-functional support across Pricing and Sales during this fast-paced launch phase",
       ],
     },
     requirements: {
       es: [
-        "1-3 años de experiencia en documentación de embarques, trade compliance o administración logística",
-        "Sólido conocimiento de documentos de embarque internacional (B/L, AWB, ISF, AES, certificados de origen) y procedimientos aduaneros",
-        "Atención excepcional al detalle con capacidad de gestionar altos volúmenes bajo plazos ajustados",
-        "Dominio de Microsoft Office y sistemas de gestión documental",
-        "Licenciatura en Negocios Internacionales, Comercio Exterior, Logística o afín",
-        "Preferible: experiencia con software de freight forwarding o plataformas TMS",
-        "Preferible: familiaridad con regulaciones de aduanas de EE.UU. (CBP), FDA, USDA u otras agencias",
-        "Preferible: conocimiento de Incoterms 2020 y documentación de Letters of Credit · fluidez EN/ES",
+        "Bachelor's degree in International Trade, Logistics, Foreign Trade, Business Administration, or related fields",
+        "Advanced, conversational English",
+        "1 to 2 years of experience in logistics operations or freight forwarding",
+        "Knowledge of logistics platforms and shipping-company portals",
       ],
       en: [
-        "1-3 years of experience in shipping documentation, trade compliance, or logistics administration",
-        "Strong knowledge of international shipping documents (B/L, AWB, ISF, AES, certificates of origin) and customs procedures",
-        "Exceptional attention to detail with the ability to manage high volumes under tight deadlines",
-        "Proficiency in Microsoft Office and document management systems",
-        "Bachelor's degree in International Business, Foreign Trade, Logistics, or related field",
-        "Preferred: experience with freight forwarding software or TMS platforms",
-        "Preferred: familiarity with U.S. customs regulations (CBP), FDA, USDA, or other agency requirements",
-        "Preferred: knowledge of Incoterms 2020 and Letters of Credit documentation · fluency in English and Spanish",
+        "Bachelor's degree in International Trade, Logistics, Foreign Trade, Business Administration, or related fields",
+        "Advanced, conversational English",
+        "1 to 2 years of experience in logistics operations or freight forwarding",
+        "Knowledge of logistics platforms and shipping-company portals",
       ],
     },
     applyEmail: "jointheteam@tradingsolutions.com",
-    postedAt: "2026-04-14",
+    postedAt: "2026-07-29",
   },
   {
-    id: 4,
-    slug: "pricing-junior",
-    linkedinUrl: "https://www.linkedin.com/jobs/view/4403965746/",
+    id: 8,
+    slug: "china-overseas-sales-executive",
+    linkedinUrl: "",
     title: {
-      es: "Pricing Junior",
-      en: "Pricing Junior",
+      es: "Overseas Sales Executive and Support",
+      en: "Overseas Sales Executive and Support",
     },
     dept: "Comercial",
-    location: "Barranquilla, Atlántico, Colombia",
-    mode: "Presencial",
-    level: "Junior",
-    salary: "Competitivo según experiencia",
-    tags: ["Pricing", "Freight", "Excel", "Análisis de Datos", "Tarifas"],
-    description: {
-      es: "Entra en un rol data-driven donde aprenderás los fundamentos del freight pricing — desde gestión de tarifas hasta negociación — construyendo la ventaja analítica que impulsa cotizaciones competitivas y mejores márgenes para nuestro equipo de Pricing.",
-      en: "Step into a data-driven role where you'll learn the foundations of freight pricing — from rate management to negotiation — building the analytical edge that powers competitive quotes and stronger margins for our Pricing team.",
-    },
-    responsibilities: {
-      es: [
-        "Apoyar la carga, actualización y mantenimiento de bases de datos de tarifas de carga, asegurando archivos organizados, correctamente nombrados y actualizados en carpetas compartidas",
-        "Verificar información de tarifas, marcar inconsistencias y reportar discrepancias para mantener data de pricing limpia y confiable",
-        "Enviar solicitudes de tarifas a vendors designados y registrar tarifas recibidas en plantillas oficiales con trazabilidad completa",
-        "Hacer seguimiento del historial de cotizaciones, contribuir a verificaciones de precios de cierre y apoyar análisis comparativos básicos entre proveedores",
-        "Colaborar en la preparación de reportes de ahorros, análisis de márgenes e insights comerciales que alimentan decisiones estratégicas",
-        "Sugerir mejoras a formatos de pricing, plantillas y herramientas de registro para impulsar eficiencia de procesos",
-        "Apoyar la actualización mensual del tarifario de scrap y commodities bajo supervisión directa del Lead Pricing",
-        "Mantener el orden documental en Drive y la confidencialidad estricta de información comercial",
-      ],
-      en: [
-        "Support the loading, updating, and maintenance of freight rate databases, ensuring files are organized, accurately named, and up to date in shared folders",
-        "Verify rate information, flag inconsistencies, and report discrepancies to keep our pricing data clean and reliable",
-        "Send rate request inquiries to designated vendors and register received rates in official templates with full traceability",
-        "Track quote history, contribute to closing-price verifications, and support basic comparative analyses across providers",
-        "Collaborate in the preparation of savings reports, margin analyses, and commercial insights that feed strategic decisions",
-        "Suggest improvements to pricing formats, templates, and registration tools to drive process efficiency",
-        "Support the monthly update of the scrap and commodities tariff schedule under direct supervision from the Lead Pricing",
-        "Maintain document order in Drive and uphold strict confidentiality of commercial information",
-      ],
-    },
-    requirements: {
-      es: [
-        "0-1 año de experiencia en pricing, logística, servicio al cliente o áreas relacionadas (recién graduados bienvenidos)",
-        "Licenciatura en Comercio Internacional, Negocios Internacionales, Ingeniería Industrial o afín",
-        "Dominio avanzado de Microsoft Office (especialmente Excel) y Google Workspace (Sheets, Drive, Docs)",
-        "Fuerte atención al detalle, mentalidad analítica y disposición a aprender",
-        "Inglés B1 o superior (trabajamos con vendors y clientes internacionales diariamente)",
-        "Preferible: práctica o exposición académica a freight forwarding, agenciamiento aduanero o logística internacional",
-        "Preferible: familiaridad con Incoterms, documentación de embarque y compliance básico",
-        "Preferible: experiencia manejando rate sheets, cotizaciones o coordinación con vendors · organización, precisión y confidencialidad",
-      ],
-      en: [
-        "0-1 year of experience in pricing, logistics, customer service, or related areas (recent graduates welcome)",
-        "Bachelor's degree in International Trade, International Business, Industrial Engineering, or related field",
-        "Advanced proficiency in Microsoft Office Suite (especially Excel) and Google Workspace (Sheets, Drive, Docs)",
-        "Strong attention to detail, analytical mindset, and willingness to learn",
-        "English B1 or higher (we work with international vendors and clients daily)",
-        "Preferred: internship or academic exposure to freight forwarding, customs brokerage, or international logistics",
-        "Preferred: familiarity with Incoterms, shipping documentation, and basic trade compliance",
-        "Preferred: experience handling rate sheets, quotations, or vendor coordination · organized, precise, and confidentiality-driven",
-      ],
-    },
-    applyEmail: "jointheteam@tradingsolutions.com",
-    postedAt: "2026-05-14",
-  },
-  {
-    id: 5,
-    slug: "talent-acquisition-development-lead",
-    linkedinUrl: "https://www.linkedin.com/jobs/view/4403965747/",
-    title: {
-      es: "Talent Acquisition and Development Lead",
-      en: "Talent Acquisition and Development Lead",
-    },
-    dept: "Talento",
-    location: "Barranquilla, Atlántico, Colombia",
+    location: "Shanghai / Shenzhen / Guangzhou, China",
     mode: "Presencial",
     level: "Senior",
-    salary: "Competitivo según experiencia",
-    tags: ["Talent Acquisition", "Recruiting", "Employer Branding", "ATS", "Bilingüe EN/ES", "Leadership"],
+    salary: "A convenir",
+    tags: ["China", "Commercial", "Sales", "Agent Network", "Freight Forwarding", "Builder Team"],
     description: {
-      es: "Entra en un rol estratégico donde liderarás el ciclo de talento end-to-end — diseñando cómo atraemos, evaluamos y desarrollamos a las personas que impulsan nuestras operaciones en cinco continentes. Harás partnership directo con nuestro C-suite y hiring managers para construir una fuerza laboral que escale con nuestra ambición.",
-      en: "Step into a strategic role where you'll own the end-to-end talent lifecycle — designing how we attract, evaluate, and grow the people who power our operations across five continents. You'll partner directly with our C-suite and hiring managers to build a workforce that scales with our ambition.",
+      es: `📢 We're building our Builder Team in China! Looking for an Overseas Sales Executive to open new markets and drive our commercial expansion across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will drive the end-to-end sales pipeline — from prospecting to closing — developing overseas agents and direct clients and connecting our local team with the global network.`,
+      en: `📢 We're building our Builder Team in China! Looking for an Overseas Sales Executive to open new markets and drive our commercial expansion across Asia.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will drive the end-to-end sales pipeline — from prospecting to closing — developing overseas agents and direct clients and connecting our local team with the global network.`,
     },
     responsibilities: {
       es: [
-        "Liderar el ciclo completo de recruiting para roles técnicos, comerciales y operativos en LATAM y EE.UU., desde sourcing hasta oferta",
-        "Construir y ejecutar estrategias de employer branding que posicionen a Trading Solutions como destino top para talento bilingüe en logística",
-        "Diseñar y refinar marcos de assessment (psicométrico, técnico, conductual) para garantizar decisiones de contratación consistentes y data-driven",
-        "Gestionar el ATS y stack tecnológico de recruiting (LinkedIn Recruiter, plataforma de carreras propia, herramientas de assessment) para escalar el pipeline eficientemente",
-        "Hacer partnership con hiring managers para definir perfiles de rol, calibrar expectativas y acelerar time-to-hire sin comprometer calidad",
-        "Impulsar iniciativas de desarrollo de talento — career paths, movilidad interna, programas de liderazgo — que retengan y crezcan a nuestra mejor gente",
-        "Construir y mantener un pipeline proactivo de talento mediante outreach en LinkedIn, alianzas universitarias y programas de referidos",
-        "Reportar métricas clave de talento (time-to-hire, efectividad de fuentes, retención) al C-suite y convertir insights en estrategia",
+        "Develop and follow up on overseas agents and direct clients, promoting our routes and services",
+        "Prepare competitive quotes (FCL/LCL/Air), coordinating with pricing and operations",
+        "Meet weekly KPIs and keep the CRM impeccable, with clear pipeline reports and forecasts",
+        "Hit monthly and quarterly targets for agent acquisition, revenue, and account expansion",
+        "Provide cross-functional support across Pricing, Procurement, and Operations",
+        "Travel to visit agents, clients, and industry events as the business needs",
       ],
       en: [
-        "Lead the full recruiting lifecycle for technical, commercial, and operations roles across LATAM and the U.S., from sourcing to offer",
-        "Build and execute employer branding strategies that position Trading Solutions as a top destination for bilingual logistics talent",
-        "Design and refine assessment frameworks (psychometric, technical, behavioral) to ensure consistent, data-driven hiring decisions",
-        "Manage our ATS and recruiting tech stack (LinkedIn Recruiter, custom careers platform, assessment tools) to scale our pipeline efficiently",
-        "Partner with hiring managers to define role profiles, calibrate expectations, and accelerate time-to-hire without compromising quality",
-        "Drive talent development initiatives — career paths, internal mobility, leadership programs — that retain and grow our best people",
-        "Build and maintain a proactive talent pipeline through LinkedIn outreach, university partnerships, and referral programs",
-        "Report key talent metrics (time-to-hire, source effectiveness, retention) to the C-suite and turn insights into strategy",
+        "Develop and follow up on overseas agents and direct clients, promoting our routes and services",
+        "Prepare competitive quotes (FCL/LCL/Air), coordinating with pricing and operations",
+        "Meet weekly KPIs and keep the CRM impeccable, with clear pipeline reports and forecasts",
+        "Hit monthly and quarterly targets for agent acquisition, revenue, and account expansion",
+        "Provide cross-functional support across Pricing, Procurement, and Operations",
+        "Travel to visit agents, clients, and industry events as the business needs",
       ],
     },
     requirements: {
       es: [
-        "4-7 años de experiencia en talent acquisition, con al menos 2 años en rol de liderazgo o estratégico",
-        "Track record probado gestionando recruiting bilingüe de alto volumen en entornos de ritmo alto",
-        "Experiencia hands-on con plataformas ATS, LinkedIn Recruiter y herramientas de assessment (psicométrico, conductual o técnico)",
-        "Fuertes habilidades de stakeholder management — capacidad de influenciar líderes senior y hiring managers con data y claridad",
-        "Fluidez en inglés y español (escrito y hablado)",
-        "Licenciatura en Recursos Humanos, Administración de Empresas, Ingeniería Industrial, Psicología o afín",
-        "Preferible: experiencia recruiting en logística, freight forwarding, BPO o comercio internacional · employer branding y social media para atracción de talento",
-        "Preferible: familiaridad con frameworks de desarrollo de talento (9-box, succession planning, pipelines de liderazgo) · mentalidad solution-oriented",
+        "Associate's or Bachelor's degree in International Trade, International Business, Logistics, or related fields",
+        "Fluent, conversational English",
+        "3+ years of experience in Freight Forwarding",
+        "Proven experience developing overseas agents and selling ocean freight (FCL/LCL) to Latin America",
       ],
       en: [
-        "4-7 years of experience in talent acquisition, with at least 2 years in a leadership or strategic role",
-        "Proven track record managing high-volume bilingual recruiting in fast-paced environments",
-        "Hands-on experience with ATS platforms, LinkedIn Recruiter, and assessment tools (psychometric, behavioral, or technical)",
-        "Strong stakeholder management skills — able to influence senior leaders and hiring managers with data and clarity",
-        "Fluency in English and Spanish (written and verbal)",
-        "Bachelor's degree in Human Resources, Business Administration, Industrial Engineering, Psychology, or related field",
-        "Preferred: experience recruiting in logistics, freight forwarding, BPO, or international trade industries · employer branding and social media for talent attraction",
-        "Preferred: familiarity with talent development frameworks (9-box, succession planning, leadership pipelines) · solution-oriented mindset",
+        "Associate's or Bachelor's degree in International Trade, International Business, Logistics, or related fields",
+        "Fluent, conversational English",
+        "3+ years of experience in Freight Forwarding",
+        "Proven experience developing overseas agents and selling ocean freight (FCL/LCL) to Latin America",
       ],
     },
     applyEmail: "jointheteam@tradingsolutions.com",
-    postedAt: "2026-05-14",
+    postedAt: "2026-07-29",
   },
-];
+  {
+    id: 9,
+    slug: "china-pricing-executive",
+    linkedinUrl: "",
+    title: {
+      es: "Pricing Executive - Support",
+      en: "Pricing Executive - Support",
+    },
+    dept: "Pricing",
+    location: "Shanghai / Shenzhen / Guangzhou, China",
+    mode: "Presencial",
+    level: "Junior",
+    salary: "A convenir",
+    tags: ["China", "Pricing", "Rates", "Freight Forwarding", "Builder Team"],
+    description: {
+      es: `📢 We're building our Builder Team in China! Looking for a Pricing Executive to shape our pricing strategy and rate management across Asia–LATAM trade.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will develop pricing strategies, manage rates with carriers and agents, and turn market insight into profitable business between Asia and Latin America.`,
+      en: `📢 We're building our Builder Team in China! Looking for a Pricing Executive to shape our pricing strategy and rate management across Asia–LATAM trade.
+
+At Trading Solutions, we're redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We want someone who wants to build, not just operate.
+
+The Role: You will develop pricing strategies, manage rates with carriers and agents, and turn market insight into profitable business between Asia and Latin America.`,
+    },
+    responsibilities: {
+      es: [
+        "Update and register FCL/LCL/air rates, keeping them valid per quarter with full traceability",
+        "Request and confirm rates with carriers, airlines, and agents, and coordinate with Sales",
+        "Resolve rate/charge discrepancies and run consistency checks between quotes and final costs",
+        "Identify cost-saving opportunities and support profitability analysis of suppliers and routes",
+        "Improve quotation templates and processes for efficiency",
+        "Provide operational and sales support during this fast-paced launch phase (potential sales commission)",
+      ],
+      en: [
+        "Update and register FCL/LCL/air rates, keeping them valid per quarter with full traceability",
+        "Request and confirm rates with carriers, airlines, and agents, and coordinate with Sales",
+        "Resolve rate/charge discrepancies and run consistency checks between quotes and final costs",
+        "Identify cost-saving opportunities and support profitability analysis of suppliers and routes",
+        "Improve quotation templates and processes for efficiency",
+        "Provide operational and sales support during this fast-paced launch phase (potential sales commission)",
+      ],
+    },
+    requirements: {
+      es: [
+        "Bachelor's degree in International Trade, Logistics, Foreign Trade, Business Administration, or related fields",
+        "Advanced English",
+        "1 to 2 years of experience in logistics, freight forwarding, or international trade",
+        "Knowledge of logistics platforms and shipping-company portals",
+      ],
+      en: [
+        "Bachelor's degree in International Trade, Logistics, Foreign Trade, Business Administration, or related fields",
+        "Advanced English",
+        "1 to 2 years of experience in logistics, freight forwarding, or international trade",
+        "Knowledge of logistics platforms and shipping-company portals",
+      ],
+    },
+    applyEmail: "jointheteam@tradingsolutions.com",
+    postedAt: "2026-07-29",
+  },
+]
