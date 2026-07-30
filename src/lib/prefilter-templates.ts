@@ -10,7 +10,7 @@
  * archivo para validar qué campos son obligatorios según template.
  */
 
-export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech";
+export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech" | "china";
 
 export type SectionKey =
   | "personal"           // todos
@@ -21,6 +21,7 @@ export type SectionKey =
   | "sales_pricing"      // solo comex
   | "hr_experience"      // solo hr_lead
   | "finance_experience" // solo finance
+  | "china_core"         // solo china · form en inglés, innegociables
   | "about_you";         // todos
 
 export type PrefilterTemplate = {
@@ -54,6 +55,12 @@ export const PREFILTER_TEMPLATES: Record<TemplateKey, PrefilterTemplate> = {
     label: "Tecnología · ingeniería · data",
     description: "Para roles técnicos · default si no hay otro template",
     sections: ["personal", "availability", "english", "education", "about_you"],
+  },
+  china: {
+    key: "china",
+    label: "China Builder Team (EN · knock-outs only)",
+    description: "Para vacantes de China · formulario en inglés, corto, solo innegociables. Salario en USD es dato, no descarta. Consentimiento PIPL en vez de habeas data colombiano.",
+    sections: ["china_core", "about_you"],
   },
 };
 
@@ -94,5 +101,14 @@ export const TEMPLATE_REQUIRED_FIELDS: Record<TemplateKey, string[]> = {
     "salary", "availability", "relocate",
     "english_level", "edu_type",
     "why_ts",
+  ],
+  // China · form en inglés. NO pide doc_type/doc_number/nacionalidad. Salario
+  // (salary_usd) es dato, no descarta. Knock-outs: work_authorized, english_level
+  // (>=B2), onsite_available. Consentimiento PIPL obligatorio.
+  china: [
+    "full_name", "email", "phone_wechat", "current_city",
+    "work_authorized", "english_level", "english_cert",
+    "years_experience", "onsite_available", "salary_usd",
+    "tariff_choice", "pipl_consent",
   ],
 };

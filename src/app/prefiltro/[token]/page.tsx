@@ -82,11 +82,35 @@ export default function PrefiltroForm() {
   const [nextRole, setNextRole] = useState("");
   const [extra, setExtra] = useState("");
 
+  // ─── China (form en inglés · knock-outs only) ─────────────────────
+  const [cnFullName, setCnFullName] = useState("");
+  const [cnEmail, setCnEmail] = useState("");
+  const [cnPhone, setCnPhone] = useState("");
+  const [cnCity, setCnCity] = useState("");
+  const [cnWorkAuth, setCnWorkAuth] = useState("");        // "yes" | "no"
+  const [cnEnglish, setCnEnglish] = useState("");          // B1/B2/C1/C2
+  const [cnEnglishCert, setCnEnglishCert] = useState("");
+  const [cnYearsExp, setCnYearsExp] = useState("");
+  const [cnOnsite, setCnOnsite] = useState("");            // "yes" | "no"
+  const [cnSalaryUsd, setCnSalaryUsd] = useState("");
+  const [cnTariff, setCnTariff] = useState("");            // A/B/C
+  const [cnTariffWhy, setCnTariffWhy] = useState("");
+
   // Template seleccionado (default comex si no hay info)
   const templateKey = data?.vacancy?.form_template_key || "comex";
   const isComex = templateKey === "comex";
   const isHR = templateKey === "hr_lead";
   const isFinance = templateKey === "finance";
+  const isChina = templateKey === "china";
+
+  // Prefill de nombre/email del candidato cuando cargan los datos (China)
+  useEffect(() => {
+    if (data) {
+      if (!cnFullName) setCnFullName(data.candidate.name || "");
+      if (!cnEmail) setCnEmail(data.candidate.email || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   useEffect(() => {
     fetch(`/api/headhunting/prefilter/${token}`)
@@ -124,6 +148,23 @@ export default function PrefiltroForm() {
   }
 
   function isFormValid() {
+    // China · validación propia (inglés, knock-outs, PIPL)
+    if (isChina) {
+      return !!(
+        cnFullName.trim().length >= 3 &&
+        /\S+@\S+\.\S+/.test(cnEmail.trim()) &&
+        cnPhone.trim().length >= 5 &&
+        cnCity.trim().length >= 2 &&
+        cnWorkAuth &&
+        cnEnglish &&
+        cnEnglishCert.trim().length >= 3 &&
+        cnYearsExp !== "" &&
+        cnOnsite &&
+        cnSalaryUsd.trim() !== "" &&
+        cnTariff &&
+        habeasAccepted // en China este check = consentimiento PIPL
+      );
+    }
     // Comunes a todos los templates
     const commonOk = !!(
       docType && docNumber.trim().length >= 6 && phone.trim().length >= 7 && city.trim().length >= 3 &&
@@ -145,10 +186,52 @@ export default function PrefiltroForm() {
 
   async function handleSubmit() {
     if (!isFormValid()) {
-      alert("Por favor completa todos los campos antes de enviar.");
+      alert(isChina ? "Please complete all required fields before submitting." : "Por favor completa todos los campos antes de enviar.");
       return;
     }
     setPhase("submitting");
+
+    // ─── China · payload en inglés, keys que espera el backend ───────
+    if (isChina) {
+      const chinaPayload = {
+        template_key: "china",
+        full_name: cnFullName.trim(),
+        email: cnEmail.trim(),
+        phone_wechat: cnPhone.trim(),
+        current_city: cnCity.trim(),
+        work_authorized: cnWorkAuth === "yes",
+        english_level: cnEnglish, // B1/B2/C1/C2
+        english_cert: cnEnglishCert.trim(),
+        years_experience: parseInt(cnYearsExp) || 0,
+        onsite_available: cnOnsite === "yes",
+        salary_usd: cnSalaryUsd.trim(), // dato · no descarta
+        tariff_choice: cnTariff, // A/B/C
+        tariff_reasoning: cnTariffWhy.trim(),
+        extra: extra.trim(),
+        pipl_consent: true,
+        pipl_consent_at: new Date().toISOString(),
+        submitted_at: new Date().toISOString(),
+      };
+      try {
+        const res = await fetch(`/api/headhunting/prefilter/${token}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(chinaPayload),
+        });
+        if (!res.ok) {
+          const j = await res.json();
+          setErrorMsg(j.error || "Submission error.");
+          setPhase("error");
+          return;
+        }
+        setPhase("done");
+      } catch {
+        setErrorMsg("Connection error.");
+        setPhase("error");
+      }
+      return;
+    }
+
     const basePayload = {
       // Personal
       doc_type: docType,
@@ -244,9 +327,80 @@ export default function PrefiltroForm() {
           <div style={{ width: 64, height: 64, borderRadius: 32, background: "#DCFCE7", margin: "0 auto 24px", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <h1 style={{ color: TS_BLACK, fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>¡Listo!</h1>
-          <p style={{ color: TS_GRAY, fontSize: 16, margin: "0 0 8px" }}>Recibimos tus respuestas correctamente.</p>
-          <p style={{ color: TS_GRAY, fontSize: 14 }}>Te contactaremos pronto con los próximos pasos.</p>
+          <h1 style={{ color: TS_BLACK, fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>{isChina ? "All set!" : "¡Listo!"}</h1>
+          <p style={{ color: TS_GRAY, fontSize: 16, margin: "0 0 8px" }}>{isChina ? "We received your answers successfully." : "Recibimos tus respuestas correctamente."}</p>
+          <p style={{ color: TS_GRAY, fontSize: 14 }}>{isChina ? "We'll be in touch soon with next steps." : "Te contactaremos pronto con los próximos pasos."}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── China · PIPL consent phase (English) ─────────────────────────
+  if (phase === "habeas" && isChina) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#fafafa", padding: "32px 16px", fontFamily: "Inter, -apple-system, sans-serif", color: TS_BLACK }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ marginBottom: 32 }}>
+            <p style={{ color: TS_GRAY, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 8 }}>
+              🌏 Trading Solutions · Initial questionnaire
+            </p>
+            <h1 style={{ fontSize: 32, fontWeight: 700, margin: "0 0 12px", lineHeight: 1.2 }}>
+              Hi {data?.candidate.name.split(" ")[0]} — let's get to know you 👋
+            </h1>
+            <p style={{ color: TS_GRAY, fontSize: 16, lineHeight: 1.6 }}>
+              Before moving forward with the <strong>{data?.vacancy.title}</strong> process, please complete this short questionnaire. It only covers the essentials and takes about 5 minutes.
+            </p>
+          </div>
+
+          <div style={{ background: "white", borderRadius: 16, padding: 32, border: `1px solid ${TS_BORDER}`, marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: "#EBF0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={TS_BLUE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l8 4v6c0 5.25-3.5 9.74-8 11-4.5-1.26-8-5.75-8-11V6l8-4z" />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Personal information consent (PIPL)</h2>
+            </div>
+            <p style={{ color: TS_GRAY, fontSize: 14, lineHeight: 1.7, marginBottom: 16 }}>
+              In accordance with China's <strong>Personal Information Protection Law (PIPL)</strong>, the information you share in this form will be processed by <strong>Trading Solutions</strong> for the sole purpose of managing the recruitment process for the position you are applying to.
+            </p>
+            <ul style={{ color: TS_GRAY, fontSize: 14, lineHeight: 1.7, paddingLeft: 20, marginBottom: 16 }}>
+              <li>Your data will be stored securely in our candidate database.</li>
+              <li>It will not be shared with third parties without your explicit authorization.</li>
+              <li>You may access, update, correct or request deletion of your data at any time.</li>
+              <li>To exercise your rights, write to <strong>jointheteam@tradingsolutions.com</strong>.</li>
+            </ul>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 16, border: `2px solid ${habeasAccepted ? TS_BLACK : TS_BORDER}`, borderRadius: 12, cursor: "pointer", background: habeasAccepted ? "#F9FAFB" : "white" }}>
+              <input
+                type="checkbox"
+                checked={habeasAccepted}
+                onChange={(e) => setHabeasAccepted(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 2, accentColor: TS_BLACK, cursor: "pointer" }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 500 }}>
+                I consent to Trading Solutions processing my personal information for the purpose of this recruitment process, in accordance with the PIPL.
+              </span>
+            </label>
+          </div>
+
+          <button
+            onClick={() => habeasAccepted && setPhase("form")}
+            disabled={!habeasAccepted}
+            style={{
+              width: "100%", padding: "16px 32px",
+              background: habeasAccepted ? TS_BLACK : "#999",
+              color: "white", border: "none", borderRadius: 999,
+              fontSize: 16, fontWeight: 700,
+              cursor: habeasAccepted ? "pointer" : "not-allowed",
+            }}
+          >
+            Continue to the questionnaire →
+          </button>
+          {!habeasAccepted && (
+            <p style={{ color: TS_GRAY, fontSize: 13, textAlign: "center", marginTop: 12 }}>
+              Check the consent box to continue.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -320,6 +474,105 @@ export default function PrefiltroForm() {
               Marca la casilla de autorización para continuar.
             </p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── China · Form phase (English, essentials only) ────────────────
+  if (isChina) {
+    const YESNO_EN = [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }];
+    return (
+      <div style={{ minHeight: "100vh", background: "#fafafa", padding: "32px 16px", fontFamily: "Inter, -apple-system, sans-serif", color: TS_BLACK }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ marginBottom: 32 }}>
+            <p style={{ color: TS_GRAY, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600, marginBottom: 8 }}>
+              🌏 Trading Solutions · {data?.vacancy.title}
+            </p>
+            <h1 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>Tell us about yourself, {data?.candidate.name.split(" ")[0]}</h1>
+            <p style={{ color: TS_GRAY, fontSize: 15, lineHeight: 1.6 }}>
+              Just the essentials. Please answer honestly — there are no right or wrong answers.
+            </p>
+          </div>
+
+          <Section title="1 · Your details">
+            <Q label="Full name">
+              <input value={cnFullName} onChange={(e) => setCnFullName(e.target.value)} style={inputStyle} placeholder="Your full name" />
+            </Q>
+            <Q label="Email">
+              <input value={cnEmail} onChange={(e) => setCnEmail(e.target.value)} style={inputStyle} placeholder="you@email.com" inputMode="email" />
+            </Q>
+            <Q label="Phone / WeChat">
+              <input value={cnPhone} onChange={(e) => setCnPhone(e.target.value)} style={inputStyle} placeholder="Phone number or WeChat ID" />
+            </Q>
+            <Q label="Current city (China)">
+              <input value={cnCity} onChange={(e) => setCnCity(e.target.value)} style={inputStyle} placeholder="e.g. Shanghai, Shenzhen, Guangzhou" />
+            </Q>
+          </Section>
+
+          <Section title="2 · Eligibility">
+            <Q label="Are you legally authorized to work in China?">
+              <SelectChips value={cnWorkAuth} onChange={setCnWorkAuth} options={YESNO_EN} />
+            </Q>
+            <Q label="On-site availability in Shanghai / Shenzhen / Guangzhou?">
+              <SelectChips value={cnOnsite} onChange={setCnOnsite} options={YESNO_EN} />
+            </Q>
+          </Section>
+
+          <Section title="3 · English">
+            <Q label="English level">
+              <SelectChips value={cnEnglish} onChange={setCnEnglish} options={["B1", "B2", "C1", "C2"]} />
+            </Q>
+            <Q label="How do you certify it? (e.g. certification, years working in English, studies abroad)">
+              <textarea value={cnEnglishCert} onChange={(e) => setCnEnglishCert(e.target.value.slice(0, 300))} rows={2} style={inputStyle} />
+            </Q>
+          </Section>
+
+          <Section title="4 · Experience">
+            <Q label="Years of relevant experience in freight forwarding / the role area">
+              <input type="number" min={0} max={50} value={cnYearsExp} onChange={(e) => setCnYearsExp(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="Salary expectation in USD (monthly)">
+              <input value={cnSalaryUsd} onChange={(e) => setCnSalaryUsd(e.target.value)} style={inputStyle} placeholder="e.g. 2000" inputMode="numeric" />
+            </Q>
+          </Section>
+
+          <Section title="5 · Tariff analysis">
+            <Q label="A client wants a competitive but reliable option. Which do you choose and why? — A: Freight 1200 + Local 300 (25 days) · B: Freight 1350 + Local 250 (20 days) · C: Freight 1100 + Local 400 (30 days)">
+              <SelectChips value={cnTariff} onChange={setCnTariff} options={["A", "B", "C"]} />
+            </Q>
+            <Q label="Briefly, why? (optional)">
+              <textarea value={cnTariffWhy} onChange={(e) => setCnTariffWhy(e.target.value.slice(0, 500))} rows={3} style={inputStyle} placeholder="Your reasoning…" />
+            </Q>
+          </Section>
+
+          <Section title="6 · Anything else">
+            <Q label="Anything else we should know? (optional)">
+              <textarea value={extra} onChange={(e) => setExtra(e.target.value.slice(0, 500))} rows={3} style={inputStyle} />
+            </Q>
+          </Section>
+
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: `1px solid ${TS_BORDER}` }}>
+            <button
+              onClick={handleSubmit}
+              disabled={(phase as Phase) === "submitting" || !isFormValid()}
+              style={{
+                width: "100%", padding: "16px 32px",
+                background: isFormValid() ? TS_BLACK : "#999",
+                color: "white", border: "none", borderRadius: 999,
+                fontSize: 16, fontWeight: 700,
+                cursor: isFormValid() ? "pointer" : "not-allowed",
+                transition: "background 0.2s",
+              }}
+            >
+              {(phase as Phase) === "submitting" ? "Submitting…" : "Submit answers"}
+            </button>
+            {!isFormValid() && (
+              <p style={{ color: TS_GRAY, fontSize: 13, textAlign: "center", marginTop: 12 }}>
+                Please complete all required questions before submitting.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     );
