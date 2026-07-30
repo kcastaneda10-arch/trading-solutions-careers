@@ -56,6 +56,22 @@ const ENGLISH_RANK: Record<string, number> = {
   "C2 (nativo / fluido)": 6,
 };
 
+// China prefilter usa niveles en inglés cortos (B1/B2/C1/C2). Mínimo B2.
+const CHINA_ENGLISH_RANK: Record<string, number> = {
+  "B1": 3,
+  "B2": 4,
+  "C1": 5,
+  "C2": 6,
+};
+const CHINA_ENGLISH_MIN_RANK = 4; // B2
+
+// Normaliza un valor Yes/No (bool o string) a booleano.
+function isYes(v: unknown): boolean {
+  if (v === true) return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "yes" || s === "si" || s === "sí" || s === "true";
+}
+
 type Decision = "pass" | "review" | "reject";
 
 function decideFromSalary(salaryRange: string, vacancyId: string): { decision: Decision; cap: number | null; lowerBound: number | null } {
@@ -195,7 +211,7 @@ export async function POST(
 
   const { data: candidate, error } = await supabaseAdmin
     .from("ht_candidates")
-    .select("id, name, email, vacancy_id, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title)")
+    .select("id, name, email, vacancy_id, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title, form_template_key)")
     .eq("prefilter_token", params.token)
     .single();
 
@@ -207,44 +223,90 @@ export async function POST(
     return NextResponse.json({ error: "already_completed" }, { status: 409 });
   }
 
-  // ─── Calcular decisión por salario ─────────────────────────────────
-  const salaryResult = decideFromSalary(
-    String(body.salary || ""),
-    String(candidate.vacancy_id)
-  );
+  // @ts-expect-error supabase relation
+  const templateKey = String(candidate.ht_vacancies?.form_template_key || "comex");
 
-  // ─── Check de inglés mínimo por vacante ────────────────────────────
-  const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
-
-  // Decisión final · si el inglés no llega al mínimo → reject (sobrescribe pass)
-  // Si el inglés llega justo al mínimo pero salario está en review → review
-  // Si el inglés es menor → priorizamos rechazo por idioma sobre salario
-  let decision: Decision = salaryResult.decision;
+  let decision: Decision;
   let rejectionReason: { category: string; sub_detail: string } | null = null;
+  let meta: Record<string, unknown>;
 
-  if (englishCheck.fails) {
-    decision = "reject";
-    rejectionReason = {
-      category: "idioma_insuficiente",
-      sub_detail: englishCheck.sub_detail || "ingles_b1",
+  if (templateKey === "china") {
+    // ─── Rama CHINA · knock-outs solamente ──────────────────────────
+    //   - Consentimiento PIPL es OBLIGATORIO · sin él no se procesa.
+    //   - Salario (salary_usd) es SOLO DATO · nunca descarta.
+    //   - Knock-outs: work_authorized, inglés (>=B2), onsite_available.
+    if (!isYes(body.pipl_consent)) {
+      return NextResponse.json({ error: "pipl_consent_required" }, { status: 400 });
+    }
+
+    const englishRank = CHINA_ENGLISH_RANK[String(body.english_level || "").trim().toUpperCase()] ?? 0;
+    const englishFails = englishRank > 0 && englishRank < CHINA_ENGLISH_MIN_RANK;
+    const workAuthorized = isYes(body.work_authorized);
+    const onsiteAvailable = isYes(body.onsite_available);
+
+    if (!workAuthorized) {
+      decision = "reject";
+      rejectionReason = { category: "requisito_excluyente", sub_detail: "sin_autorizacion_trabajo_china" };
+    } else if (englishFails) {
+      decision = "reject";
+      rejectionReason = { category: "idioma_insuficiente", sub_detail: englishRank <= 3 ? "ingles_b1" : "ingles_b2_para_c1" };
+    } else if (!onsiteAvailable) {
+      decision = "reject";
+      rejectionReason = { category: "requisito_excluyente", sub_detail: "sin_disponibilidad_presencial" };
+    } else {
+      decision = "pass";
+    }
+
+    meta = {
+      china: true,
+      salary_usd_expectation: body.salary_usd ?? null, // dato · no descarta
+      english_min_required_rank: CHINA_ENGLISH_MIN_RANK,
+      english_candidate_rank: englishRank,
+      english_fails: englishFails,
+      work_authorized: workAuthorized,
+      onsite_available: onsiteAvailable,
+      pipl_consent: true,
     };
-  } else if (decision === "reject") {
-    rejectionReason = {
-      category: "pretension_salarial",
-      sub_detail: "sobre_banda",
+  } else {
+    // ─── Rama estándar (comex/hr/finance/tech) · salario + inglés ────
+    const salaryResult = decideFromSalary(
+      String(body.salary || ""),
+      String(candidate.vacancy_id)
+    );
+
+    // Check de inglés mínimo por vacante
+    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
+
+    // Decisión final · si el inglés no llega al mínimo → reject (sobrescribe pass)
+    // Si el inglés es menor → priorizamos rechazo por idioma sobre salario
+    decision = salaryResult.decision;
+
+    if (englishCheck.fails) {
+      decision = "reject";
+      rejectionReason = {
+        category: "idioma_insuficiente",
+        sub_detail: englishCheck.sub_detail || "ingles_b1",
+      };
+    } else if (decision === "reject") {
+      rejectionReason = {
+        category: "pretension_salarial",
+        sub_detail: "sobre_banda",
+      };
+    }
+
+    meta = {
+      cap_used: salaryResult.cap,
+      salary_lower_bound: salaryResult.lowerBound,
+      english_min_required_rank: englishCheck.minRank,
+      english_candidate_rank: englishCheck.candidateRank,
+      english_fails: englishCheck.fails,
     };
   }
 
   const updates: Record<string, unknown> = {
     prefilter_data: {
       ...body,
-      _meta: {
-        cap_used: salaryResult.cap,
-        salary_lower_bound: salaryResult.lowerBound,
-        english_min_required_rank: englishCheck.minRank,
-        english_candidate_rank: englishCheck.candidateRank,
-        english_fails: englishCheck.fails,
-      },
+      _meta: meta,
     },
     prefilter_decision: decision,
     prefilter_completed_at: new Date().toISOString(),
