@@ -16,7 +16,7 @@ export interface Job {
   postedAt: string;
 }
 
-export const departments = ["Comercial", "Operaciones", "Finanzas", "Pricing"] as const;
+export const departments = ["Comercial", "Operaciones", "Talento", "Finanzas", "Tecnología"] as const;
 export const modes = ["Presencial", "Híbrido", "Remoto"] as const;
 
 /**
@@ -25,6 +25,32 @@ export const modes = ["Presencial", "Híbrido", "Remoto"] as const;
  * Postulación: vía formulario en la página de cada vacante.
  */
 export const jobs: Job[] = [
+  {
+    id: 6,
+    slug: "full-stack-developer",
+    linkedinUrl: "https://www.linkedin.com/company/trading-solutions/jobs/",
+    title: { es: "Full Stack Developer (Mid-Level)", en: "Full Stack Developer (Mid-Level)" },
+    dept: "Tecnología",
+    location: "Barranquilla, Atlántico, Colombia",
+    mode: "Presencial",
+    level: "Mid-Level",
+    salary: "Competitivo según experiencia",
+    tags: ["React", "Next.js", "Node.js", "TypeScript", "APIs REST", "Full Stack", "Inglés"],
+    description: {
+      es: "Únete al equipo de Producto & Tecnología de Trading Solutions y ayúdanos a construir All Heritage Freight, la plataforma que redefine la experiencia logística. Buscamos un Full Stack Developer (Mid-Level) con mínimo 4 años de experiencia, mentalidad de producto y foco en calidad de código, para diseñar, desarrollar e implementar nuevas funcionalidades de punta a punta (frontend y backend).",
+      en: "Join Trading Solutions' Product & Technology team and help us build All Heritage Freight, the platform redefining the logistics experience. We're looking for a Mid-Level Full Stack Developer with 4+ years of experience, a product mindset and a focus on code quality, to design, develop and ship new end-to-end features (frontend and backend).",
+    },
+    responsibilities: {
+      es: ["Desarrollar nuevas funcionalidades tanto en Frontend como Backend","Diseñar e implementar APIs seguras, escalables y mantenibles","Integrar servicios internos y plataformas de terceros","Participar en el diseño técnico y la evolución de la arquitectura de nuestros productos","Colaborar con Product Owners y UX Designers para transformar requerimientos en soluciones funcionales","Optimizar el rendimiento, la seguridad y la escalabilidad de las aplicaciones","Garantizar buenas prácticas de desarrollo, testing y documentación","Participar en code reviews, planeaciones técnicas y ceremonias Agile"],
+      en: ["Develop new features across both Frontend and Backend","Design and implement secure, scalable and maintainable APIs","Integrate internal services and third-party platforms","Contribute to the technical design and evolution of our product architecture","Collaborate with Product Owners and UX Designers to turn requirements into working solutions","Optimize application performance, security and scalability","Ensure good development, testing and documentation practices","Take part in code reviews, technical planning and Agile ceremonies"],
+    },
+    requirements: {
+      es: ["4 o más años de experiencia como Full Stack Developer","Experiencia sólida con JavaScript y TypeScript","Dominio de React y/o Next.js","Experiencia desarrollando APIs con Node.js","Conocimiento de bases de datos relacionales y NoSQL","Experiencia consumiendo e integrando APIs REST; manejo de Git y flujos colaborativos","Experiencia trabajando bajo metodologías Agile (Scrum o Kanban)","Inglés (requerido)","Preferible: experiencia en logística/freight forwarding o Fintech; cloud (AWS, Azure o GCP), Docker y CI/CD"],
+      en: ["4+ years of experience as a Full Stack Developer","Solid experience with JavaScript and TypeScript","Proficiency in React and/or Next.js","Experience building APIs with Node.js","Knowledge of relational and NoSQL databases","Experience consuming and integrating REST APIs; Git and collaborative workflows","Experience working under Agile methodologies (Scrum or Kanban)","English (required)","Preferred: experience in logistics/freight forwarding or Fintech; cloud (AWS, Azure or GCP), Docker and CI/CD"],
+    },
+    applyEmail: "jointheteam@tradingsolutions.com",
+    postedAt: "2026-08-11",
+  },
   {
     id: 2,
     slug: "inside-sales-support",

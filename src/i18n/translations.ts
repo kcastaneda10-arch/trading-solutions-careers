@@ -126,7 +126,8 @@ export const translations = {
       Comercial: "Comercial",
       People: "People",
       Talento: "Talento",
-      Finanzas: "Finanzas"
+      Finanzas: "Finanzas",
+      "Tecnología": "Tecnología"
     },
     modeNames: {
       Presencial: "Presencial",
@@ -259,7 +260,8 @@ export const translations = {
       Comercial: "Commercial",
       People: "People",
       Talento: "Talent",
-      Finanzas: "Finance"
+      Finanzas: "Finance",
+      "Tecnología": "Technology"
     },
     modeNames: {
       Presencial: "On-site",
