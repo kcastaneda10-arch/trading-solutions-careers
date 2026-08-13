@@ -20,7 +20,7 @@ import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 export const runtime = "nodejs";
 
 // URL por defecto · Calendly individual de Kelly (Entrevista Recruiter solo).
-const CALENDLY_URL_DEFAULT = process.env.CALENDLY_BASE_URL || "https://calendly.com/kcastaneda-tradingsolutions/30min";
+const CALENDLY_URL_DEFAULT = "https://calendly.com/k-castaneda-tradingsolutions/30min";
 
 // Yohanna Franco · Chief Wellness Officer
 const YOHANNA_CALENDLY = "https://calendly.com/cwo-tradingsolutions/new-meeting";
@@ -77,7 +77,7 @@ function buildPrefillUrl(baseUrl: string, name: string, email: string, vacancyTi
 
 function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: string, host: { firstName: string; fullName: string; role: string }, customMessage?: string): string {
   const messageBody = customMessage ||
-    `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong>. La próxima conversación es con <strong>${host.fullName}</strong> · va a durar alrededor de 45 minutos por video.`;
+    `Pasaste a la siguiente etapa del proceso para <strong>${vacancyTitle}</strong>. La próxima conversación es una <strong>entrevista presencial</strong> con <strong>${host.fullName}</strong> en nuestras oficinas de Barranquilla.<br><br><strong>📍 Dirección:</strong> Cra. 57 #99A-65, Torre Sur, Oficina 1501.<br><strong>🪪 Importante:</strong> lleva tu <strong>cédula en original</strong> (indispensable para el ingreso).`;
   const slotText = `Elige el mejor horario de acuerdo a tu disponibilidad · vas a ver el calendario de ${host.firstName} y puedes reservar el espacio que prefieras:`;
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -95,7 +95,7 @@ function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: st
     <p style="font-size:13px;color:#737373"><em>Nota: los festivos colombianos no son hábiles · si ves alguno disponible (ej. lunes 18 de mayo · Día de la Ascensión), por favor escoge otro día.</em></p>
     <p>Si ninguno de los horarios disponibles te funciona, regálame una respuesta a este correo y buscamos juntos.</p>
     <p>Un abrazo,<br><strong>${host.fullName}</strong><br>${host.role}</p>
-    <div class="footer">El enlace genera la videollamada de Google Meet automáticamente al confirmar.</div>
+    <div class="footer">La dirección y los detalles quedan también en la invitación de Calendly al confirmar tu horario.</div>
   </div>
 </body></html>`;
 }
@@ -175,7 +175,7 @@ export async function POST(
     }
 
     // WhatsApp link · pre-llenado para click-to-send (firmado por el host correspondiente)
-    const waMessage = `Hola ${firstName}, te escribo desde Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle}. La próxima conversación es con ${host.fullName} · 45 minutos por video.\n\nElige el horario que mejor te funcione desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\n${host.firstName}`;
+    const waMessage = `Hola ${firstName}, te escribo desde Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle}. La próxima conversación es una entrevista PRESENCIAL con ${host.fullName}.\n📍 Dirección: Cra. 57 #99A-65, Torre Sur, Oficina 1501 — Barranquilla.\n🪪 Importante: lleva tu cédula en original.\n\nElige el horario que mejor te funcione desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\n${host.firstName}`;
     const cleanPhone = (candidate.phone || "").replace(/[^0-9]/g, "");
     const finalPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
     const waLink = finalPhone
