@@ -177,11 +177,15 @@ export default function PrefiltroForm() {
     if (isFinance) {
       return !!(yearsFinance !== "" && accountingSystems.length > 0 && ifrsFamiliar);
     }
-    // Comex (default)
-    return !!(
-      yearsLogistics !== "" && intlClients && excelLevel &&
-      yearsSales !== "" && pricingExp && leadership
-    );
+    // Comex
+    if (isComex) {
+      return !!(
+        yearsLogistics !== "" && intlClients && excelLevel &&
+        yearsSales !== "" && pricingExp && leadership
+      );
+    }
+    // Tech u otros roles: basta con las preguntas comunes
+    return true;
   }
 
   async function handleSubmit() {
@@ -268,8 +272,8 @@ export default function PrefiltroForm() {
         ifrs_familiar: ifrsFamiliar === "si",
         audit_exp: auditExp.trim(),
       };
-    } else {
-      // Comex default
+    } else if (isComex) {
+      // Comex
       payload = {
         ...payload,
         years_logistics: parseInt(yearsLogistics) || 0,
@@ -681,7 +685,7 @@ export default function PrefiltroForm() {
               <textarea value={auditExp} onChange={(e) => setAuditExp(e.target.value.slice(0, 300))} rows={2} style={inputStyle} placeholder="Ej. 3 ciclos con KPMG en cliente multinacional" />
             </Q>
           </Section>
-        ) : (
+        ) : isComex ? (
           <>
             <Section title="5 · Experiencia en comex · operaciones">
               <Q label="Años de experiencia en logística o comercio exterior">
@@ -719,9 +723,9 @@ export default function PrefiltroForm() {
               )}
             </Section>
           </>
-        )}
+        ) : null}
 
-        <Section title={`${isComex ? "7" : "6"} · Sobre ti`}>
+        <Section title={`${isComex ? "7" : (isHR || isFinance) ? "6" : "5"} · Sobre ti`}>
           <Q label={`¿Por qué Trading Solutions específicamente? (mín. 20 caracteres) — ${whyTs.length}/500`}>
             <textarea value={whyTs} onChange={(e) => setWhyTs(e.target.value.slice(0, 500))} rows={4} style={inputStyle} placeholder="Cuéntanos qué te llamó la atención de la empresa, no de la vacante…" />
           </Q>
