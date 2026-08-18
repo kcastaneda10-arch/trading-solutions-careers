@@ -67,7 +67,9 @@ export async function GET(req: NextRequest) {
       .from("ht_candidates")
       .select("id, name, stage, updated_at, ht_vacancies(title)")
       .eq("client_id", TS_CLIENT_ID)
-      .in("stage", ["aging_check", "oferta", "terna", "prefiltro_revision", "assessment_completado"])
+      // Codes v4 vivos · el filtro corre en la BD. "aging_check" nunca fue un
+      // stage real y "assessment_completado" quedó absorbido por "pruebas".
+      .in("stage", ["prefiltro_revision", "pruebas", "prueba_tecnica", "terna", "oferta"])
       .not("email", "ilike", "%@tradingsolutions.com");
 
     const now = Date.now();

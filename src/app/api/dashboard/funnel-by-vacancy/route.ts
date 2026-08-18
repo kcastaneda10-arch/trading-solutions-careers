@@ -12,48 +12,21 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+// El orden y las etiquetas del funnel salen de la fuente única de verdad.
+// Antes había una copia acá que se quedó en los codes pre-v4: el funnel de
+// cada vacante mostraba etapas que ya no existen y perdía las nuevas.
+import { STAGE_ORDER, normalizeStage, stageLabel } from "@/lib/stage-labels";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
-// Orden canónico del funnel (sin terminales)
-const STAGES = [
-  'aplico',
-  'prefiltro_enviado',
-  'prefiltro_pasado',
-  'assessment_invitado',
-  'assessment_completado',
-  'entrevista_ia',
-  'recruiter_interview',
-  'cwo_interview',
-  'touring',
-  'terna',
-  'oferta',
-  'contratado',
-];
-
-const STAGE_LABEL: Record<string, string> = {
-  aplico: 'Aplicó',
-  prefiltro_enviado: 'Prefiltro enviado',
-  prefiltro_pasado: 'Prefiltro ✓',
-  prefiltro_revision: 'Prefiltro revisión',
-  assessment_invitado: 'Elevare invitado',
-  assessment_en_progreso: 'Elevare progreso',
-  assessment_completado: 'Elevare ✓',
-  entrevista_ia: 'Entrevista IA',
-  bateria_psicometrica: 'Batería psicométrica',
-  recruiter_interview: 'Recruiter interview',
-  cwo_interview: 'CWO interview',
-  touring: 'Touring',
-  terna: 'Terna',
-  oferta: 'Oferta',
-  contratado: 'Contratado',
-  rechazado: 'Rechazado',
-};
-
+/**
+ * Posición del candidato en el funnel. Normaliza primero porque en BD siguen
+ * vivos los codes históricos y sin traducir caerían todos en -1.
+ */
 function stageRank(s: string | null): number {
-  if (!s || s === 'rechazado') return -1;
-  const i = STAGES.indexOf(s);
-  return i === -1 ? -1 : i;
+  const code = normalizeStage(s);
+  if (!code || code === 'rechazado') return -1;
+  return STAGE_ORDER.indexOf(code as any);
 }
 
 export async function GET(req: NextRequest) {
@@ -94,36 +67,36 @@ export async function GET(req: NextRequest) {
       .map((v: any) => {
         const candsForVac = candsByVac[v.id] || [];
         const total = candsForVac.length;
-        const rejected = candsForVac.filter((c: any) => c.stage === 'rechazado').length;
-        const hired = candsForVac.filter((c: any) => c.stage === 'contratado').length;
+        const rejected = candsForVac.filter((c: any) => normalizeStage(c.stage) === 'rechazado').length;
+        const hired = candsForVac.filter((c: any) => normalizeStage(c.stage) === 'contratado').length;
         const active = total - rejected - hired;
 
         // Cuántos llegaron a cada stage
         const reached: Record<string, number> = {};
-        STAGES.forEach(s => { reached[s] = 0; });
+        STAGE_ORDER.forEach(s => { reached[s] = 0; });
         candsForVac.forEach((c: any) => {
           const r = stageRank(c.stage);
-          if (c.stage === 'rechazado') {
+          if (normalizeStage(c.stage) === 'rechazado') {
             reached.aplico++;
           } else if (r >= 0) {
-            for (let i = 0; i <= r; i++) reached[STAGES[i]]++;
+            for (let i = 0; i <= r; i++) reached[STAGE_ORDER[i]]++;
           }
         });
 
         // Conversiones por stage transition
-        const stages = STAGES.map((s, i) => {
+        const stages = STAGE_ORDER.map((s, i) => {
           const r = reached[s] || 0;
-          const prev = i === 0 ? r : reached[STAGES[i - 1]] || 0;
+          const prev = i === 0 ? r : reached[STAGE_ORDER[i - 1]] || 0;
           const conv = prev > 0 ? Math.round((r / prev) * 100) : null;
           const lostFromPrev = i === 0 ? 0 : prev - r;
           return {
             stage: s,
-            label: STAGE_LABEL[s],
+            label: stageLabel(s),
             count: r,
             conv_pct: conv,
             lost_from_prev: lostFromPrev,
           };
-        }).filter(s => s.count > 0 || (STAGES.indexOf(s.stage) <= 2)); // siempre mostrar al menos los primeros 3
+        }).filter(s => s.count > 0 || (STAGE_ORDER.indexOf(s.stage) <= 2)); // siempre mostrar al menos los primeros 3
 
         // Top 3 drop-offs (transiciones donde más se perdió en %)
         const dropoffs = stages

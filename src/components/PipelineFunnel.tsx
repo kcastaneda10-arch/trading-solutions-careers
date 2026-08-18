@@ -88,6 +88,13 @@ const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 // Definición del funnel — agrupado por fase semántica con paleta TS sobria
 // (negros, grises y solo 2 acentos: emerald para terminal positivo, red para rechazo).
 // La distinción entre stages se hace por categoría visual, no por colores brillantes.
+import {
+  STAGES as CANON_STAGES,
+  STAGE_CATEGORY,
+  normalizeStage,
+  stageOrder,
+} from "@/lib/stage-labels";
+
 type StageCategory = "screening" | "assessment" | "interview" | "decision" | "terminal-positive" | "terminal-negative";
 // Owner = de quién depende mover la pelota en este stage.
 //   candidate → estamos esperando que el candidato responda/haga algo
@@ -98,22 +105,33 @@ type StageOwner = "candidate" | "recruiter" | "shared" | "terminal";
 // 2026-05-12 v3: Pipeline definitivo de Kelly al cierre · simplificado y sin Elevare/IA.
 // 3 entrevistas antes de psico (Recruiter → Hiring Lead → CWO+HM) · luego pruebas Mary.
 // Onboarding agregado como etapa post-contratación.
-const STAGES: Array<{ id: string; label: string; category: StageCategory; owner: StageOwner }> = [
-  { id: "aplico",                  label: "Aplicó",                       category: "screening",  owner: "recruiter" },
-  { id: "prefiltro_enviado",       label: "Prefiltro enviado",            category: "screening",  owner: "candidate" },
-  { id: "prefiltro_pasado",        label: "Prefiltro · Pass",             category: "screening",  owner: "recruiter" },
-  { id: "prefiltro_revision",      label: "Prefiltro · Review",           category: "screening",  owner: "recruiter" },
-  { id: "recruiter_interview",     label: "Entrevista Recruiter",         category: "interview",  owner: "recruiter" },
-  { id: "hiring_lead_interview",   label: "Entrevista Hiring Lead",       category: "interview",  owner: "recruiter" },
-  { id: "cwo_interview",           label: "CWO + Hiring Manager",         category: "interview",  owner: "recruiter" },
-  { id: "bateria_psicometrica",    label: "Pruebas Psicométricas",        category: "assessment", owner: "recruiter" },
-  { id: "solicitud_enviada_mary",  label: "Solicitud a HR Specialist",    category: "assessment", owner: "shared" },
-  { id: "touring",                 label: "Máquina de Turing",            category: "assessment", owner: "shared" },
-  { id: "terna",                   label: "Terna · Finalistas",           category: "decision",   owner: "recruiter" },
-  { id: "oferta",                  label: "Oferta",                       category: "decision",   owner: "candidate" },
-  { id: "contratado",              label: "Contratado",                   category: "terminal-positive", owner: "terminal" },
-  { id: "onboarding",              label: "Onboarding",                   category: "terminal-positive", owner: "shared" },
-];
+// v4 · 18-ago-2026 — las etapas ya NO se declaran acá.
+// Salen de src/lib/stage-labels.ts, que es la fuente única de verdad del
+// proceso (Selección 8 etapas → Contratación 5). Este bloque solo traduce
+// esa definición a la forma que el kanban necesita (category + owner).
+const OWNER_BY_STAGE: Record<string, StageOwner> = {
+  aplico: "recruiter",
+  prefiltro_enviado: "candidate",
+  prefiltro_pasado: "recruiter",
+  prefiltro_revision: "recruiter",
+  pruebas: "shared",
+  recruiter_interview: "recruiter",
+  prueba_tecnica: "shared",
+  terna: "recruiter",
+  examenes_medicos: "candidate",
+  estudio_seguridad: "shared",
+  documentacion_ingreso: "candidate",
+  oferta: "candidate",
+  contratado: "terminal",
+};
+
+const STAGES: Array<{ id: string; label: string; category: StageCategory; owner: StageOwner }> =
+  CANON_STAGES.map((s) => ({
+    id: s.id,
+    label: s.label,
+    category: (s.id === "contratado" ? "terminal-positive" : STAGE_CATEGORY[s.id]) as StageCategory,
+    owner: OWNER_BY_STAGE[s.id] ?? "recruiter",
+  }));
 
 const REJECTED_STAGE = { id: "rechazado", label: "Rechazado", category: "terminal-negative" as StageCategory, owner: "terminal" as StageOwner };
 
@@ -219,7 +237,9 @@ export default function PipelineFunnel() {
     const m: Record<string, Cand[]> = {};
     [...STAGES, REJECTED_STAGE].forEach(s => { m[s.id] = []; });
     filtered.forEach(c => {
-      const stage = c.stage || "aplico";
+      // normalizeStage traduce los codes históricos (touring, cwo_interview,
+      // bateria_psicometrica…) a la etapa v4 que les corresponde.
+      const stage = normalizeStage(c.stage) || "aplico";
       if (!m[stage]) m[stage] = [];
       m[stage].push(c);
     });
@@ -279,131 +299,6 @@ export default function PipelineFunnel() {
                   📊 Comparar
                 </a>
               )}
-              <button
-                type="button"
-                onClick={async () => {
-                  if (bulkRunning) return;
-                  const vacancyParam = vacFilter !== "all" ? [vacFilter] : null;
-                  const msg = vacancyParam
-                    ? `Generar handoff COMPLETO de la vacante filtrada para Yohanna?\n\nIncluye: candidatos en prefiltro, recruiter interview, hiring lead, CWO+HM, pruebas, rechazados (con razón) y tus revisiones.`
-                    : `Generar handoff COMPLETO de TODAS las vacantes activas para Yohanna?\n\nIncluye: candidatos en todas las etapas pendientes + rechazados (con razón) + tus revisiones.`;
-                  if (!confirm(msg)) return;
-                  setBulkRunning(true);
-                  try {
-                    const r = await fetch(`/api/admin/export-pipeline-to-yohanna`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        vacancy_ids: vacancyParam,
-                        include_rejected: true,
-                      }),
-                    });
-                    const j = await r.json();
-                    if (j.success) {
-                      alert(`✅ Draft listo en Gmail · ${j.candidates_count} candidatos · ${j.vacancies_count} vacante${j.vacancies_count !== 1 ? "s" : ""}\n\nTo: ${j.to}\nIncluye: revisiones tuyas + rechazados con razón.\nRevisa el draft (podés editar lista de destinatarios o el contenido) y envíalo.`);
-                    } else {
-                      alert(`❌ ${j.error || "Error generando draft"}`);
-                    }
-                  } catch (e) {
-                    alert(`❌ ${(e as Error).message}`);
-                  } finally {
-                    setBulkRunning(false);
-                  }
-                }}
-                disabled={bulkRunning}
-                className="text-xs font-bold px-3 py-2.5 border-2 border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors whitespace-nowrap disabled:opacity-50"
-                style={{ borderRadius: 0 }}
-                title="Genera handoff COMPLETO a Yohanna · todas las etapas activas + rechazados con razón + tus revisiones recruiter. Si tenés una vacante filtrada, solo manda los de esa vacante."
-              >
-                📋 Handoff a Yohanna
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (bulkRunning) return;
-                  const vacancyParam = vacFilter !== "all" ? [vacFilter] : null;
-                  const msg = vacancyParam
-                    ? `Descargar Excel COMPLETO de la vacante filtrada para Yohanna?\n\nIncluye: candidatos en todas las etapas + rechazados (con razón) + tus revisiones · listo para filtrar/ordenar en Excel.`
-                    : `Descargar Excel COMPLETO de TODAS las vacantes activas para Yohanna?\n\nIncluye: candidatos en todas las etapas + rechazados + tus revisiones · listo para filtrar/ordenar.`;
-                  if (!confirm(msg)) return;
-                  setBulkRunning(true);
-                  try {
-                    const r = await fetch(`/api/admin/export-pipeline-yohanna-excel`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        vacancy_ids: vacancyParam,
-                        include_rejected: true,
-                      }),
-                    });
-                    if (!r.ok) {
-                      const j = await r.json().catch(() => ({}));
-                      alert(`❌ ${j.error || "Error generando Excel"}`);
-                      return;
-                    }
-                    // Descargar el archivo
-                    const blob = await r.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    const today = new Date().toISOString().slice(0, 10);
-                    a.download = `handoff-pipeline-yohanna-${today}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  } catch (e) {
-                    alert(`❌ ${(e as Error).message}`);
-                  } finally {
-                    setBulkRunning(false);
-                  }
-                }}
-                disabled={bulkRunning}
-                className="text-xs font-bold px-3 py-2.5 border-2 border-blue-400 bg-blue-50 text-blue-900 hover:bg-blue-100 transition-colors whitespace-nowrap disabled:opacity-50"
-                style={{ borderRadius: 0 }}
-                title="Descarga Excel con todos los candidatos · una fila por candidato con columnas para Vacante, Etapa, Nombre, Cédula, Contacto, LinkedIn, CV, Verdict tuyo, Fortalezas, Reservas, Razón rechazo · listo para filtrar/ordenar"
-              >
-                📊 Excel a Yohanna
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (bulkRunning) return;
-                  const queueCount = filtered.filter(c => (c.stage || "aplico") === "bateria_psicometrica").length;
-                  if (queueCount === 0) {
-                    alert("No hay candidatos en cola de Pruebas Psicométricas.");
-                    return;
-                  }
-                  const vacancyParam = vacFilter !== "all" ? vacFilter : null;
-                  const msg = `Enviar batch a Mary con ${queueCount} candidato${queueCount > 1 ? "s" : ""} en cola? Se generará UN draft consolidado y se moverán todos a "Solicitud a HR Specialist".`;
-                  if (!confirm(msg)) return;
-                  setBulkRunning(true);
-                  try {
-                    const r = await fetch(`/api/admin/send-batch-to-mary`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ vacancy_id: vacancyParam }),
-                    });
-                    const j = await r.json();
-                    if (j.success) {
-                      alert(`✅ Draft consolidado listo en Gmail · ${j.candidates_count} candidatos\n\nTo: ${j.to}\n${j.moved_count} candidatos movidos a "Solicitud a HR Specialist".\n\nRevisa el draft y envíalo.`);
-                      await load(); // refresca el funnel
-                    } else {
-                      alert(`❌ ${j.error || "Error generando draft"}`);
-                    }
-                  } catch (e) {
-                    alert(`❌ ${(e as Error).message}`);
-                  } finally {
-                    setBulkRunning(false);
-                  }
-                }}
-                disabled={bulkRunning}
-                className="text-xs font-bold px-3 py-2.5 border-2 border-emerald-400 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors whitespace-nowrap disabled:opacity-50"
-                style={{ borderRadius: 0 }}
-                title="Crea UN draft consolidado a Mary con todos los candidatos en cola de Pruebas Psicométricas · los mueve a 'Solicitud a HR Specialist' · se usa 2x/día (mañana/tarde)"
-              >
-                📨 Batch a Mary
-              </button>
             </div>
           </div>
         </div>
@@ -1353,19 +1248,19 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             <ElevareResultsBlock candidateId={cand.id} candidateStatus={cand.status} />
           )}
 
-          {/* Entrevista IA — disponible desde assessment_completado en adelante */}
-          {(cand.status === "completed" ||
-            ["assessment_completado","entrevista_ia","recruiter_interview"].includes(String(cand.stage || ""))) && (
-            <AIInterviewBlock candidateId={cand.id} candidateEmail={cand.email} />
-          )}
+          {/* La entrevista IA por voz se retiró del funnel el 18-ago-2026:
+              no aplica en el flujograma del proceso. La evaluación de los
+              16 mandatos del CEO con IA sí se conserva, acá abajo. */}
 
-          {/* Recruiter Assessment · 16 mandatos del CEO · visible desde recruiter_interview en adelante */}
-          {["recruiter_interview","cwo_interview","touring","terna","oferta","contratado","rechazado"].includes(String(cand.stage || "")) && (
+          {/* Evaluación de los 16 mandatos del CEO con IA — se conserva.
+              Se compara por posición en el funnel v4 en vez de listar codes
+              sueltos: visible desde "Entrevista reclutador" (orden 6). */}
+          {(stageOrder(cand.stage) >= 6 || String(cand.stage) === "rechazado") && (
             <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} stage="recruiter_interview" />
           )}
 
-          {/* CWO Assessment · 16 mandatos del CEO desde el lente de la CWO · visible desde cwo_interview en adelante */}
-          {["cwo_interview","touring","terna","oferta","contratado","rechazado"].includes(String(cand.stage || "")) && (
+          {/* El mismo assessment desde el lente de la CWO · desde "Terna" (orden 8) */}
+          {(stageOrder(cand.stage) >= 8 || String(cand.stage) === "rechazado") && (
             <RecruiterAssessmentCard candidateId={cand.id} candidateName={cand.name || ""} stage="cwo_interview" />
           )}
 

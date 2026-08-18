@@ -6,8 +6,23 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { recordStageEvent } from "@/lib/stage-events";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+
+/**
+ * Destinos que el Hiring Lead puede elegir desde la página pública.
+ * Solo codes v4: `cwo_interview` y `touring` quedaron muertos y `touring`
+ * además normaliza a `pruebas`, así que aceptarlo mandaba al candidato a la
+ * batería psicotécnica en vez de a la etapa que el líder quiso.
+ */
+const DECISION_TARGET_STAGES = [
+  'recruiter_interview',
+  'prueba_tecnica',
+  'terna',
+  'oferta',
+  'contratado',
+];
 
 export async function GET(
   _req: NextRequest,
@@ -120,16 +135,33 @@ export async function POST(
       updates.recommended_vacancy_text = body.recommended_vacancy_text ? String(body.recommended_vacancy_text).slice(0, 500) : null;
     }
 
+    // Etapa previa · se lee antes de escribir para poder registrar el evento.
+    const { data: candBefore } = await supabaseAdmin
+      .from("ht_candidates")
+      .select("stage, vacancy_id")
+      .eq("id", existing.candidate_id)
+      .maybeSingle();
+    const fromStage = candBefore?.stage ?? null;
+
     // Auto-apply stage transition si avanza con stage definido
     let stageUpdated = false;
     if (body.decision === 'avanza' && body.target_stage) {
-      const validStages = ['recruiter_interview','cwo_interview','touring','terna','oferta','contratado'];
-      if (validStages.includes(body.target_stage)) {
+      if (DECISION_TARGET_STAGES.includes(body.target_stage)) {
         await supabaseAdmin
           .from("ht_candidates")
           .update({ stage: body.target_stage, updated_at: new Date().toISOString() })
           .eq("id", existing.candidate_id);
         stageUpdated = true;
+        // La decisión del Hiring Lead mueve la etapa sin pasar por el endpoint
+        // de stage: sin el evento el dashboard no ve el avance.
+        await recordStageEvent({
+          candidateId: existing.candidate_id,
+          fromStage,
+          toStage: body.target_stage,
+          vacancyId: existing.vacancy_id ?? candBefore?.vacancy_id ?? null,
+          source: "system",
+          note: "decisión del Hiring Lead",
+        });
       }
     } else if (body.decision === 'no_avanza') {
       // Marcar rechazado automáticamente
@@ -138,17 +170,36 @@ export async function POST(
         .update({ stage: 'rechazado', status: 'rejected', updated_at: new Date().toISOString() })
         .eq("id", existing.candidate_id);
       stageUpdated = true;
+      await recordStageEvent({
+        candidateId: existing.candidate_id,
+        fromStage,
+        toStage: 'rechazado',
+        vacancyId: existing.vacancy_id ?? candBefore?.vacancy_id ?? null,
+        source: "system",
+        note: "decisión del Hiring Lead · no avanza",
+      });
     } else if (body.decision === 'recommend_other_vacancy' && body.recommended_vacancy_id && body.move_now) {
       // Mover candidato a la otra vacante en stage aplico (o el que indique target_stage)
+      const movedToStage = body.target_stage || 'aplico';
       await supabaseAdmin
         .from("ht_candidates")
         .update({
           vacancy_id: body.recommended_vacancy_id,
-          stage: body.target_stage || 'aplico',
+          stage: movedToStage,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.candidate_id);
       stageUpdated = true;
+      // El evento va contra la vacante NUEVA · es donde el candidato empieza a
+      // contar días.
+      await recordStageEvent({
+        candidateId: existing.candidate_id,
+        fromStage,
+        toStage: movedToStage,
+        vacancyId: body.recommended_vacancy_id,
+        source: "system",
+        note: "recomendado para otra vacante",
+      });
     }
     updates.stage_auto_updated = stageUpdated;
 

@@ -48,11 +48,13 @@ export async function GET(req: NextRequest) {
     const todayEnd = endOfDay(now);
 
     // Pull candidatos en stages relevantes
+    // El filtro corre en la BD, así que normalizeStage no lo salva: si acá
+    // quedan codes muertos el brief sale vacío aunque haya entrevistas hoy.
     const { data: cands } = await supabaseAdmin
       .from("ht_candidates")
       .select("id, name, email, vacancy_id, stage, calendly_scheduled_at, ht_vacancies(title), prefilter_data")
       .eq("client_id", TS_CLIENT_ID)
-      .in("stage", ["recruiter_interview", "cwo_interview"])
+      .in("stage", ["recruiter_interview", "prueba_tecnica", "terna"])
       .order("updated_at", { ascending: false });
 
     const candIds = (cands || []).map(c => c.id);

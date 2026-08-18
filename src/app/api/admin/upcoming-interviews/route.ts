@@ -4,7 +4,9 @@
  * Devuelve las entrevistas próximas/pendientes para Kelly:
  *   - scheduled_today: candidatos con calendly_scheduled_at = hoy
  *   - pending_eval: candidatos en stage `recruiter_interview` sin ts_recruiter_assessments
- *   - cwo_pending: candidatos en stage `cwo_interview` sin moverse en >2d
+ *   - cwo_pending: candidatos esperando decisión del Hiring Lead (stage `terna`).
+ *                  La clave conserva el nombre viejo porque el HR Admin la lee así;
+ *                  el stage `cwo_interview` se consolidó en `terna` en v4.
  *   - calendly_sent_no_book: invitación Calendly enviada pero candidato no agendó
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -37,7 +39,9 @@ export async function GET(req: NextRequest) {
       .from("ht_candidates")
       .select("id, name, email, phone, vacancy_id, stage, status, updated_at, calendly_invitation_sent_at, calendly_scheduled_at, calendly_event_url, ht_vacancies(title), prefilter_completed_at")
       .eq("client_id", TS_CLIENT_ID)
-      .in("stage", ["recruiter_interview", "cwo_interview"])
+      // Filtro a nivel BD · normalizeStage no aplica acá, tienen que ser
+      // codes v4 vivos o la consulta vuelve vacía.
+      .in("stage", ["recruiter_interview", "prueba_tecnica", "terna"])
       .order("updated_at", { ascending: false });
 
     // Pull recruiter assessments para saber cuáles ya están evaluados
@@ -95,7 +99,9 @@ export async function GET(req: NextRequest) {
       c.calendly_sent_at && !c.calendly_scheduled_at && !c.has_assessment
     );
 
-    const cwoPending = all.filter(c => c.stage === "cwo_interview");
+    // La entrevista con CWO ya no existe: quien espera decisión es el Hiring
+    // Lead con la terna en la mano.
+    const cwoPending = all.filter(c => c.stage === "terna");
 
     return NextResponse.json({
       generated_at: now.toISOString(),

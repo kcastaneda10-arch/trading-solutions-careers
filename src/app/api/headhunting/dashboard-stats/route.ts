@@ -10,6 +10,16 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+// Las etapas salen de la fuente única de verdad. Este archivo tenía sus
+// propias listas con codes pre-v4: contaba candidatos en etapas muertas y
+// dejaba fuera las nuevas (pruebas, prueba_tecnica, terna, contratación).
+import {
+  ACTIVE_STAGES,
+  STAGE_ORDER,
+  STAGE_RANK,
+  normalizeStage,
+  stageLabel,
+} from "@/lib/stage-labels";
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,26 +48,14 @@ export async function GET(req: NextRequest) {
 
     const all: any[] = resp.data || [];
 
-    // Conteo por stage del Funnel (12 stages oficiales)
-    const STAGES = [
-      "aplico",
-      "prefiltro_enviado",
-      "prefiltro_pasado",
-      "prefiltro_revision",
-      "assessment_invitado",
-      "assessment_en_progreso",
-      "assessment_completado",
-      "entrevista_ia",
-      "recruiter_interview",
-      "cwo_interview",
-      "touring",
-      "contratado",
-      "rechazado",
-    ];
+    // Conteo por stage del Funnel v4 · 13 etapas + terminal
+    const COUNTED_STAGES = [...STAGE_ORDER, "rechazado"];
     const byStage: Record<string, number> = {};
-    for (const s of STAGES) byStage[s] = 0;
+    for (const s of COUNTED_STAGES) byStage[s] = 0;
     for (const c of all) {
-      const stg = (c.stage as string) || "aplico";
+      // Normalizar antes de contar · en BD siguen vivos los codes históricos y
+      // sin traducir cada uno abriría su propio bucket fuera del funnel.
+      const stg = normalizeStage(c.stage as string) || "aplico";
       byStage[stg] = (byStage[stg] ?? 0) + 1;
     }
 
@@ -96,23 +94,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Funnel conversion rates (stage → next stage)
-    const funnelOrder = [
-      { key: "aplico", label: "Aplicó" },
-      { key: "prefiltro_enviado", label: "Prefiltro enviado" },
-      { key: "prefiltro_pasado", label: "Prefiltro pasado" },
-      { key: "assessment_invitado", label: "Assessment invitado" },
-      { key: "assessment_completado", label: "Assessment completado" },
-      { key: "recruiter_interview", label: "Entrevista recruiter" },
-      { key: "cwo_interview", label: "Entrevista CWO" },
-      { key: "contratado", label: "Contratado" },
-    ];
+    const funnelOrder = STAGE_ORDER.map((key) => ({ key, label: stageLabel(key) }));
     // Acumulado: cuántos están en stage X o más adelante
-    const STAGE_RANK: Record<string, number> = {};
-    STAGES.forEach((s, i) => { STAGE_RANK[s] = i; });
     const cumulative = funnelOrder.map((f) => {
       const rankF = STAGE_RANK[f.key];
       const reached = all.filter((c) => {
-        const stg = (c.stage as string) || "aplico";
+        const stg = normalizeStage(c.stage as string) || "aplico";
         // 'rechazado' no cuenta como progreso a stages futuras
         if (stg === "rechazado") {
           // pero si fue rechazado AFTER passing this stage, debería contarse
@@ -121,18 +108,16 @@ export async function GET(req: NextRequest) {
           if (f.key === "prefiltro_pasado" && c.prefilter_decision === "pass") return true;
           return false;
         }
-        return STAGE_RANK[stg] >= rankF;
+        return (STAGE_RANK[stg] ?? 0) >= rankF;
       }).length;
       return { ...f, count: reached };
     });
 
     // ─── Top candidates · activos en pipeline con Elevare score ───
-    // Excluir contratado/rechazado y casos terminales
-    const ACTIVE_FOR_TOP = [
-      "aplico", "prefiltro_pasado", "assessment_completado", "entrevista_ia",
-      "recruiter_interview", "cwo_interview", "touring", "terna", "oferta",
-    ];
-    const activeCands = all.filter((c) => ACTIVE_FOR_TOP.includes((c.stage as string) || ""));
+    // ACTIVE_STAGES ya excluye contratado y rechazado.
+    const activeCands = all.filter((c) =>
+      (ACTIVE_STAGES as string[]).includes(normalizeStage(c.stage as string))
+    );
 
     // Cargar Elevare scores en una query separada
     const candIds = activeCands.map((c) => c.id);
@@ -165,7 +150,7 @@ export async function GET(req: NextRequest) {
           candidate_id: c.id,
           name: c.name,
           email: c.email,
-          stage: c.stage,
+          stage: normalizeStage(c.stage as string),
           vacancy_id: c.vacancy_id,
           vacancy_title: c.ht_vacancies?.title || "—",
           elevare_score: score,
@@ -186,8 +171,10 @@ export async function GET(req: NextRequest) {
       cumulative,
       hires: byStage["contratado"] ?? 0,
       rejected: byStage["rechazado"] ?? 0,
-      inElevareProcess: (byStage["assessment_invitado"] ?? 0) + (byStage["assessment_en_progreso"] ?? 0),
-      completedElevare: byStage["assessment_completado"] ?? 0,
+      // Las tres etapas de assessment se consolidaron en "pruebas" (batería) y
+      // "prueba_tecnica" (assessment del cargo).
+      inElevareProcess: byStage["pruebas"] ?? 0,
+      completedElevare: byStage["prueba_tecnica"] ?? 0,
       prefilterCompleted: all.filter((c) => c.prefilter_completed_at).length,
       prefilterInvited: all.filter((c) => c.prefilter_invited_at).length,
       top_candidates_enriched: enrichedTop,

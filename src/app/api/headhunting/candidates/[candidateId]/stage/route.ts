@@ -15,29 +15,9 @@ import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 import { defaultOnboardingTasks } from "@/lib/onboarding-tasks";
 import crypto from "crypto";
 
-const VALID_STAGES = [
-  "aplico",
-  "prefiltro_enviado",
-  "prefiltro_pasado",
-  "prefiltro_revision",
-  // Legacy · candidatos pre-mayo 2026
-  "assessment_invitado",
-  "assessment_en_progreso",
-  "assessment_completado",
-  "entrevista_ia",
-  // Pipeline activo v3
-  "recruiter_interview",
-  "hiring_lead_interview",
-  "cwo_interview",
-  "bateria_psicometrica",
-  "solicitud_enviada_mary",
-  "touring",
-  "terna",
-  "oferta",
-  "contratado",
-  "onboarding",
-  "rechazado",
-];
+// Las etapas válidas (v4 + legacy) viven en la fuente única de verdad.
+// No declarar listas de etapas acá.
+import { VALID_STAGES } from "@/lib/stage-labels";
 
 const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
 
@@ -198,6 +178,26 @@ export async function POST(
 
     if (updateErr) {
       return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
+    }
+
+    // ─── Historial de etapa ────────────────────────────────────────
+    // Sin esto los "días en etapa" del dashboard vuelven a depender de
+    // updated_at, que se pisa con cualquier edición del candidato.
+    // Es best-effort: si falla, el movimiento igual quedó guardado.
+    if (candidate.stage !== targetStage) {
+      const { error: eventErr } = await supabaseAdmin
+        .from("ht_candidate_stage_events")
+        .insert({
+          candidate_id: candidateId,
+          vacancy_id: candidate.vacancy_id ?? null,
+          from_stage: candidate.stage ?? null,
+          to_stage: targetStage,
+          changed_at: new Date().toISOString(),
+          source: "ui",
+        });
+      if (eventErr) {
+        console.error("[stage] no se pudo registrar el evento de etapa:", eventErr.message);
+      }
     }
 
     // ─── Auto-create People + Onboarding when hired ───

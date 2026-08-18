@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { recordStageEvent } from '@/lib/stage-events';
 
 function calculateIntegrityScore(proctoring: {
   camera_enabled?: boolean;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     // Validate token
     const { data: candidate } = await supabaseAdmin
       .from('ht_candidates')
-      .select('id, status, vacancy_id')
+      .select('id, status, stage, vacancy_id')
       .eq('assessment_token', token)
       .single();
 
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       .eq('is_final', false);
 
     // Update candidate status to completed
-    await supabaseAdmin
+    const { error: updateErr } = await supabaseAdmin
       .from('ht_candidates')
       .update({
         status: 'completed',
@@ -53,6 +54,18 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', candidate.id);
+
+    // Cerrar el assessment mueve la etapa. Sin el evento no queda rastro del
+    // salto y los días en etapa se calculan sobre updated_at recién pisado.
+    if (!updateErr) {
+      await recordStageEvent({
+        candidateId: candidate.id,
+        fromStage: candidate.stage ?? null,
+        toStage: 'assessment_completado',
+        vacancyId: candidate.vacancy_id ?? null,
+        source: 'system',
+      });
+    }
 
     // Create a pending result record
     await supabaseAdmin.from('ht_results').insert({

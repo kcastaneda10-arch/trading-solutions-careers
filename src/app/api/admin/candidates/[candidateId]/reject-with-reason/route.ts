@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { recordStageEvent } from "@/lib/stage-events";
 
 export const runtime = "nodejs";
 
@@ -162,6 +163,19 @@ export async function POST(
     if (updateErr) {
       return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
     }
+
+    // El descarte también es un movimiento de etapa: sin el evento el candidato
+    // conserva el historial de su etapa anterior y el dashboard le sigue
+    // contando días donde ya no está.
+    await recordStageEvent({
+      candidateId,
+      fromStage: (candidate.stage as string) ?? null,
+      toStage: "rechazado",
+      vacancyId: (candidate.vacancy_id as string) ?? null,
+      source: "system",
+      changedBy: rejectedBy || null,
+      note: `${categoryKey} · ${subDetailKey}`,
+    });
 
     return NextResponse.json({
       success: true,

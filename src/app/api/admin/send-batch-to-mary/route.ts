@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { recordStageEvents } from "@/lib/stage-events";
 
 export const runtime = "nodejs";
 
@@ -174,6 +175,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Mover a todos a solicitud_enviada_mary
     const movedIds: string[] = [];
+    const movedCands: Cand[] = [];
     for (const c of cands) {
       try {
         await supabaseAdmin
@@ -184,10 +186,25 @@ export async function POST(req: NextRequest) {
           })
           .eq("id", c.id);
         movedIds.push(c.id);
+        movedCands.push(c);
       } catch (e) {
         console.warn(`No se pudo mover candidato ${c.id}:`, e);
       }
     }
+
+    // El batch mueve decenas de candidatos de una. Sin registrar los eventos,
+    // todos quedan con updated_at de hoy y el dashboard los muestra como recién
+    // movidos aunque lleven semanas esperando a Mary.
+    // La query de arriba filtra por stage, así que la etapa previa es conocida.
+    await recordStageEvents(
+      movedCands.map((c) => ({
+        candidateId: c.id,
+        fromStage: "bateria_psicometrica",
+        toStage: "solicitud_enviada_mary",
+        vacancyId: c.vacancy_id ?? null,
+        source: "system" as const,
+      })),
+    );
 
     return NextResponse.json({
       success: true,

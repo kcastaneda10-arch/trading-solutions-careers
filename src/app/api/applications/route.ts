@@ -5,22 +5,12 @@ import { generatePortalToken } from "@/lib/portal-token";
 import { getResend, EMAIL_FROM } from "@/lib/resend";
 import { sendViaGmail, isGmailConnected } from "@/lib/gmail";
 import { supabaseAdmin } from "@/lib/supabase";
+import { recordStageEvent } from "@/lib/stage-events";
+// El mapa job_id → vacancy_id es compartido con
+// /api/admin/sync-applications-to-funnel · no duplicarlo acá.
+import { VACANCY_MAP } from "@/lib/vacancy-map";
 
-// Mapping job_id (jobs.ts) → vacancy_id (Supabase ht_vacancies)
-// Mantener sincronizado con /api/admin/sync-applications-to-funnel
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
-const VACANCY_MAP: Record<number, string> = {
-  2: "c25ce70b-9244-4393-aea6-75372a99a6ef", // Inside Sales Support
-  3: "6e4838dd-8aea-4426-bd26-ea588f0f493a", // Customer Documentation Specialist
-  4: "d354c55a-eb1c-4aee-bd02-b0a20162e1f1", // Pricing Junior
-  5: "70c39cab-adaf-49a0-b137-29d0ff9b56b0", // Talent Acquisition and Development Lead
-
-  // ─── CHINA · Builder Team (form_template_key='china', country='China') ──
-  6: "ac368792-1cde-4afb-9185-24d5b4aa0579", // Customer Documentation and Support (Finance)
-  7: "da9ca124-e610-450b-a9f1-56f4a538fd9a", // Operations Executive and Support (Operations)
-  8: "81d82ac5-9746-4f80-94d5-4595d09bd7ab", // Overseas Sales Executive and Support (Commercial)
-  9: "7350dc25-2791-4a9c-8d30-1c09fe48cbad", // Pricing Executive - Support (Pricing)
-};
 
 let dbInitialized = false;
 
@@ -108,7 +98,7 @@ export async function POST(request: NextRequest) {
             .update({ updated_at: new Date().toISOString() })
             .eq("id", existing.id);
         } else {
-          await supabaseAdmin
+          const { data: created, error: insertErr } = await supabaseAdmin
             .from("ht_candidates")
             .insert({
               client_id: TS_CLIENT_ID,
@@ -121,8 +111,31 @@ export async function POST(request: NextRequest) {
               notes: why_ts ? `[Public form] ${why_ts}` : `[Public form] · application_id=${newId}`,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+            })
+            .select("id")
+            .maybeSingle();
+
+          // La entrada al funnel es el primer evento del candidato: sin él
+          // "días en aplicó" no tiene punto de partida real.
+          if (!insertErr && created?.id) {
+            await recordStageEvent({
+              candidateId: created.id,
+              fromStage: null,
+              toStage: "aplico",
+              vacancyId,
+              source: "system",
+              note: "formulario público",
             });
+          }
         }
+      } else {
+        // Sin mapeo la aplicación se guarda en Neon pero nunca entra al funnel,
+        // y el candidato igual recibe "aplicación recibida". Queda invisible
+        // para el equipo hasta que alguien mapee el job_id.
+        console.error(
+          `[applications] job_id ${job_id} (${job_title || "sin título"}) no está en VACANCY_MAP · ` +
+          `la aplicación ${newId} de ${emailLower} NO entró al funnel`
+        );
       }
     } catch (syncErr) {
       // No bloquear el flujo de aplicación si el sync falla · queda para sync manual posterior

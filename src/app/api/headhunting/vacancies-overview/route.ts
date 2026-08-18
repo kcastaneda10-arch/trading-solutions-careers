@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     // 1. Vacancies + their milestones
     let vacQuery = supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, status, role_level, vacancy_type")
+      .select("id, title, area, status, role_level, vacancy_type, country")
       .eq("client_id", TS_CLIENT_ID);
     if (filterByVacancy) vacQuery = vacQuery.eq("id", vacancyId);
     const { data: vacs, error: vErr } = await vacQuery;

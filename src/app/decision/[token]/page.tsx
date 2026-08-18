@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { CheckCircle2, XCircle, ArrowRight, HelpCircle, AlertTriangle } from "lucide-react";
+import { stageLabel } from "@/lib/stage-labels";
 
 const TS_HERO = "https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/691645b652c1e9091b25f59c_FotosWeb_TradingSolutions-14_4_11zon.webp";
 const TS_LOGO = "https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/6913594489519813fe9e620e_logo%20web-03.png";
@@ -277,12 +278,11 @@ function DecisionForm({
       {decision === 'avanza' && (
         <>
           <h3 className="text-lg font-bold mb-1">¿A qué stage avanza?</h3>
-          <p className="text-xs text-gray-600 mb-3">Stage actual: <code className="bg-gray-100 px-1 rounded">{ds.candidate?.stage || '—'}</code></p>
+          <p className="text-xs text-gray-600 mb-3">Stage actual: <code className="bg-gray-100 px-1 rounded">{stageLabel(ds.candidate?.stage)}</code></p>
           <select value={targetStage} onChange={e => setTargetStage(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm mb-4">
             <option value="">— Elegir siguiente stage —</option>
-            <option value="cwo_interview">Entrevista con CWO</option>
-            <option value="touring">Touring (visita oficinas)</option>
-            <option value="terna">Terna (final candidates)</option>
+            <option value="prueba_tecnica">Prueba técnica / Assessment</option>
+            <option value="terna">Terna para Hiring Lead</option>
             <option value="oferta">Hacer oferta</option>
             <option value="contratado">Contratar</option>
           </select>

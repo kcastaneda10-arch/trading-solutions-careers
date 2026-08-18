@@ -12,8 +12,19 @@ import crypto from "crypto";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
-// Stages que requieren decisión humana antes de avanzar
-const STAGES_NEEDING_DECISION = ['recruiter_interview','cwo_interview','touring','terna'];
+// Stages que requieren decisión humana antes de avanzar.
+// Se filtra a nivel BD, así que tienen que ser codes v4 vivos: con los viejos
+// (cwo_interview, touring) la lista salía vacía y nadie recibía nudge.
+// Toda la fase de contratación entra · cada paso espera una respuesta.
+const STAGES_NEEDING_DECISION = [
+  'recruiter_interview',
+  'prueba_tecnica',
+  'terna',
+  'examenes_medicos',
+  'estudio_seguridad',
+  'documentacion_ingreso',
+  'oferta',
+];
 
 function buildEmail(opts: {
   candidate_name: string;

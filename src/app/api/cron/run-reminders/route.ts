@@ -24,6 +24,7 @@ import {
   getLanguage,
 } from "@/lib/reminder-templates";
 import { requireAdmin } from "@/lib/admin-auth";
+import { recordStageEvent } from "@/lib/stage-events";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -177,10 +178,24 @@ export async function GET(req: NextRequest) {
             });
           results.push({ candidate_id: cand.id, status: "exhausted_paused" });
         } else if (rule.on_exhausted_action === "mark_rejected") {
-          await supabaseAdmin
+          const { error: rejectErr } = await supabaseAdmin
             .from("ht_candidates")
             .update({ stage: "rechazado", status: "rejected", updated_at: new Date().toISOString() })
             .eq("id", cand.id);
+
+          // El auto-rechazo por silencio es justo el caso donde interesa saber
+          // desde qué etapa se cayó el candidato y cuándo: sin el evento el
+          // historial muestra al rechazado como si nunca hubiera avanzado.
+          if (!rejectErr) {
+            await recordStageEvent({
+              candidateId: cand.id,
+              fromStage: cand.stage ?? null,
+              toStage: "rechazado",
+              vacancyId: cand.vacancy_id ?? null,
+              source: "system",
+              note: `auto-rechazo tras ${rule.max_iterations} recordatorios · ${rule.scenario_key}`,
+            });
+          }
           results.push({ candidate_id: cand.id, status: "exhausted_rejected" });
         } else {
           results.push({ candidate_id: cand.id, status: "exhausted_noop" });

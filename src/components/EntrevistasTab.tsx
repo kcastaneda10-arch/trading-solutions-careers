@@ -7,13 +7,14 @@
  *   - Agendadas hoy (Calendly scheduled today)
  *   - Pendientes de evaluar (recruiter_interview sin assessment)
  *   - Calendly enviado, sin agendar
- *   - CWO pending
+ *   - Esperando decisión del Hiring Lead (terna)
  *   - Próximas esta semana
  *
  * Por cada candidato: botón "Abrir prep" que abre /hr-admin/prep/[id] en pestaña nueva.
  */
 import { useEffect, useState } from "react";
 import { Calendar, Clock, FileText, AlertCircle, ChevronRight, RefreshCw } from "lucide-react";
+import { stageLabel } from "@/lib/stage-labels";
 
 type Cand = {
   candidate_id: string;
@@ -181,10 +182,6 @@ function Section({ title, candidates, emptyText, subtitle }: { title: string; ca
 
 function CandidateRow({ c }: { c: Cand }) {
   const scheduledTime = c.calendly_scheduled_at ? new Date(c.calendly_scheduled_at) : null;
-  const stageLabel: Record<string, string> = {
-    recruiter_interview: "Recruiter Interview",
-    cwo_interview: "CWO Interview",
-  };
 
   return (
     <div className="flex items-center justify-between gap-3 py-3 group">
@@ -211,7 +208,7 @@ function CandidateRow({ c }: { c: Cand }) {
               {scheduledTime.toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}
             </span>
           )}
-          <span>{stageLabel[c.stage] || c.stage}</span>
+          <span>{stageLabel(c.stage)}</span>
           {c.days_in_stage != null && c.days_in_stage > 0 && (
             <span className={c.days_in_stage > 5 ? "text-amber-700 font-semibold" : ""}>
               {c.days_in_stage}d en stage

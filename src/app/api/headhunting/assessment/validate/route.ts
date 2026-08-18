@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { TS_SCENARIOS } from '@/lib/headhunting/scenarios-ts';
+import { recordStageEvent } from '@/lib/stage-events';
 
 export async function GET(req: NextRequest) {
   try {
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     // If status is 'invited', transition to 'in_progress'
     if (candidate.status === 'invited') {
-      await supabaseAdmin
+      const { error: updateErr } = await supabaseAdmin
         .from('ht_candidates')
         .update({
           status: 'in_progress',
@@ -92,6 +93,18 @@ export async function GET(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', candidate.id);
+
+      // Arrancar el assessment mueve la etapa. Sin el evento el dashboard
+      // pierde el momento real y vuelve a contar días desde updated_at.
+      if (!updateErr) {
+        await recordStageEvent({
+          candidateId: candidate.id,
+          fromStage: candidate.stage ?? null,
+          toStage: 'assessment_en_progreso',
+          vacancyId: candidate.vacancy_id ?? null,
+          source: 'system',
+        });
+      }
     }
 
     // Enrich scenarios with options and correct scenario_type from TS source

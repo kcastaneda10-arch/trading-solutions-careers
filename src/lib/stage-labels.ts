@@ -1,173 +1,359 @@
 /**
- * Mapping centralizado de stage codes (técnicos, en BD) a etiquetas humanas (UI).
+ * FUENTE ÚNICA DE VERDAD del funnel de selección.
  *
- * REGLA: cuando vayas a renderizar un stage en pantalla, usá `stageLabel(code)` —
- * NUNCA imprimas el code crudo. Eso es para BD.
+ * v4 · 18-ago-2026 — Kelly redefinió el proceso en dos fases:
+ *   SELECCIÓN (8 etapas) → CONTRATACIÓN (5 etapas)
  *
- * También provee SLA targets por stage (días que un candidato debería pasar
- * en ese stage antes de considerarse "atascado"). Estos vienen de la práctica
- * estándar de ATS modernos (Greenhouse, Ashby, Lever) y la política RYS.
+ * REGLAS:
+ *  1. Ningún archivo debe declarar su propia lista de etapas. Importar de acá.
+ *  2. Nunca imprimir el code crudo en pantalla — usar `stageLabel(code)`.
+ *  3. Los codes viejos siguen siendo válidos en BD; `normalizeStage()` los
+ *     traduce a la etapa canónica v4 para agrupar, contar y mostrar.
  */
+
+// ─────────────────────────────────────────────────────────────
+// Etapas canónicas v4
+// ─────────────────────────────────────────────────────────────
+
+export type Phase = 'seleccion' | 'contratacion';
 
 export type StageCode =
+  // ── Fase 1 · Selección ──
   | 'aplico'
   | 'prefiltro_enviado'
-  | 'prefiltro_revision'
   | 'prefiltro_pasado'
-  | 'prefiltro_rechazado'
-  | 'assessment_invitado'        // LEGACY · solo candidatos pre-mayo 2026
-  | 'assessment_en_progreso'     // LEGACY
-  | 'assessment_completado'      // LEGACY
-  | 'entrevista_ia'              // LEGACY
+  | 'prefiltro_revision'
+  | 'pruebas'
   | 'recruiter_interview'
-  | 'hiring_lead_interview'
-  | 'cwo_interview'
-  | 'bateria_psicometrica'       // cola Pruebas Psicométricas
-  | 'solicitud_enviada_mary'     // batch enviado · Mary trabajando
-  | 'touring'                    // Máquina de Turing
+  | 'prueba_tecnica'
   | 'terna'
+  // ── Fase 2 · Contratación ──
+  | 'examenes_medicos'
+  | 'estudio_seguridad'
+  | 'documentacion_ingreso'
   | 'oferta'
   | 'contratado'
-  | 'onboarding'
+  // ── Terminal ──
   | 'rechazado';
 
-/** Etiqueta corta humana — para chips y tablas */
-export const STAGE_LABEL_SHORT: Record<string, string> = {
-  aplico: 'Aplicó',
-  prefiltro_enviado: 'Prefiltro enviado',
-  prefiltro_revision: 'Prefiltro · revisar',
-  prefiltro_pasado: 'Prefiltro ✓',
-  prefiltro_rechazado: 'Prefiltro ✗',
-  assessment_invitado: 'Integridad invitada',
-  assessment_en_progreso: 'Integridad en curso',
-  assessment_completado: 'Integridad ✓',
-  entrevista_ia: 'Entrevista IA',
-  recruiter_interview: 'Recruiter Interview',
-  hiring_lead_interview: 'Hiring Lead Interview',
-  cwo_interview: 'CWO + Hiring Manager',
-  bateria_psicometrica: 'Pruebas Psicométricas',
-  solicitud_enviada_mary: 'Solicitud a HR Specialist',
-  touring: 'Máquina de Turing',
-  terna: 'Terna',
-  oferta: 'Oferta enviada',
-  contratado: 'Contratado',
-  onboarding: 'Onboarding',
-  rechazado: 'Rechazado',
+export interface StageDef {
+  id: StageCode;
+  /** Posición 1..13 dentro del proceso completo */
+  order: number;
+  phase: Phase;
+  /** Etiqueta corta — chips y tablas */
+  label: string;
+  /** Etiqueta larga — títulos y tooltips */
+  labelLong: string;
+  /** Quién tiene la pelota mientras el candidato está acá */
+  owner: string;
+  /** Días máximos antes de considerarlo atascado */
+  sla: number;
+  /** Acción concreta que debe ejecutar el responsable */
+  action: string;
+}
+
+export const PHASE_LABEL: Record<Phase, string> = {
+  seleccion: 'Selección',
+  contratacion: 'Contratación',
 };
 
-/** Etiqueta larga humana — para títulos y tooltips */
-export const STAGE_LABEL_LONG: Record<string, string> = {
-  aplico: 'Aplicó',
-  prefiltro_enviado: 'Prefiltro enviado al candidato',
-  prefiltro_revision: 'Esperando revisión del prefiltro',
-  prefiltro_pasado: 'Prefiltro aprobado',
-  prefiltro_rechazado: 'Prefiltro rechazado',
-  assessment_invitado: 'Invitado a prueba de integridad (legacy)',
-  assessment_en_progreso: 'Tomando prueba de integridad (legacy)',
-  assessment_completado: 'Prueba de integridad completada (legacy)',
-  entrevista_ia: 'Entrevista con IA (legacy)',
-  recruiter_interview: 'Entrevista con Recruiter',
-  hiring_lead_interview: 'Entrevista con Hiring Lead',
-  cwo_interview: 'Entrevista con CWO + Hiring Manager',
-  bateria_psicometrica: 'Pruebas Psicométricas · cola de envío a HR Specialist',
-  solicitud_enviada_mary: 'Solicitud enviada a HR Specialist · Mary aplicando pruebas',
-  touring: 'Máquina de Turing · prueba propia del matemático interno',
-  terna: 'En terna final',
-  oferta: 'Oferta enviada · esperando respuesta',
-  contratado: 'Contratado',
-  onboarding: 'En proceso de onboarding',
-  rechazado: 'Rechazado',
+export const STAGES: StageDef[] = [
+  // ───────────── SELECCIÓN ─────────────
+  {
+    id: 'aplico', order: 1, phase: 'seleccion',
+    label: 'Aplicó', labelLong: 'Aplicó a la vacante',
+    owner: 'Automático', sla: 3,
+    action: 'Enviar el prefiltro',
+  },
+  {
+    id: 'prefiltro_enviado', order: 2, phase: 'seleccion',
+    label: 'Prefiltro enviado', labelLong: 'Prefiltro enviado al candidato',
+    owner: 'Espera candidato', sla: 5,
+    action: 'Hacer follow-up si no responde',
+  },
+  {
+    id: 'prefiltro_pasado', order: 3, phase: 'seleccion',
+    label: 'Prefiltro pasado', labelLong: 'Prefiltro pasado · superó los knock-outs automáticos',
+    owner: 'Recruiter', sla: 2,
+    action: 'Pasar a revisión del recruiter',
+  },
+  {
+    id: 'prefiltro_revision', order: 4, phase: 'seleccion',
+    label: 'Revisión de prefiltro', labelLong: 'Revisión de prefiltro por el recruiter',
+    owner: 'Recruiter', sla: 2,
+    action: 'Revisar respuestas y decidir avance',
+  },
+  {
+    id: 'pruebas', order: 5, phase: 'seleccion',
+    label: 'Pruebas', labelLong: 'Batería de pruebas psicotécnicas',
+    owner: 'Espera candidato', sla: 4,
+    action: 'Revisar qué prueba está frenando al candidato',
+  },
+  {
+    id: 'recruiter_interview', order: 6, phase: 'seleccion',
+    label: 'Entrevista reclutador', labelLong: 'Entrevista con el reclutador',
+    owner: 'Recruiter', sla: 5,
+    action: 'Completar scorecard y decidir avance',
+  },
+  {
+    id: 'prueba_tecnica', order: 7, phase: 'seleccion',
+    label: 'Prueba técnica / Assessment', labelLong: 'Prueba técnica del cargo y assessment',
+    owner: 'Líder de área', sla: 5,
+    action: 'Pedir el resultado al líder de área',
+  },
+  {
+    id: 'terna', order: 8, phase: 'seleccion',
+    label: 'Terna para Hiring Lead', labelLong: 'Terna entregada al Hiring Lead / Manager',
+    owner: 'Hiring Lead / Manager', sla: 5,
+    action: 'Pedir decisión al Hiring Lead',
+  },
+
+  // ─────────── CONTRATACIÓN ───────────
+  {
+    id: 'examenes_medicos', order: 9, phase: 'contratacion',
+    label: 'Exámenes médicos', labelLong: 'Exámenes médicos de ingreso',
+    owner: 'Espera candidato', sla: 3,
+    action: 'Confirmar cita y resultado',
+  },
+  {
+    id: 'estudio_seguridad', order: 10, phase: 'contratacion',
+    label: 'Estudio de seguridad', labelLong: 'Estudio de seguridad',
+    owner: 'Proveedor externo', sla: 5,
+    action: 'Hacer seguimiento al proveedor',
+  },
+  {
+    id: 'documentacion_ingreso', order: 11, phase: 'contratacion',
+    label: 'Documentación de ingreso', labelLong: 'Documentación de ingreso',
+    owner: 'Espera candidato', sla: 3,
+    action: 'Verificar documentos faltantes',
+  },
+  {
+    id: 'oferta', order: 12, phase: 'contratacion',
+    label: 'Oferta', labelLong: 'Oferta enviada · esperando respuesta',
+    owner: 'Espera candidato', sla: 7,
+    action: 'Hacer follow-up de la respuesta',
+  },
+  {
+    id: 'contratado', order: 13, phase: 'contratacion',
+    label: 'Contratación', labelLong: 'Contratado',
+    owner: 'Nómina', sla: 2,
+    action: 'Iniciar onboarding',
+  },
+];
+
+export const REJECTED_STAGE: StageDef = {
+  id: 'rechazado', order: 99, phase: 'seleccion',
+  label: 'Rechazado', labelLong: 'Rechazado',
+  owner: '—', sla: 0, action: '',
 };
 
-/** Acción concreta que debe ejecutar el reclutador en este stage */
-export const STAGE_ACTION: Record<string, string> = {
-  prefiltro_revision: 'Revisar respuestas y decidir avance',
-  assessment_completado: 'Revisar resultado de prueba de integridad y agendar entrevista',
-  entrevista_ia: 'Revisar resultado de entrevista IA',
-  bateria_psicometrica: 'Revisar batería psicométrica',
-  recruiter_interview: 'Completar scorecard y decidir avance a CWO',
-  cwo_interview: 'Pedir decisión a CWO sobre touring/terna',
-  touring: 'Confirmar fecha de touring',
-  terna: 'Selección final del candidato',
-  oferta: 'Hacer follow-up de respuesta del candidato',
-  contratado: 'Iniciar onboarding',
+/** Todas las etapas incluyendo la terminal negativa */
+export const ALL_STAGES: StageDef[] = [...STAGES, REJECTED_STAGE];
+
+/** Solo las etapas donde un candidato está "vivo" (excluye contratado y rechazado) */
+export const ACTIVE_STAGES: StageCode[] = STAGES
+  .filter((s) => s.id !== 'contratado')
+  .map((s) => s.id);
+
+/** Orden canónico de codes, para ordenar y calcular avance */
+export const STAGE_ORDER: StageCode[] = STAGES.map((s) => s.id);
+
+export const STAGE_RANK: Record<string, number> = Object.fromEntries(
+  STAGES.map((s) => [s.id, s.order]),
+);
+
+export const STAGES_BY_PHASE: Record<Phase, StageDef[]> = {
+  seleccion: STAGES.filter((s) => s.phase === 'seleccion'),
+  contratacion: STAGES.filter((s) => s.phase === 'contratacion'),
 };
+
+const BY_ID: Record<string, StageDef> = Object.fromEntries(
+  ALL_STAGES.map((s) => [s.id, s]),
+);
+
+// ─────────────────────────────────────────────────────────────
+// Compatibilidad con los codes viejos que ya viven en la BD
+// ─────────────────────────────────────────────────────────────
 
 /**
- * SLA en días — cuánto tiempo MÁXIMO debería un candidato estar en este stage.
- * Si lo supera, está atascado (mostrar en rojo en Stage Health).
- *
- * Inspirado en best practices ATS (Ashby, Greenhouse) + ajustado al ritmo TS.
+ * Codes históricos → etapa canónica v4.
+ * No se reescribe la BD: se traduce al leer. Así ningún candidato
+ * en curso se pierde ni queda en una etapa que ya no existe.
  */
-export const STAGE_SLA_DAYS: Record<string, number> = {
-  aplico: 3,                       // 3d para mandar prefiltro
-  prefiltro_enviado: 5,            // 5d para que candidato responda
-  prefiltro_revision: 2,           // 2d para que reclutador revise
-  prefiltro_pasado: 2,             // 2d para agendar recruiter interview
-  // Legacy (Elevare / AI) — solo aplica a candidatos pre-mayo 2026
-  assessment_invitado: 5,
-  assessment_en_progreso: 3,
-  assessment_completado: 3,
-  entrevista_ia: 3,
-  // Pipeline activo v3
-  recruiter_interview: 5,          // 5d para completar scorecard + decidir
-  hiring_lead_interview: 5,        // 5d para que Hiring Lead complete
-  cwo_interview: 5,                // 5d para que CWO + HM completen
-  bateria_psicometrica: 1,         // 1d en cola · debería irse en el próximo batch (mañana o tarde)
-  solicitud_enviada_mary: 7,       // 7d para que Mary aplique pruebas y devuelva
-  touring: 5,                      // 5d para programar/realizar Máquina de Turing
-  terna: 7,                        // 7d para selección final
-  oferta: 7,                       // 7d para que candidato responda
+export const LEGACY_STAGE_MAP: Record<string, StageCode> = {
+  // El prefiltro rechazado siempre fue un descarte
+  prefiltro_rechazado: 'rechazado',
+
+  // Todo lo que antes eran pruebas sueltas ahora vive dentro de "Pruebas"
+  assessment_invitado: 'pruebas',
+  assessment_en_progreso: 'pruebas',
+  assessment_completado: 'pruebas',
+  bateria_psicometrica: 'pruebas',
+  solicitud_enviada_mary: 'pruebas',
+  touring: 'pruebas',            // Máquina de Turing es ahora una sub-prueba
+
+  // La entrevista IA hacía el trabajo del screening del reclutador
+  entrevista_ia: 'recruiter_interview',
+
+  // Las dos entrevistas de decisión se consolidaron en la Terna
+  hiring_lead_interview: 'terna',
+  cwo_interview: 'terna',
+
+  // Onboarding salió del funnel de selección
+  onboarding: 'contratado',
 };
 
+/** Codes que el endpoint de cambio de etapa sigue aceptando (nuevos + legacy) */
+export const VALID_STAGES: string[] = [
+  ...ALL_STAGES.map((s) => s.id),
+  ...Object.keys(LEGACY_STAGE_MAP),
+];
+
 /**
- * Categorización del stage — útil para colorear en UI.
- * - "screening": stages tempranos (filtro)
- * - "assessment": pruebas
- * - "interview": entrevistas humanas
- * - "decision": stages de decisión final
- * - "terminal": estados finales (contratado/rechazado)
+ * Traduce cualquier code (nuevo o histórico) a la etapa canónica v4.
+ * Un code desconocido se devuelve tal cual para no romper el render.
+ */
+export function normalizeStage(code: string | null | undefined): string {
+  if (!code) return '';
+  if (BY_ID[code]) return code;
+  return LEGACY_STAGE_MAP[code] ?? code;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sub-pruebas de la etapa "Pruebas"
+// ─────────────────────────────────────────────────────────────
+
+export interface TestDef {
+  id: string;
+  label: string;
+  owner: string;
+  sla: number;
+}
+
+/** La batería completa, tal como está en el Hiring Flow de Trading Solutions */
+export const PRUEBAS: TestDef[] = [
+  { id: 'disc',           label: 'DISC · personalidad',   owner: 'Espera candidato',  sla: 4 },
+  { id: 'motivacion',     label: 'Motivación',            owner: 'Espera candidato',  sla: 4 },
+  { id: 'maquina_turing', label: 'Máquina de Turing',     owner: 'Espera candidato',  sla: 4 },
+  { id: 'betesa',         label: 'Betesa',                owner: 'Espera candidato',  sla: 4 },
+  { id: 'iq_factorial',   label: 'IQ Factorial',          owner: 'Espera candidato',  sla: 4 },
+  { id: 'neurocluster',   label: 'Análisis Neurocluster', owner: 'Proveedor externo', sla: 5 },
+];
+
+/** Sub-evaluaciones de la etapa "Prueba técnica / Assessment" */
+export const EVALUACIONES_TECNICAS: TestDef[] = [
+  { id: 'assessment_grupal',  label: 'Assessment grupal',        owner: 'Caso situacional + 6 competencias', sla: 5 },
+  { id: 'prueba_tecnica_cargo', label: 'Prueba técnica del cargo', owner: 'Líder de área · caso práctico',   sla: 5 },
+];
+
+/** Sub-items por etapa — para el desglose del dashboard */
+export const STAGE_BREAKDOWN: Record<string, TestDef[]> = {
+  pruebas: PRUEBAS,
+  prueba_tecnica: EVALUACIONES_TECNICAS,
+};
+
+// ─────────────────────────────────────────────────────────────
+// Mapas derivados (compatibilidad con los imports que ya existen)
+// ─────────────────────────────────────────────────────────────
+
+export const STAGE_LABEL_SHORT: Record<string, string> = Object.fromEntries(
+  ALL_STAGES.map((s) => [s.id, s.label]),
+);
+
+export const STAGE_LABEL_LONG: Record<string, string> = Object.fromEntries(
+  ALL_STAGES.map((s) => [s.id, s.labelLong]),
+);
+
+export const STAGE_ACTION: Record<string, string> = Object.fromEntries(
+  STAGES.filter((s) => s.action).map((s) => [s.id, s.action]),
+);
+
+export const STAGE_SLA_DAYS: Record<string, number> = Object.fromEntries(
+  STAGES.map((s) => [s.id, s.sla]),
+);
+
+export const STAGE_PHASE: Record<string, Phase> = Object.fromEntries(
+  STAGES.map((s) => [s.id, s.phase]),
+);
+
+/**
+ * Categoría del stage — se conserva porque varios componentes colorean con esto.
  */
 export const STAGE_CATEGORY: Record<string, 'screening' | 'assessment' | 'interview' | 'decision' | 'terminal'> = {
   aplico: 'screening',
   prefiltro_enviado: 'screening',
-  prefiltro_revision: 'screening',
   prefiltro_pasado: 'screening',
-  prefiltro_rechazado: 'terminal',
-  assessment_invitado: 'assessment',
-  assessment_en_progreso: 'assessment',
-  assessment_completado: 'assessment',
-  entrevista_ia: 'interview',
-  bateria_psicometrica: 'assessment',
+  prefiltro_revision: 'screening',
+  pruebas: 'assessment',
   recruiter_interview: 'interview',
-  cwo_interview: 'interview',
-  touring: 'interview',
+  prueba_tecnica: 'assessment',
   terna: 'decision',
+  examenes_medicos: 'decision',
+  estudio_seguridad: 'decision',
+  documentacion_ingreso: 'decision',
   oferta: 'decision',
   contratado: 'terminal',
   rechazado: 'terminal',
 };
 
-/** Helper: obtener etiqueta corta con fallback al code */
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+/** Definición completa de una etapa (acepta codes históricos) */
+export function stageDef(code: string | null | undefined): StageDef | null {
+  const id = normalizeStage(code);
+  return BY_ID[id] ?? null;
+}
+
+/** Etiqueta corta con fallback al code */
 export function stageLabel(code: string | null | undefined): string {
   if (!code) return '—';
-  return STAGE_LABEL_SHORT[code] || code;
+  return stageDef(code)?.label ?? code;
 }
 
-/** Helper: obtener etiqueta larga con fallback */
+/** Etiqueta larga con fallback */
 export function stageLabelLong(code: string | null | undefined): string {
   if (!code) return '—';
-  return STAGE_LABEL_LONG[code] || code;
+  return stageDef(code)?.labelLong ?? code;
 }
 
-/** Helper: acción a ejecutar en este stage (texto humano) */
+/** Acción a ejecutar en esta etapa */
 export function stageAction(code: string | null | undefined): string | null {
   if (!code) return null;
-  return STAGE_ACTION[code] || null;
+  return stageDef(code)?.action || null;
 }
 
-/** Helper: SLA en días para un stage */
+/** SLA en días */
 export function stageSla(code: string | null | undefined): number | null {
   if (!code) return null;
-  return STAGE_SLA_DAYS[code] ?? null;
+  return stageDef(code)?.sla ?? null;
+}
+
+/** Fase a la que pertenece la etapa */
+export function stagePhase(code: string | null | undefined): Phase | null {
+  if (!code) return null;
+  return stageDef(code)?.phase ?? null;
+}
+
+/** Posición 1..13 en el proceso */
+export function stageOrder(code: string | null | undefined): number {
+  return stageDef(code)?.order ?? 0;
+}
+
+/**
+ * Estado de un candidato frente al SLA de su etapa.
+ *  ok       → dentro del SLA
+ *  warning  → justo en el límite
+ *  serious  → lo pasó
+ *  critical → lo pasó por más del doble
+ */
+export function slaStatus(code: string | null | undefined, days: number): 'ok' | 'warning' | 'serious' | 'critical' {
+  const sla = stageSla(code);
+  if (!sla) return 'ok';
+  if (days >= sla * 2) return 'critical';
+  if (days > sla) return 'serious';
+  if (days >= sla) return 'warning';
+  return 'ok';
 }

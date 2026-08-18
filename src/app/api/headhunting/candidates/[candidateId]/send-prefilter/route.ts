@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { recordStageEvent } from "@/lib/stage-events";
 import crypto from "crypto";
 
 export async function POST(
@@ -34,7 +35,7 @@ export async function POST(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await supabaseAdmin
+    const { error: updateErr } = await supabaseAdmin
       .from("ht_candidates")
       .update({
         prefilter_token: token,
@@ -44,6 +45,18 @@ export async function POST(
         updated_at: new Date().toISOString(),
       })
       .eq("id", candidateId);
+
+    // El envío del prefiltro mueve la etapa; sin el evento el dashboard cree
+    // que el candidato sigue en la etapa anterior y cuenta mal los días.
+    if (!updateErr) {
+      await recordStageEvent({
+        candidateId,
+        fromStage: candidate.stage ?? null,
+        toStage: "prefiltro_enviado",
+        vacancyId: candidate.vacancy_id ?? null,
+        source: "system",
+      });
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
     const formUrl = `${baseUrl}/prefiltro/${token}`;

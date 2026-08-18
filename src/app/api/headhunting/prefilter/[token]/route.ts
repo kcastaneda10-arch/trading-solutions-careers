@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected, sendViaGmail } from "@/lib/gmail";
+import { recordStageEvent } from "@/lib/stage-events";
 
 // Techos por vacancy_id (en COP mensuales)
 const SALARY_CAPS: Record<string, number> = {
@@ -211,7 +212,7 @@ export async function POST(
 
   const { data: candidate, error } = await supabaseAdmin
     .from("ht_candidates")
-    .select("id, name, email, vacancy_id, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title, form_template_key)")
+    .select("id, name, email, vacancy_id, stage, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title, form_template_key)")
     .eq("prefilter_token", params.token)
     .single();
 
@@ -367,6 +368,20 @@ export async function POST(
 
   if (updateErr) {
     return NextResponse.json({ error: "save_failed", detail: updateErr.message }, { status: 500 });
+  }
+
+  // El submit del prefiltro decide la etapa por sí solo. Sin registrar el
+  // evento, el candidato que pasa a revisión arranca el contador de días
+  // desde cero cada vez que alguien lo edita.
+  if (updates.stage) {
+    await recordStageEvent({
+      candidateId: candidate.id as string,
+      fromStage: (candidate.stage as string) ?? null,
+      toStage: updates.stage as string,
+      vacancyId: (candidate.vacancy_id as string) ?? null,
+      source: "system",
+      note: `prefiltro: ${decision}`,
+    });
   }
 
   // ─── Notificación a Kelly (no bloqueante) ─────────────────────────
