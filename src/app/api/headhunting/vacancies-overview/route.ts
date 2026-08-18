@@ -108,7 +108,12 @@ export async function GET(req: NextRequest) {
         return Math.floor((t.getTime() - f.getTime()) / (1000 * 60 * 60 * 24));
       }
 
-      const isClosed = !!m.hire_date;
+      // La autoridad es ht_vacancies.status. Antes esto se decidía SOLO por
+      // hire_date en los milestones, así que una vacante cerrada sin fecha de
+      // contratación registrada (se canceló, se congeló, se cubrió por
+      // interno) seguía apareciendo como abierta para siempre — y no había
+      // forma de cerrarla desde ningún lado.
+      const isClosed = v.status === "closed" || v.status === "cancelled" || !!m.hire_date;
       const daysActive = m.hr_request_date ? daysBetween(m.hr_request_date, isClosed ? m.hire_date : null) : null;
       const timeToFill = isClosed && m.hr_request_date ? daysBetween(m.hr_request_date, m.hire_date) : null;
       const daysSinceLinkedin = m.linkedin_active_date ? daysBetween(m.linkedin_active_date, isClosed ? m.hire_date : null) : null;

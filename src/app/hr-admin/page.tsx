@@ -1239,7 +1239,7 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
         title="Vacantes abiertas · estudio de mercado IA"
         hint="Click en una vacante para ver el estudio del perfil"
       />
-      <VacanciesOverview vacancyFilter={selectedVacancy} />
+      <VacanciesOverview vacancyFilter={selectedVacancy} onlyOpen />
 
       <p className="text-[12px] text-neutral-400 mt-4">
         El detalle del pipeline (kanban, mover candidatos) sigue en la pestaña{" "}
@@ -1258,7 +1258,7 @@ function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }) {
+function VacanciesOverview({ vacancyFilter = 'all', onlyOpen = false }: { vacancyFilter?: string; onlyOpen?: boolean }) {
   const [vacs, setVacs] = useState<VacancyOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1302,12 +1302,39 @@ function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }
   );
 
   const abiertas = vacs.filter(v => v.status === 'abierta');
-  const cerradas = vacs.filter(v => v.status === 'cerrada');
-  const avgTtfRecruitment = cerradas.length > 0
-    ? Math.round(cerradas.reduce((sum, v) => sum + (v.metrics.time_to_fill || 0), 0) / cerradas.length)
+  // Las cerradas siguen alimentando los promedios de time-to-fill…
+  const todasCerradas = vacs.filter(v => v.status === 'cerrada');
+  // …pero en el Dashboard no se listan: ahí solo interesan las abiertas.
+  const cerradas = onlyOpen ? [] : todasCerradas;
+
+  async function cerrarVacante(id: string, title: string) {
+    if (!confirm(
+      `¿Cerrar la vacante "${title}"?\n\n` +
+      `Sus candidatos NO se borran — siguen en la base con su historia. ` +
+      `Solo dejan de contar en los indicadores del dashboard.\n\n` +
+      `Se puede volver a abrir después.`
+    )) return;
+    try {
+      const r = await fetch(`/api/headhunting/vacancies/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'closed' }),
+      });
+      const j = await r.json();
+      if (!r.ok) { alert(`No se pudo cerrar: ${j.error || r.status}`); return; }
+      if (j.affected_candidates > 0) {
+        alert(`Vacante cerrada. ${j.affected_candidates} candidatos dejan de contar en el dashboard.`);
+      }
+      fetchData();
+    } catch (e: any) {
+      alert(`No se pudo cerrar: ${e?.message || 'error de red'}`);
+    }
+  }
+  const avgTtfRecruitment = todasCerradas.length > 0
+    ? Math.round(todasCerradas.reduce((sum, v) => sum + (v.metrics.time_to_fill || 0), 0) / todasCerradas.length)
     : 0;
-  const avgTtfLinkedin = cerradas.filter(v => v.metrics.days_since_linkedin != null).length > 0
-    ? Math.round(cerradas.filter(v => v.metrics.days_since_linkedin != null).reduce((sum, v) => sum + (v.metrics.days_since_linkedin || 0), 0) / cerradas.filter(v => v.metrics.days_since_linkedin != null).length)
+  const avgTtfLinkedin = todasCerradas.filter(v => v.metrics.days_since_linkedin != null).length > 0
+    ? Math.round(todasCerradas.filter(v => v.metrics.days_since_linkedin != null).reduce((sum, v) => sum + (v.metrics.days_since_linkedin || 0), 0) / todasCerradas.filter(v => v.metrics.days_since_linkedin != null).length)
     : 0;
 
   return (
@@ -1316,7 +1343,7 @@ function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }
       <div className="flex items-end justify-between mb-3 flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-extrabold tracking-tight">Vacantes</h2>
-          <p className="text-xs text-gray-500">{abiertas.length} abierta{abiertas.length !== 1 ? 's' : ''} · {cerradas.length} cerrada{cerradas.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-500">{abiertas.length} abierta{abiertas.length !== 1 ? 's' : ''}{!onlyOpen && ` · ${todasCerradas.length} cerrada${todasCerradas.length !== 1 ? 's' : ''}`}</p>
         </div>
         <div className="flex gap-2 text-[11px]">
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
@@ -1343,6 +1370,7 @@ function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }
                 v={v}
                 onResearch={() => setResearchVac({ id: v.vacancy_id, title: v.title })}
                 onRediscover={() => setRediscoverVac({ id: v.vacancy_id, title: v.title })}
+                onClose={() => cerrarVacante(v.vacancy_id, v.title)}
               />
             ))}
           </div>
@@ -1418,7 +1446,7 @@ function VacanciesOverview({ vacancyFilter = 'all' }: { vacancyFilter?: string }
   );
 }
 
-function OpenVacancyCard({ v, onResearch, onRediscover }: { v: VacancyOverview; onResearch: () => void; onRediscover?: () => void }) {
+function OpenVacancyCard({ v, onResearch, onRediscover, onClose }: { v: VacancyOverview; onResearch: () => void; onRediscover?: () => void; onClose?: () => void }) {
   const m = v.milestones;
   const hasLinkedIn = !!m.linkedin_active_date;
   const healthColor = v.health.score === 'green' ? '#10B981' : v.health.score === 'yellow' ? '#F59E0B' : '#EF4444';
@@ -1600,6 +1628,15 @@ function OpenVacancyCard({ v, onResearch, onRediscover }: { v: VacancyOverview; 
           </button>
         )}
       </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="w-full mt-2 text-[10px] font-semibold text-gray-500 hover:text-red-700 py-1.5 transition-colors"
+          title="Cerrar la vacante · sus candidatos dejan de contar en el dashboard pero no se borran"
+        >
+          Cerrar vacante
+        </button>
+      )}
       </div>
     </div>
   );
