@@ -6,9 +6,9 @@ import { getResend, EMAIL_FROM } from "@/lib/resend";
 import { sendViaGmail, isGmailConnected } from "@/lib/gmail";
 import { supabaseAdmin } from "@/lib/supabase";
 import { recordStageEvent } from "@/lib/stage-events";
-// El mapa job_id → vacancy_id es compartido con
-// /api/admin/sync-applications-to-funnel · no duplicarlo acá.
-import { VACANCY_MAP } from "@/lib/vacancy-map";
+// La resolución job_id → vacancy_id es compartida con
+// /api/admin/sync-applications-to-funnel · no duplicarla acá.
+import { resolveVacancyId } from "@/lib/vacancy-map";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     // sin necesidad de correr sync manual. Idempotente · si ya existe el email
     // solo actualiza el updated_at.
     try {
-      const vacancyId = VACANCY_MAP[job_id];
+      const vacancyId = await resolveVacancyId(job_id, job_title);
       if (vacancyId) {
         const emailNormalized = emailLower;
         const { data: existing } = await supabaseAdmin
@@ -133,8 +133,8 @@ export async function POST(request: NextRequest) {
         // y el candidato igual recibe "aplicación recibida". Queda invisible
         // para el equipo hasta que alguien mapee el job_id.
         console.error(
-          `[applications] job_id ${job_id} (${job_title || "sin título"}) no está en VACANCY_MAP · ` +
-          `la aplicación ${newId} de ${emailLower} NO entró al funnel`
+          `[applications] job_id ${job_id} (${job_title || "sin título"}) no se pudo resolver ` +
+          `ni por mapa ni por título · la aplicación ${newId} de ${emailLower} NO entró al funnel`
         );
       }
     } catch (syncErr) {

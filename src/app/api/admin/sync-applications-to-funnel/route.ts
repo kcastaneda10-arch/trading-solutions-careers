@@ -20,7 +20,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { recordStageEvents } from "@/lib/stage-events";
 // El mapa job_id → vacancy_id es compartido con /api/applications · esta copia
 // se había quedado con solo los ids 2-5 y descartaba las vacantes nuevas.
-import { VACANCY_MAP } from "@/lib/vacancy-map";
+import { resolveVacancyId } from "@/lib/vacancy-map";
 
 export const runtime = "nodejs";
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         skipped++;
         continue;
       }
-      const vacancyId = VACANCY_MAP[app.job_id];
+      const vacancyId = await resolveVacancyId(app.job_id, app.job_title);
       if (!vacancyId) {
         skipped++;
         details.push({ email, action: "skipped", reason: `job_id ${app.job_id} no mapeado` });

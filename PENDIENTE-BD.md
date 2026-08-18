@@ -44,28 +44,19 @@ antes de empezar y guardá el resultado, por si hay que devolverse.
 
 ---
 
-## 3. Configurar la variable del Full Stack Junior
+## 3. ~~Configurar la variable del Full Stack Junior~~ — ya no hace falta
 
-Después de correr el punto 2, el `SELECT` de la sección 2 devuelve el UUID de la
-vacante. Ponelo en **Vercel → Settings → Environment Variables**:
+Esto era un paso manual en Vercel y se eliminó. Ahora, cuando un `job_id` no está
+en el mapa, el sistema busca la vacante por título en `ht_vacancies` y prefiere la
+que esté abierta. Queda registrado en los logs cada vez que resuelve así.
 
-```
-VACANCY_ID_FULLSTACK_JUNIOR = <el uuid>
-```
+La variable `VACANCY_ID_FULLSTACK_JUNIOR` sigue funcionando si algún día se quiere
+fijar el UUID a mano: si está puesta, manda ella.
 
-**Por qué.** En `jobs.ts` la vacante de Full Stack tenía `id: 6` — el mismo id
-que la vacante de China "Customer Documentation and Support". `VACANCY_MAP` en
-`/api/applications` mapea por ese número, así que **toda aplicación a Full Stack
-estaba entrando al funnel de la vacante de China.** Se cambió a `10` para romper
-la colisión, y el `10` se resuelve con esa variable.
-
-Sin la variable, las aplicaciones nuevas a Full Stack no se enrutan a ninguna
-vacante. Es el único paso que bloquea algo.
-
-Vale la pena mirar cuántos candidatos quedaron mal clasificados por el bug —
-el `SELECT` para revisarlo está comentado en el script.
-
----
+**Por qué se cambió.** Un mapa de números escritos a mano se rompe solo: cada
+vacante nueva exige que alguien se acuerde de agregar la línea, y hasta que lo haga
+las aplicaciones se guardan pero nunca entran al funnel — en silencio, y al
+candidato igual le llega el correo de "aplicación recibida".
 
 ## 4. Poblar las pruebas (cuando quieras)
 
