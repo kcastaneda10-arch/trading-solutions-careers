@@ -39,7 +39,8 @@ interface PhaseSummary { id: string; label: string; count: number; total_days: n
 interface Totals {
   active: number; stuck: number; stuck_pct: number; end_to_end_days: number;
   open_vacancies: number;
-  bottleneck: { id: string; label: string; avg_days: number; sla: number; count: number } | null;
+  bottleneck: { id: string; label: string; avg_days: number; sla: number; count: number; owner: string; action: string } | null;
+  most_stuck: { id: string; name: string; days: number; stage_label: string; vacancy_title: string } | null;
 }
 interface Data {
   stages: Stage[]; phases: PhaseSummary[]; totals: Totals; approx_ratio: number;
@@ -110,8 +111,6 @@ export default function FunnelTiming({
 
   const { totals, phases, stages, approx_ratio } = data;
   const maxDays = Math.max(1, ...stages.map((s) => s.avg_days));
-  const sel = phases.find((p) => p.id === "seleccion");
-  const con = phases.find((p) => p.id === "contratacion");
 
   return (
     <div className="mb-8">
@@ -124,12 +123,17 @@ export default function FunnelTiming({
               valueSmall={totals.active ? `de ${totals.active} · ${totals.stuck_pct}%` : undefined}
               valueClass={totals.stuck > 0 ? "text-red-700" : ""}
               foot={totals.stuck > 0 ? "Requiere acción" : "Todo dentro de SLA"} />
-        <Tile label="Peso del proceso hoy" value={fmt(totals.end_to_end_days)} valueSmall="días"
-              foot={`Selección ${fmt(sel?.total_days ?? 0)} · Contratación ${fmt(con?.total_days ?? 0)}`}
-              title="Suma de los días promedio actuales de cada etapa. Sirve para comparar el peso de Selección contra el de Contratación. NO es el time-to-hire: baja cuando el funnel se vacía." />
+        {totals.most_stuck ? (
+          <Tile label="El más estancado"
+                text={totals.most_stuck.name}
+                foot={`${fmt(totals.most_stuck.days)} días en ${totals.most_stuck.stage_label} · ${totals.most_stuck.vacancy_title}`} />
+        ) : (
+          <Tile label="El más estancado" text="Ninguno" foot="No hay candidatos activos" />
+        )}
         {totals.bottleneck ? (
           <Tile label="Cuello de botella" text={totals.bottleneck.label}
-                foot={`${fmt(totals.bottleneck.avg_days)} días · SLA ${totals.bottleneck.sla} · ${totals.bottleneck.count} esperando`} />
+                foot={`${totals.bottleneck.count} candidatos esperando · ${fmt(totals.bottleneck.avg_days)} días en promedio contra un SLA de ${totals.bottleneck.sla}`}
+                extra={`Depende de: ${totals.bottleneck.owner}. ${totals.bottleneck.action}.`} />
         ) : (
           <Tile label="Cuello de botella" text="Ninguno" foot="Ninguna etapa retiene candidatos sobre su SLA" />
         )}
@@ -303,8 +307,9 @@ export default function FunnelTiming({
   );
 }
 
-function Tile({ label, value, valueSmall, valueClass = "", text, foot, title }: {
-  label: string; value?: string; valueSmall?: string; valueClass?: string; text?: string; foot?: string; title?: string;
+function Tile({ label, value, valueSmall, valueClass = "", text, foot, title, extra }: {
+  label: string; value?: string; valueSmall?: string; valueClass?: string;
+  text?: string; foot?: string; title?: string; extra?: string;
 }) {
   return (
     <div className="bg-white border border-neutral-200 rounded-lg px-4 py-3.5" title={title}>
@@ -317,6 +322,7 @@ function Tile({ label, value, valueSmall, valueClass = "", text, foot, title }: 
         </div>
       )}
       {foot && <div className="text-[11.5px] text-neutral-400 mt-1.5">{foot}</div>}
+      {extra && <div className="text-[11.5px] text-neutral-600 mt-1 pt-1.5 border-t border-neutral-100">{extra}</div>}
     </div>
   );
 }

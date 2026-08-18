@@ -219,6 +219,11 @@ export async function GET(req: NextRequest) {
 
     // Cuello de botella: la etapa que más gente retiene por más tiempo
     // relativo a su propio SLA. Sin candidatos no hay cuello de botella.
+    const activeIds = new Set<string>(active.map((s) => String(s.id)));
+    const mostStuck = enriched
+      .filter((c) => activeIds.has(String(c.stage)))
+      .sort((a, b) => b.days - a.days)[0] ?? null;
+
     const withPeople = active.filter((s) => s.count > 0);
     const bottleneck = withPeople.length
       ? withPeople.reduce((worst, s) =>
@@ -245,6 +250,22 @@ export async function GET(req: NextRequest) {
               avg_days: bottleneck.avg_days,
               sla: bottleneck.sla,
               count: bottleneck.count,
+              // Contexto para que la tarjeta no sea solo un nombre de etapa:
+              // de quién depende y qué hay que hacer para destrabarla.
+              owner: bottleneck.owner,
+              action: bottleneck.action,
+            }
+          : null,
+        // El candidato que lleva más tiempo parado en todo el pipeline.
+        // Reemplaza al viejo "peso del proceso", que era una suma de
+        // promedios sin significado operativo.
+        most_stuck: mostStuck
+          ? {
+              id: mostStuck.id,
+              name: mostStuck.name,
+              days: mostStuck.days,
+              stage_label: STAGES.find((st) => String(st.id) === String(mostStuck.stage))?.label ?? mostStuck.stage,
+              vacancy_title: mostStuck.vacancy_title,
             }
           : null,
       },
@@ -270,6 +291,6 @@ function testSlaStatus(sla: number, days: number): "ok" | "warning" | "serious" 
 function emptyTotals() {
   return {
     active: 0, stuck: 0, stuck_pct: 0, end_to_end_days: 0,
-    open_vacancies: 0, bottleneck: null,
+    open_vacancies: 0, bottleneck: null, most_stuck: null,
   };
 }
