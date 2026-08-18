@@ -2019,7 +2019,9 @@ function VacancyMarketResearchModal({
         if (r.status === 401 || j.error === 'Unauthorized') {
           setError('Tu sesión expiró (las cookies duran 12h). Cerrá sesión arriba a la derecha y volvé a entrar.');
         } else {
-          setError(j.error || 'Error generando estudio');
+          // El endpoint manda el motivo real en `detail`. Sin esto la pantalla
+          // decía solo "Error interno" y no había forma de saber qué falló.
+          setError([j.error, j.detail].filter(Boolean).join(' · ') || 'Error generando estudio');
         }
       } else {
         setReport(j.research?.report || null);

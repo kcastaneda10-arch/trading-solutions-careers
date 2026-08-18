@@ -27,7 +27,7 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-5";
 
 // ─── PROMPT 1: Scoring general ────────────────────────────────
 const SCORING_PROMPT = `Eres un analista experto en entrevistas de selección. Acabas de revisar una entrevista por voz que un candidato tuvo con una recruiter virtual de Trading Solutions (logística internacional, Barranquilla Colombia).

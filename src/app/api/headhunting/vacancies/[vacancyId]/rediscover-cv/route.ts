@@ -24,7 +24,7 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-5";
 
 const REDISCOVER_PROMPT = `Eres un experto en talent rediscovery — cruzar candidatos del banco con vacantes nuevas.
 

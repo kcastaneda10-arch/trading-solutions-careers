@@ -25,7 +25,11 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
-const MODEL = "claude-sonnet-4-20250514";
+// Antes: "claude-sonnet-4-20250514" (Sonnet 4, may-2025). Los agentes nuevos
+// del ATS ya usan el alias sin fecha, que apunta siempre al modelo vigente —
+// un id con fecha se retira eventualmente y el endpoint empieza a devolver
+// 500 sin explicación.
+const MODEL = "claude-sonnet-4-5";
 
 const MARKET_RESEARCH_PROMPT = `Eres un consultor experto en mercado laboral de logística internacional / freight forwarding en Colombia y LATAM. Conoces a fondo: compensación, tiempos de reclutamiento, talent pool, sourcing, beneficios típicos.
 
@@ -293,8 +297,11 @@ USAR ESTA DATA COMO ANCLA OBLIGATORIA:
     return NextResponse.json({ success: true, research: saved || { report } });
   } catch (err: any) {
     console.error("market research error:", err);
+    // El detail viaja al modal: sin él la pantalla mostraba "Error interno"
+    // y no había forma de distinguir una API key faltante de un modelo
+    // retirado o de un timeout.
     return NextResponse.json(
-      { error: "Error interno", detail: err?.message || String(err) },
+      { error: "No se pudo generar el estudio", detail: err?.message || String(err) },
       { status: 500 }
     );
   }

@@ -37,7 +37,7 @@ const anthropic = new Proxy({} as Anthropic, {
     return typeof v === 'function' ? (v as (...args: unknown[]) => unknown).bind(c) : v;
   },
 });
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-sonnet-4-5';
 
 // ─── Score a single response ─────────────────────────────────────
 export async function scoreResponse(
