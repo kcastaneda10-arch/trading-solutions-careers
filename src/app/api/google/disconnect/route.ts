@@ -3,6 +3,7 @@
  * Después de esto, los emails vuelven a salir vía Resend (default).
  */
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { clearTokens } from "@/lib/gmail";
 
 export const runtime = "nodejs";

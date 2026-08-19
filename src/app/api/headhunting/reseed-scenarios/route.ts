@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from '@/lib/supabase';
 import { TS_SCENARIOS } from '@/lib/headhunting/scenarios-ts';
 
 const MODEL_ID = '186c9e42-5448-40b0-9a87-0f8e8a2f2af0';
 
 export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   // Check admin authentication using x-admin-secret header
   const adminSecret = req.headers.get('x-admin-secret');
   const expectedSecret = process.env.ADMIN_SECRET || 'elevare-admin-2026-secure';

@@ -1,9 +1,12 @@
 import { neon } from '@neondatabase/serverless';
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from 'next/server';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  // Solo lectura para orígenes externos. La escritura exige sesión de HR Admin
+  // y no se anuncia acá.
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -52,6 +55,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(request);
+  if (authError) return authError;
+
   try {
     const vacancyId = parseInt(params.id);
 
@@ -169,6 +177,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(request);
+  if (authError) return authError;
+
   try {
     const vacancyId = parseInt(params.id);
 

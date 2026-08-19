@@ -12,7 +12,8 @@
  * Si force=true, re-parsea.
  */
 import { neon } from "@neondatabase/serverless";
-import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from "next/server";
 import { parseCV, buildCandidateText } from "@/lib/cv-parser";
 
 const corsHeaders = {
@@ -31,7 +32,12 @@ type Body = {
   force?: boolean;
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = (await req.json()) as Body;
     if (!body.candidate_id && !body.email) {

@@ -15,6 +15,7 @@
  *   curl -X POST https://trading-solutions-careers.vercel.app/api/seed/attraction-tracking
  */
 import { neon } from "@neondatabase/serverless";
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import seedData from "@/data/seed/attraction_tracking.json";

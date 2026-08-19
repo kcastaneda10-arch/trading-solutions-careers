@@ -9,6 +9,7 @@
  * lo dispare manualmente.
  */
 import { neon } from "@neondatabase/serverless";
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getResend, EMAIL_FROM, EMAIL_BCC } from "@/lib/resend";
@@ -155,6 +156,11 @@ function buildEmailHtml(opts: {
 }
 
 export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = (await req.json()) as CreateBody;
     if (!body.candidate_name || !body.candidate_email) {

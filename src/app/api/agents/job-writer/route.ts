@@ -11,7 +11,8 @@
  * Returns:
  *   { posting: string, model: string, usage?: object }
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { getAnthropic } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
@@ -46,7 +47,12 @@ Formato salida:
 - Sé específico con tools, métricas y entregables
 `.trim();
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = await req.json();
     const role = (body.role || "").toString().trim();

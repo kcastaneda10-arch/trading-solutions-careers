@@ -19,7 +19,8 @@
  * Returns:
  *   { report: { salary_benchmark, talent_supply, bilingualism, competitiveness, employer_brand_impact, actions, sources }, model }
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 import { neon } from "@neondatabase/serverless";
 import { getAnthropic } from "@/lib/anthropic";
 
@@ -41,7 +42,12 @@ EMPLOYER BRAND:
 - Activación LinkedIn 22-Abr-2026
 `.trim();
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = await req.json();
     const role = (body.role || "").toString().trim();

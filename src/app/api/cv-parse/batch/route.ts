@@ -14,7 +14,8 @@
  * Response: resumen con contadores + errores por candidato.
  */
 import { neon } from "@neondatabase/serverless";
-import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from "next/server";
 import { parseCV, buildCandidateText } from "@/lib/cv-parser";
 
 const corsHeaders = {
@@ -57,7 +58,12 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   const body = (await req.json().catch(() => ({}))) as Body;
   const limit = Math.min(body.limit ?? 50, 200);
   const concurrency = Math.min(Math.max(body.concurrency ?? 3, 1), 8);

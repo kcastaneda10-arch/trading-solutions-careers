@@ -10,7 +10,8 @@
  *        porque cambiarlo requiere DNS verificado en Resend.
  */
 import { neon } from "@neondatabase/serverless";
-import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
@@ -82,7 +83,12 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     await ensureTable();
     const sql = neon(process.env.DATABASE_URL!);

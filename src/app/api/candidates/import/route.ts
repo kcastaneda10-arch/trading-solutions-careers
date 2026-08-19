@@ -17,6 +17,7 @@
  *   }
  */
 import { neon } from "@neondatabase/serverless";
+import { requireAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prefilter, toPrefilterData, VACANCY_CONFIG } from "@/lib/agent/prefilter";
 
@@ -50,6 +51,11 @@ type Body = {
 };
 
 export async function POST(req: NextRequest) {
+  // Escritura solo para HR Admin. Antes esta ruta aceptaba cambios de
+  // cualquiera en internet.
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = (await req.json()) as Body;
     if (!body.candidates || !Array.isArray(body.candidates) || body.candidates.length === 0) {
