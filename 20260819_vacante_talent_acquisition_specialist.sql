@@ -39,7 +39,7 @@ INSERT INTO vacancies (
 
   'Trading Solutions es una compañía de logística internacional. Movemos carga entre continentes y, para sostener ese crecimiento, necesitamos elegir bien a las personas que lo hacen posible.
 
-Buscamos un Talent Acquisition Specialist: un profesional en Psicología que lidere nuestros procesos de selección de punta a punta y que evalúe con rigor técnico. No buscamos a alguien que coordine agendas: buscamos criterio.',
+Buscamos un Talent Acquisition Specialist: un profesional en Psicología que lidere nuestros procesos de selección end to end y que evalúe con rigor técnico. No buscamos a alguien que coordine agendas: buscamos criterio.',
 
   'Trading Solutions is an international logistics company. We move cargo across continents, and sustaining that growth depends on choosing the right people.
 
@@ -61,8 +61,8 @@ We are hiring a Talent Acquisition Specialist: a psychologist who owns our hirin
     "Verify references and coordinate the pre-employment steps with the People Ops team",
     "Maintain process traceability in the ATS and report recruitment metrics"]'::jsonb,
 
-  '["Profesional en Psicología con tarjeta profesional vigente",
-    "De 2 a 4 años de experiencia en selección de punta a punta, con responsabilidad directa sobre vacantes",
+  '["Profesional en Psicología",
+    "De 2 a 4 años de experiencia en procesos de selección end to end, con responsabilidad directa sobre vacantes",
     "Mínimo 1 año aplicando e interpretando pruebas psicométricas y elaborando informes de evaluación",
     "Inglés B2 o superior. Se valida durante el proceso con entrevista en vivo y prueba escrita",
     "Formación o certificación en entrevista por competencias (BEI/STAR)",
@@ -70,8 +70,8 @@ We are hiring a Talent Acquisition Specialist: a psychologist who owns our hirin
     "Preferible: experiencia en logística internacional, freight forwarding, comercio exterior, agenciamiento aduanero o navieras",
     "Preferible: experiencia en compañías con operación en varios países y equipos distribuidos"]'::jsonb,
 
-  '["Degree in Psychology with a valid professional licence",
-    "2-4 years in full-cycle recruitment with direct ownership of openings",
+  '["Degree in Psychology",
+    "2-4 years in end-to-end recruitment with direct ownership of openings",
     "At least 1 year administering and interpreting psychometric assessments",
     "English at B2 or above, verified during the process through a live interview and a written exercise",
     "Training or certification in competency-based interviewing (BEI/STAR)",
