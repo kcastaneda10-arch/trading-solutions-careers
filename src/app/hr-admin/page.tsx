@@ -1264,6 +1264,7 @@ function VacanciesOverview({ vacancyFilter = 'all', onlyOpen = false }: { vacanc
   const [error, setError] = useState<string | null>(null);
   const [researchVac, setResearchVac] = useState<{ id: string; title: string } | null>(null);
   const [rediscoverVac, setRediscoverVac] = useState<{ id: string; title: string } | null>(null);
+  const [publicando, setPublicando] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -1307,6 +1308,37 @@ function VacanciesOverview({ vacancyFilter = 'all', onlyOpen = false }: { vacanc
   // …pero en el Dashboard no se listan: ahí solo interesan las abiertas.
   const cerradas = onlyOpen ? [] : todasCerradas;
 
+  async function publicarEnLaWeb() {
+    if (!confirm(
+      'Publicar en la web las vacantes definidas en el código (src/data/jobs.ts).\n\n' +
+      'Actualiza título, descripción, responsabilidades y requisitos de las que ya están ' +
+      'publicadas, y crea las que falten.\n\n' +
+      'No cierra ninguna vacante ni reabre las que hayas cerrado.'
+    )) return;
+    setPublicando(true);
+    try {
+      const r = await fetch('/api/admin/sync-jobs-to-web', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) { alert(`No se pudo publicar: ${[j.error, j.detail].filter(Boolean).join(' · ')}`); return; }
+      const partes: string[] = [];
+      if (j.creadas?.length) partes.push(`Creadas: ${j.creadas.join(', ')}`);
+      if (j.actualizadas?.length) partes.push(`Actualizadas: ${j.actualizadas.join(', ')}`);
+      if (j.fallidas?.length) partes.push(`Fallaron: ${j.fallidas.map((f: any) => `${f.slug} (${f.error})`).join(' · ')}`);
+      if (j.publicadas_sin_perfil?.length) {
+        partes.push(
+          `\nSiguen publicadas en la web pero ya no están en el código: ` +
+          `${j.publicadas_sin_perfil.map((v: any) => v.title).join(', ')}. ` +
+          `Si ya no van, hay que cerrarlas.`
+        );
+      }
+      alert(partes.length ? partes.join('\n') : 'No había nada que publicar.');
+    } catch (e: any) {
+      alert(`No se pudo publicar: ${e?.message || 'error de red'}`);
+    } finally {
+      setPublicando(false);
+    }
+  }
+
   async function cerrarVacante(id: string, title: string) {
     if (!confirm(
       `¿Cerrar la vacante "${title}"?\n\n` +
@@ -1345,7 +1377,15 @@ function VacanciesOverview({ vacancyFilter = 'all', onlyOpen = false }: { vacanc
           <h2 className="text-lg font-extrabold tracking-tight">Vacantes</h2>
           <p className="text-xs text-gray-500">{abiertas.length} abierta{abiertas.length !== 1 ? 's' : ''}{!onlyOpen && ` · ${todasCerradas.length} cerrada${todasCerradas.length !== 1 ? 's' : ''}`}</p>
         </div>
-        <div className="flex gap-2 text-[11px]">
+        <div className="flex gap-2 text-[11px] items-center">
+          <button
+            onClick={publicarEnLaWeb}
+            disabled={publicando}
+            className="bg-black hover:bg-gray-800 disabled:opacity-50 text-white text-[11px] font-semibold px-3 py-2 rounded-lg transition-colors"
+            title="Publica en la página pública las vacantes definidas en src/data/jobs.ts · no cierra ninguna"
+          >
+            {publicando ? 'Publicando…' : 'Publicar en la web'}
+          </button>
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
             <div className="text-[9px] uppercase font-bold text-emerald-700">Avg time-to-fill</div>
             <div className="text-base font-extrabold text-emerald-900">{avgTtfRecruitment}<span className="text-[10px] font-medium ml-1">días</span></div>
