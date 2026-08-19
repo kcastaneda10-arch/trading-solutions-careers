@@ -38,6 +38,8 @@
  *        http://localhost:3010/api/linkedin/callback  (dev)
  */
 
+import crypto from "crypto";
+
 export interface LinkedInConfig {
   clientId: string;
   clientSecret: string;      // sólo server-side
@@ -214,15 +216,39 @@ export async function fetchApplications(
  * Validación: header "x-li-signature" con HMAC-SHA256 del body firmado
  * con el client_secret de tu app.
  */
+/**
+ * Verifica que el request venga de LinkedIn y no de cualquiera.
+ *
+ * Esta función devolvía `true` sin mirar nada — era un placeholder con un
+ * comentario que decía "en producción usar createHmac". Mientras el handler
+ * solo escribía en el log el daño era acotado, pero deja la puerta abierta
+ * para quien complete el TODO de guardar en base de datos: cualquiera podría
+ * inyectar candidatos falsos en el ATS.
+ *
+ * Falla cerrado: sin secreto configurado, sin firma, o con firma que no
+ * coincide, se rechaza. Un webhook que no puede verificar quién lo llama no
+ * debería aceptar nada.
+ */
 export function verifyRSCSignature(
   body: string,
   signature: string,
   clientSecret: string
 ): boolean {
-  // En producción usar crypto.createHmac('sha256', clientSecret).update(body).digest('base64');
-  // Esta firma previene que alguien falsifique aplicaciones hacia nuestro webhook.
-  void body;
-  void signature;
-  void clientSecret;
-  return true;
+  if (!clientSecret || !signature) return false;
+
+  try {
+    const esperada = crypto
+      .createHmac("sha256", clientSecret)
+      .update(body, "utf8")
+      .digest("base64");
+
+    const a = Buffer.from(esperada, "utf8");
+    const b = Buffer.from(signature, "utf8");
+    // Longitudes distintas ⇒ no coincide. timingSafeEqual exige mismo largo,
+    // y comparar antes evitaría la protección contra ataques de tiempo.
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
