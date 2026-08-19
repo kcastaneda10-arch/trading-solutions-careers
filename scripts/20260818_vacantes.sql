@@ -42,24 +42,28 @@ WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
 -- El perfil nuevo (job description del 18-ago) ya está en la página de
 -- careers. Acá se alinea el registro del ATS.
 
+-- OJO · NO tocar role_level. La columna tiene un CHECK que solo acepta
+-- 'entry', 'lead' y 'c_suite': son niveles de jerarquía, no de seniority.
+-- Poner 'junior' hace fallar el UPDATE con:
+--   ERROR 23514: violates check constraint "ht_vacancies_role_level_check"
+-- La vacante ya está en 'entry', que es lo correcto para un cargo junior.
+
 UPDATE ht_vacancies
-SET title      = 'Full Stack Developer Junior',
-    role_level = 'junior'
+SET title = 'Full Stack Developer Junior'
 WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
   AND title ILIKE '%full stack%';
 
 -- Verificar:
 -- SELECT id, title, role_level FROM ht_vacancies WHERE title ILIKE '%full stack%';
 
--- ⚠️ IMPORTANTE · copiá el UUID que devuelve ese SELECT y ponelo en Vercel
--- como variable de entorno:
---     VACANCY_ID_FULLSTACK_JUNIOR = <ese uuid>
+-- Ya NO hace falta configurar VACANCY_ID_FULLSTACK_JUNIOR en Vercel: cuando un
+-- job_id no está en el mapa, el sistema resuelve la vacante por título y
+-- prefiere la que esté abierta.
 --
--- POR QUÉ: en jobs.ts la vacante de Full Stack tenía id 6, el mismo id que
--- la vacante de China "Customer Documentation and Support". VACANCY_MAP en
--- /api/applications mapea por ese número, así que TODA aplicación a Full
--- Stack estaba entrando al funnel de la vacante de China. Se cambió a 10
--- para romper la colisión, y el 10 se resuelve con esa variable.
+-- CONTEXTO: en jobs.ts la vacante de Full Stack tenía id 6, el mismo id que la
+-- vacante de China "Customer Documentation and Support". VACANCY_MAP mapea por
+-- ese número, así que TODA aplicación a Full Stack entraba al funnel de la
+-- vacante de China. Se cambió a 10 y ahora se resuelve por título.
 --
 -- Si querés ver el daño histórico antes de decidir qué hacer:
 -- SELECT c.id, c.name, c.email, c.created_at, v.title AS vacante_actual
