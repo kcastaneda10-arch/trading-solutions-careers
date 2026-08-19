@@ -26,6 +26,69 @@ export const modes = ["Presencial", "Híbrido", "Remoto"] as const;
  */
 export const jobs: Job[] = [
   {
+    id: 11,
+    slug: "talent-acquisition-specialist",
+    linkedinUrl: "",
+    title: {
+      es: "Talent Acquisition Specialist",
+      en: "Talent Acquisition Specialist",
+    },
+    dept: "Wellness",
+    location: "Barranquilla, Atlántico, Colombia",
+    mode: "Presencial",
+    level: "Mid-Level",
+    salary: "A convenir",
+    tags: ["Selección", "Psicometría", "Entrevista por competencias", "ATS", "Bilingüe EN/ES"],
+    description: {
+      es: "Trading Solutions es una compañía de logística internacional. Movemos carga entre continentes y, para sostener ese crecimiento, necesitamos elegir bien a las personas que lo hacen posible.\n\nBuscamos un Talent Acquisition Specialist: un profesional en Psicología que lidere nuestros procesos de selección end to end y que evalúe con rigor técnico. No buscamos a alguien que coordine agendas: buscamos criterio.",
+      en: "Trading Solutions is an international logistics company. We move cargo across continents, and sustaining that growth depends on choosing the right people.\n\nWe are hiring a Talent Acquisition Specialist: a psychologist who owns our hiring processes end to end and assesses with technical rigour. We are not looking for someone to coordinate calendars — we are looking for judgment.",
+    },
+    responsibilities: {
+      es: [
+        "Levantar el perfil con el líder solicitante antes de publicar y definir la estrategia de búsqueda de cada vacante",
+        "Ejecutar sourcing activo y headhunting en LinkedIn, portales de empleo, bases propias, referidos y alianzas académicas",
+        "Conducir entrevistas por competencias (metodología STAR/BEI) en español e inglés",
+        "Aplicar, calificar e interpretar la batería psicométrica corporativa y elaborar informes de evaluación dirigidos al líder de negocio",
+        "Construir y sustentar la terna de finalistas con evidencia y una recomendación técnica",
+        "Verificar referencias y coordinar los pasos de la etapa de contratación con el equipo de People Ops",
+        "Mantener la trazabilidad del proceso en el ATS y reportar los indicadores de selección",
+      ],
+      en: [
+        "Run role intake with the hiring leader before publishing, and define the search strategy for each opening",
+        "Execute active sourcing and headhunting across LinkedIn, job boards, internal databases, referrals and academic partnerships",
+        "Conduct competency-based interviews (STAR/BEI) in Spanish and English",
+        "Administer, score and interpret our psychometric battery, and write assessment reports addressed to business leaders",
+        "Build and defend the final shortlist with evidence and a technical recommendation",
+        "Verify references and coordinate the pre-employment steps with the People Ops team",
+        "Maintain process traceability in the ATS and report recruitment metrics",
+      ],
+    },
+    requirements: {
+      es: [
+        "Profesional en Psicología",
+        "De 2 a 4 años de experiencia en procesos de selección end to end, con responsabilidad directa sobre vacantes",
+        "Mínimo 1 año aplicando e interpretando pruebas psicométricas y elaborando informes de evaluación",
+        "Inglés B2 o superior. Se valida durante el proceso con entrevista en vivo y prueba escrita",
+        "Formación o certificación en entrevista por competencias (BEI/STAR)",
+        "Excel nivel intermedio-avanzado y manejo de plataformas ATS",
+        "Preferible: experiencia en logística internacional, freight forwarding, comercio exterior, agenciamiento aduanero o navieras",
+        "Preferible: experiencia en compañías con operación en varios países y equipos distribuidos",
+      ],
+      en: [
+        "Degree in Psychology",
+        "2-4 years in end-to-end recruitment with direct ownership of openings",
+        "At least 1 year administering and interpreting psychometric assessments",
+        "English at B2 or above, verified during the process through a live interview and a written exercise",
+        "Training or certification in competency-based interviewing (BEI/STAR)",
+        "Intermediate-advanced Excel and hands-on ATS experience",
+        "Preferred: background in international logistics, freight forwarding, foreign trade, customs brokerage or shipping lines",
+        "Preferred: experience in companies operating across several countries with distributed teams",
+      ],
+    },
+    applyEmail: "jointheteam@tradingsolutions.com",
+    postedAt: "2026-08-19",
+  },
+  {
     // OJO · el id era 6, el mismo que china-customer-documentation.
     // VACANCY_MAP en /api/applications mapea por job_id, así que todas las
     // aplicaciones a Full Stack estaban entrando al funnel de la vacante de

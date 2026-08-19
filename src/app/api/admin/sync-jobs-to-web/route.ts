@@ -24,15 +24,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sql } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { jobs } from "@/data/jobs";
+
+const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+
+// ht_vacancies.role_level tiene un CHECK: solo 'entry', 'lead' y 'c_suite'.
+// Son niveles de jerarquía, no de seniority — un cargo junior o mid es 'entry'.
+function nivelDeJerarquia(level: string): string {
+  const l = (level || "").toLowerCase();
+  if (l.includes("senior") || l.includes("lead")) return "lead";
+  return "entry";
+}
 
 export async function POST(req: NextRequest) {
   const authError = requireAdmin(req);
   if (authError) return authError;
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
+
   try {
-    const creadas: string[] = [];
-    const actualizadas: string[] = [];
+    const creadas: { title: string; url: string }[] = [];
+    const actualizadas: { title: string; url: string }[] = [];
+    const funnel_creado: string[] = [];
     const fallidas: { slug: string; error: string }[] = [];
 
     for (const job of jobs) {
@@ -71,9 +85,9 @@ export async function POST(req: NextRequest) {
               updated_at          = NOW()
             WHERE slug = ${job.slug}
           `;
-          actualizadas.push(job.title.es);
+          actualizadas.push({ title: job.title.es, url: `${baseUrl}/vacantes/${existing[0].id}` });
         } else {
-          await sql`
+          const creada = await sql`
             INSERT INTO vacancies (
               slug, title, title_es, title_en, department, location, work_mode,
               employment_type, level, salary_range, tags, status, apply_email,
@@ -92,8 +106,35 @@ export async function POST(req: NextRequest) {
               ${JSON.stringify(job.requirements.en)}::jsonb,
               NOW(), NOW()
             )
+            RETURNING id
           `;
-          creadas.push(job.title.es);
+          const nuevoId = (creada as any[])[0]?.id;
+          creadas.push({ title: job.title.es, url: `${baseUrl}/vacantes/${nuevoId}` });
+        }
+        // La otra mitad del problema: sin fila en ht_vacancies la vacante se ve
+        // en la web pero las aplicaciones no tienen funnel donde entrar. Publicar
+        // en dos bases distintas a mano es justo donde se rompía antes.
+        const { data: enAts } = await supabaseAdmin
+          .from("ht_vacancies")
+          .select("id")
+          .eq("client_id", TS_CLIENT_ID)
+          .ilike("title", job.title.es)
+          .maybeSingle();
+
+        if (!enAts) {
+          const { error: atsErr } = await supabaseAdmin.from("ht_vacancies").insert({
+            client_id: TS_CLIENT_ID,
+            title: job.title.es,
+            area: job.dept,
+            status: "open",
+            role_level: nivelDeJerarquia(job.level),
+            vacancy_type: "incremental",
+          });
+          if (atsErr) {
+            fallidas.push({ slug: job.slug, error: `web OK, pero no se creó en el ATS: ${atsErr.message}` });
+          } else {
+            funnel_creado.push(job.title.es);
+          }
         }
       } catch (e: any) {
         fallidas.push({ slug: job.slug, error: e?.message || String(e) });
@@ -113,6 +154,7 @@ export async function POST(req: NextRequest) {
       success: fallidas.length === 0,
       creadas,
       actualizadas,
+      funnel_creado,
       fallidas,
       publicadas_sin_perfil: huerfanas.map((v: any) => ({
         slug: v.slug,

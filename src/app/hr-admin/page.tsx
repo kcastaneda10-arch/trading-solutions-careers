@@ -1321,8 +1321,15 @@ function VacanciesOverview({ vacancyFilter = 'all', onlyOpen = false }: { vacanc
       const j = await r.json();
       if (!r.ok) { alert(`No se pudo publicar: ${[j.error, j.detail].filter(Boolean).join(' · ')}`); return; }
       const partes: string[] = [];
-      if (j.creadas?.length) partes.push(`Creadas: ${j.creadas.join(', ')}`);
-      if (j.actualizadas?.length) partes.push(`Actualizadas: ${j.actualizadas.join(', ')}`);
+      // Las URLs se muestran acá porque es lo que se necesita al publicar:
+      // el enlace para mandarle a la gente.
+      if (j.creadas?.length) {
+        partes.push('PUBLICADAS:\n' + j.creadas.map((v: any) => `  ${v.title}\n  ${v.url}`).join('\n'));
+      }
+      if (j.actualizadas?.length) {
+        partes.push('ACTUALIZADAS:\n' + j.actualizadas.map((v: any) => `  ${v.title}\n  ${v.url}`).join('\n'));
+      }
+      if (j.funnel_creado?.length) partes.push(`Funnel creado en el ATS para: ${j.funnel_creado.join(', ')}`);
       if (j.fallidas?.length) partes.push(`Fallaron: ${j.fallidas.map((f: any) => `${f.slug} (${f.error})`).join(' · ')}`);
       if (j.publicadas_sin_perfil?.length) {
         partes.push(
