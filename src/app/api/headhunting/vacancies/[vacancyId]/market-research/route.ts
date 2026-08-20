@@ -256,21 +256,54 @@ USAR ESTA DATA COMO ANCLA OBLIGATORIA:
 
     const aiResult = await getAnthropic().messages.create({
       model: MODEL,
-      max_tokens: 4500,
+      // El estudio completo (compensación, timeline, talent pool, sourcing,
+      // riesgos, recomendaciones) no cabía en 4500 tokens: la respuesta se
+      // cortaba a mitad de camino y el JSON quedaba sin cerrar. El síntoma era
+      // un "Expected ',' or '}' in JSON at position ..." que no decía nada.
+      max_tokens: 12000,
       temperature: 0.3,
       messages: [{ role: "user", content: prompt }],
     });
 
     const text = aiResult.content[0].type === "text" ? aiResult.content[0].text : "";
+
+    // Si se cortó por límite de tokens, decirlo con todas las letras en vez de
+    // dejar que reviente el JSON.parse con un error de sintaxis.
+    if (aiResult.stop_reason === "max_tokens") {
+      return NextResponse.json(
+        {
+          error: "El estudio se cortó por longitud",
+          detail:
+            "El modelo llegó al límite de tokens antes de terminar. Volvé a intentar; " +
+            "si sigue pasando, hay que subir max_tokens o pedir un estudio más corto.",
+        },
+        { status: 502 },
+      );
+    }
+
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) {
       return NextResponse.json(
-        { error: "AI no devolvió JSON válido", raw: text.slice(0, 400) },
+        { error: "La IA no devolvió JSON", detail: text.slice(0, 400) },
         { status: 502 }
       );
     }
 
-    const report = JSON.parse(m[0]);
+    let report: any;
+    try {
+      report = JSON.parse(m[0]);
+    } catch (parseErr: any) {
+      // El detalle incluye el pedazo donde se rompió: sin eso, diagnosticar
+      // esto significa adivinar.
+      const pos = Number(String(parseErr?.message || "").match(/position (\d+)/)?.[1] ?? 0);
+      return NextResponse.json(
+        {
+          error: "La IA devolvió un JSON inválido",
+          detail: `${parseErr?.message}. Alrededor del punto de falla: …${m[0].slice(Math.max(0, pos - 120), pos + 120)}…`,
+        },
+        { status: 502 },
+      );
+    }
 
     // Save to cache
     const { data: saved, error: insErr } = await supabaseAdmin
