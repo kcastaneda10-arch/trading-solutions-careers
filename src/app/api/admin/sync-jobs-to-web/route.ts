@@ -51,9 +51,19 @@ export async function POST(req: NextRequest) {
 
     for (const job of jobs) {
       try {
-        const existing = await sql`
-          SELECT id, status FROM vacancies WHERE slug = ${job.slug} LIMIT 1
+        // Buscar por slug y, si no aparece, por título. Hay filas viejas con
+        // slug NULL: buscando solo por slug no se encuentran, se insertaría una
+        // segunda fila y la vacante saldría duplicada en la web.
+        let existing = await sql`
+          SELECT id, status, slug FROM vacancies WHERE slug = ${job.slug} LIMIT 1
         `;
+        if (existing.length === 0) {
+          existing = await sql`
+            SELECT id, status, slug FROM vacancies
+            WHERE slug IS NULL AND (title ILIKE ${job.title.es} OR title ILIKE ${job.title.en})
+            LIMIT 1
+          `;
+        }
         const yaExiste = existing.length > 0;
 
         const tags = (job.tags || []).join(", ");
@@ -82,8 +92,9 @@ export async function POST(req: NextRequest) {
               responsibilities_en = ${JSON.stringify(job.responsibilities.en)}::jsonb,
               requirements_es     = ${JSON.stringify(job.requirements.es)}::jsonb,
               requirements_en     = ${JSON.stringify(job.requirements.en)}::jsonb,
+              slug                = ${job.slug},
               updated_at          = NOW()
-            WHERE slug = ${job.slug}
+            WHERE id = ${existing[0].id}
           `;
           actualizadas.push({ title: job.title.es, url: `${baseUrl}/vacantes/${existing[0].id}` });
         } else {
