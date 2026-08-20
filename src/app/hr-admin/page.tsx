@@ -2957,6 +2957,41 @@ function Vacantes() {
                       {actionBusy === `post-internal-${v.id}` ? '…' : '📢 Interno'}
                     </button>
                   )}
+                  {tab === 'active' && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (actionBusy === `close-web-${v.id}`) return;
+                        if (!confirm(
+                          `¿Quitar "${title}" de la página pública?\n\n` +
+                          `Deja de aparecer en /vacantes y nadie puede aplicar.\n\n` +
+                          `No se borra nada: las aplicaciones que ya entraron conservan su ` +
+                          `historial y la vacante se puede volver a abrir.`
+                        )) return;
+                        setActionBusy(`close-web-${v.id}`);
+                        try {
+                          const r = await fetch(`/api/vacancies/${v.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'closed' }),
+                          });
+                          const j = await r.json();
+                          if (!r.ok) { alert(`No se pudo cerrar: ${j.error || r.status}`); return; }
+                          window.location.reload();
+                        } catch (err) {
+                          alert(`No se pudo cerrar: ${(err as Error).message}`);
+                        } finally {
+                          setActionBusy(null);
+                        }
+                      }}
+                      disabled={actionBusy === `close-web-${v.id}`}
+                      className="text-[10px] font-bold px-2 py-1 rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 hover:text-red-700 hover:border-red-300 disabled:opacity-50"
+                      title="Quita la vacante de la página pública. No borra datos y se puede reabrir."
+                    >
+                      {actionBusy === `close-web-${v.id}` ? '…' : 'Cerrar en la web'}
+                    </button>
+                  )}
                   {v.linkedin_url && (
                     <a
                       href={v.linkedin_url}
