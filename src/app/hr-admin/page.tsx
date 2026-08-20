@@ -2602,6 +2602,7 @@ type AgentDetailModalData = {
 };
 
 function Vacantes() {
+  const [publicandoWeb, setPublicandoWeb] = useState(false);
   const [vacancies, setVacancies] = useState<LiveVacancy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2658,6 +2659,35 @@ function Vacantes() {
     alert(`✓ Invitaciones enviadas: ${ok}/${candidates.length}`);
     setSelectedCandidates((prev) => ({ ...prev, [vid]: new Set() }));
     window.location.reload();
+  }
+
+  // Publica en la página pública las vacantes definidas en src/data/jobs.ts.
+  // El botón vive también en el Dashboard, pero acá es donde se busca: esta es
+  // la pantalla de vacantes.
+  async function publicarEnLaWeb() {
+    if (!confirm(
+      'Publicar en la web las vacantes definidas en el código.\n\n' +
+      'Actualiza las que ya están publicadas y crea las que falten. También crea ' +
+      'el funnel en el ATS si no existe.\n\n' +
+      'No cierra ninguna vacante ni reabre las que hayas cerrado.'
+    )) return;
+    setPublicandoWeb(true);
+    try {
+      const r = await fetch('/api/admin/sync-jobs-to-web', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) { alert(`No se pudo publicar: ${[j.error, j.detail].filter(Boolean).join(' · ')}`); return; }
+      const partes: string[] = [];
+      if (j.creadas?.length) partes.push('PUBLICADAS:\n' + j.creadas.map((v: any) => `  ${v.title}\n  ${v.url}`).join('\n'));
+      if (j.actualizadas?.length) partes.push('ACTUALIZADAS:\n' + j.actualizadas.map((v: any) => `  ${v.title}\n  ${v.url}`).join('\n'));
+      if (j.funnel_creado?.length) partes.push(`Funnel creado en el ATS para: ${j.funnel_creado.join(', ')}`);
+      if (j.fallidas?.length) partes.push('FALLARON:\n' + j.fallidas.map((f: any) => `  ${f.slug}: ${f.error}`).join('\n'));
+      alert(partes.length ? partes.join('\n\n') : 'No había nada que publicar.');
+      window.location.reload();
+    } catch (e: any) {
+      alert(`No se pudo publicar: ${e?.message || 'error de red'}`);
+    } finally {
+      setPublicandoWeb(false);
+    }
   }
 
   // Cargar vacantes
@@ -2815,6 +2845,15 @@ function Vacantes() {
             </button>
             <button className="pill-btn text-xs bg-[#1F4FBF] text-white hover:bg-[#163E96]" style={{ padding: '9px 14px' }} onClick={() => setShowMarketResearch(true)}>
               <Sparkles className="w-3.5 h-3.5" /> Agente Market Research
+            </button>
+            <button
+              className="pill-btn text-xs bg-[#0F172A] text-white hover:bg-black disabled:opacity-50"
+              style={{ padding: '9px 14px' }}
+              onClick={publicarEnLaWeb}
+              disabled={publicandoWeb}
+              title="Publica en la página pública las vacantes definidas en el código y crea su funnel en el ATS"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> {publicandoWeb ? 'Publicando…' : 'Publicar en la web'}
             </button>
             <button className="pill-btn pill-btn-primary text-xs" style={{ padding: '9px 14px' }}>
               <Plus className="w-3.5 h-3.5" /> Nueva requisición
