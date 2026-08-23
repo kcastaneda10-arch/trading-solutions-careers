@@ -53,6 +53,36 @@ function nivelDeJerarquia(level: string): string {
   return "entry";
 }
 
+/**
+ * ht_vacancies.model_id es NOT NULL y no tiene default: apunta al modelo de
+ * competencias (los 16 mandatos) contra el que se evalúa a los candidatos.
+ * Sin él la fila no entra, y ese fue exactamente el motivo por el que Talent
+ * Acquisition Specialist quedó publicada en la web sin funnel en el ATS.
+ *
+ * Todas las vacantes del cliente comparten el mismo modelo, así que se
+ * reutiliza el que ya está en uso. Se prefiere el modelo activo; si por lo que
+ * sea no hay ninguno marcado así, se toma el de cualquier vacante existente.
+ */
+async function modeloDeCompetencias(): Promise<string | null> {
+  const { data: modelo } = await supabaseAdmin
+    .from("ht_competency_models")
+    .select("id")
+    .eq("client_id", TS_CLIENT_ID)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (modelo?.id) return modelo.id;
+
+  const { data: otraVacante } = await supabaseAdmin
+    .from("ht_vacancies")
+    .select("model_id")
+    .eq("client_id", TS_CLIENT_ID)
+    .not("model_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  return otraVacante?.model_id ?? null;
+}
+
 export async function POST(req: NextRequest) {
   const authError = requireAdmin(req);
   if (authError) return authError;
@@ -60,6 +90,7 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
 
   try {
+    const modelId = await modeloDeCompetencias();
     const creadas: { title: string; url: string }[] = [];
     const actualizadas: { title: string; url: string }[] = [];
     const funnel_creado: string[] = [];
@@ -151,7 +182,17 @@ export async function POST(req: NextRequest) {
 
         const plantilla = plantillaDePrefiltro(job);
 
-        if (!enAts) {
+        if (!enAts && !modelId) {
+          // Sin modelo de competencias no hay forma de crear la vacante en el
+          // ATS. Se dice con todas las letras en vez de dejar un error de
+          // Postgres que no le sirve a nadie.
+          fallidas.push({
+            slug: job.slug,
+            error:
+              "web OK, pero no se creó en el ATS: no hay modelo de competencias " +
+              "para el cliente. Hay que crearlo (los 16 mandatos) antes de publicar.",
+          });
+        } else if (!enAts) {
           // Se intenta el insert completo. Si alguna columna tiene un CHECK que
           // rechaza el valor (ya pasó con role_level), Postgres tumba la fila
           // entera y la vacante no se crea — la web la muestra pero nadie puede
@@ -159,6 +200,7 @@ export async function POST(req: NextRequest) {
           // indispensable: es preferible una vacante incompleta que ninguna.
           let { error: atsErr } = await supabaseAdmin.from("ht_vacancies").insert({
             client_id: TS_CLIENT_ID,
+            model_id: modelId,
             title: job.title.es,
             area: job.dept,
             status: "open",
@@ -171,6 +213,7 @@ export async function POST(req: NextRequest) {
             console.error(`[sync] insert completo falló para "${job.title.es}": ${atsErr.message}`);
             const minimo = await supabaseAdmin.from("ht_vacancies").insert({
               client_id: TS_CLIENT_ID,
+              model_id: modelId,
               title: job.title.es,
               status: "open",
             });
