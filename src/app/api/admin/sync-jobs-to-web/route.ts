@@ -152,7 +152,12 @@ export async function POST(req: NextRequest) {
         const plantilla = plantillaDePrefiltro(job);
 
         if (!enAts) {
-          const { error: atsErr } = await supabaseAdmin.from("ht_vacancies").insert({
+          // Se intenta el insert completo. Si alguna columna tiene un CHECK que
+          // rechaza el valor (ya pasó con role_level), Postgres tumba la fila
+          // entera y la vacante no se crea — la web la muestra pero nadie puede
+          // entrar al funnel. Por eso hay un segundo intento con lo mínimo
+          // indispensable: es preferible una vacante incompleta que ninguna.
+          let { error: atsErr } = await supabaseAdmin.from("ht_vacancies").insert({
             client_id: TS_CLIENT_ID,
             title: job.title.es,
             area: job.dept,
@@ -161,6 +166,41 @@ export async function POST(req: NextRequest) {
             vacancy_type: "incremental",
             form_template_key: plantilla,
           });
+
+          if (atsErr) {
+            console.error(`[sync] insert completo falló para "${job.title.es}": ${atsErr.message}`);
+            const minimo = await supabaseAdmin.from("ht_vacancies").insert({
+              client_id: TS_CLIENT_ID,
+              title: job.title.es,
+              status: "open",
+            });
+            if (!minimo.error) {
+              atsErr = null as any;
+              // La fila ya existe: ahora se completa campo por campo, y lo que
+              // no pase su CHECK simplemente no se pone.
+              const { data: recien } = await supabaseAdmin
+                .from("ht_vacancies")
+                .select("id")
+                .eq("client_id", TS_CLIENT_ID)
+                .ilike("title", job.title.es)
+                .maybeSingle();
+              if (recien) {
+                for (const campo of [
+                  { area: job.dept },
+                  { role_level: nivelDeJerarquia(job.level) },
+                  { vacancy_type: "incremental" },
+                  { form_template_key: plantilla },
+                ]) {
+                  const r = await supabaseAdmin.from("ht_vacancies").update(campo).eq("id", recien.id);
+                  if (r.error) {
+                    console.error(`[sync] "${job.title.es}" · no se pudo poner ${Object.keys(campo)[0]}: ${r.error.message}`);
+                  }
+                }
+              }
+            } else {
+              atsErr = minimo.error;
+            }
+          }
           if (atsErr) {
             fallidas.push({ slug: job.slug, error: `web OK, pero no se creó en el ATS: ${atsErr.message}` });
           } else {
