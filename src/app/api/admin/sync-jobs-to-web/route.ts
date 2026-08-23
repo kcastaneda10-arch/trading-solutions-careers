@@ -29,6 +29,22 @@ import { jobs } from "@/data/jobs";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
+/**
+ * Plantilla de prefiltro según el área del cargo.
+ *
+ * POR QUÉ IMPORTA: getTemplate() cae a "comex" cuando form_template_key está
+ * vacío. Una vacante nueva sin esto le preguntaba a un psicólogo por años en
+ * logística internacional, Incoterms y experiencia en pricing.
+ */
+function plantillaDePrefiltro(job: { dept: string; slug: string; location: string }): string {
+  const d = (job.dept || "").toLowerCase();
+  if (job.slug.startsWith("china-") || /china|shanghai|shenzhen|guangzhou/i.test(job.location)) return "china";
+  if (d.includes("tecnolog") || d.includes("technology")) return "tech";
+  if (d.includes("finanz") || d.includes("contab") || d.includes("finance")) return "finance";
+  if (d.includes("talento") || d.includes("wellness") || d.includes("people") || d.includes("human")) return "hr_lead";
+  return "comex";
+}
+
 // ht_vacancies.role_level tiene un CHECK: solo 'entry', 'lead' y 'c_suite'.
 // Son niveles de jerarquía, no de seniority — un cargo junior o mid es 'entry'.
 function nivelDeJerarquia(level: string): string {
@@ -47,6 +63,7 @@ export async function POST(req: NextRequest) {
     const creadas: { title: string; url: string }[] = [];
     const actualizadas: { title: string; url: string }[] = [];
     const funnel_creado: string[] = [];
+    const plantilla_corregida: string[] = [];
     const fallidas: { slug: string; error: string }[] = [];
 
     for (const job of jobs) {
@@ -127,10 +144,12 @@ export async function POST(req: NextRequest) {
         // en dos bases distintas a mano es justo donde se rompía antes.
         const { data: enAts } = await supabaseAdmin
           .from("ht_vacancies")
-          .select("id")
+          .select("id, form_template_key")
           .eq("client_id", TS_CLIENT_ID)
           .ilike("title", job.title.es)
           .maybeSingle();
+
+        const plantilla = plantillaDePrefiltro(job);
 
         if (!enAts) {
           const { error: atsErr } = await supabaseAdmin.from("ht_vacancies").insert({
@@ -140,12 +159,21 @@ export async function POST(req: NextRequest) {
             status: "open",
             role_level: nivelDeJerarquia(job.level),
             vacancy_type: "incremental",
+            form_template_key: plantilla,
           });
           if (atsErr) {
             fallidas.push({ slug: job.slug, error: `web OK, pero no se creó en el ATS: ${atsErr.message}` });
           } else {
-            funnel_creado.push(job.title.es);
+            funnel_creado.push(`${job.title.es} (prefiltro: ${plantilla})`);
           }
+        } else if (!enAts.form_template_key) {
+          // Vacante que ya existía sin plantilla asignada: se le pone la que
+          // corresponde en vez de dejarla cayendo al default de comex.
+          const { error: tplErr } = await supabaseAdmin
+            .from("ht_vacancies")
+            .update({ form_template_key: plantilla })
+            .eq("id", enAts.id);
+          if (!tplErr) plantilla_corregida.push(`${job.title.es} → ${plantilla}`);
         }
       } catch (e: any) {
         fallidas.push({ slug: job.slug, error: e?.message || String(e) });
@@ -166,6 +194,7 @@ export async function POST(req: NextRequest) {
       creadas,
       actualizadas,
       funnel_creado,
+      plantilla_corregida,
       fallidas,
       publicadas_sin_perfil: huerfanas.map((v: any) => ({
         slug: v.slug,

@@ -41,7 +41,7 @@ export const PREFILTER_TEMPLATES: Record<TemplateKey, PrefilterTemplate> = {
   hr_lead: {
     key: "hr_lead",
     label: "Liderazgo HR · talent acquisition · learning",
-    description: "Para Talent Acquisition Lead, T&D Lead, HR Manager",
+    description: "Para Talent Acquisition Specialist, Talent Acquisition Lead, T&D Lead, HR Manager",
     sections: ["personal", "availability", "english", "education", "hr_experience", "about_you"],
   },
   finance: {
@@ -87,6 +87,10 @@ export const TEMPLATE_REQUIRED_FIELDS: Record<TemplateKey, string[]> = {
     "salary", "availability", "relocate",
     "english_level", "edu_type",
     "years_hr", "ats_tools_used", "team_size_led",
+    // Requisitos duros del perfil de Talent Acquisition Specialist que el
+    // formulario no preguntaba: sin esto el prefiltro dejaba pasar a quien
+    // nunca aplicó una prueba psicométrica ni entrevistó por competencias.
+    "psychometrics_years", "bei_certified",
     "why_ts",
   ],
   finance: [

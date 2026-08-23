@@ -295,6 +295,28 @@ export async function POST(
       };
     }
 
+    // ─── Knock-outs propios de HR / Talent Acquisition ───────────────
+    // El perfil pide mínimo 1 año aplicando e interpretando psicometría y
+    // formación en entrevista por competencias. Sin esto el prefiltro dejaba
+    // pasar a cualquiera con años de reclutamiento pero sin criterio técnico,
+    // que es justo lo que la vacante NO busca.
+    if (templateKey === "hr_lead" && decision !== "reject") {
+      const psychYears = Number(body.psychometrics_years ?? 0);
+      const bei = String(body.bei_certified || "").trim().toLowerCase();
+
+      if (psychYears < 1) {
+        decision = "reject";
+        rejectionReason = {
+          category: "experiencia_insuficiente",
+          sub_detail: "sin_psicometria",
+        };
+      } else if (bei === "no" || bei === "") {
+        // No descarta: la formación en BEI se puede validar o cerrar en el
+        // proceso. Pero obliga a que una persona lo mire.
+        decision = "review";
+      }
+    }
+
     meta = {
       cap_used: salaryResult.cap,
       salary_lower_bound: salaryResult.lowerBound,

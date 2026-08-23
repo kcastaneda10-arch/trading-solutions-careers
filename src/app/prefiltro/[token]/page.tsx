@@ -25,6 +25,7 @@ const EDU_COMEX = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otr
 const EDU_HR = ["Psicología", "Administración / Negocios", "Recursos Humanos", "Comunicación / Mercadeo", "Otra carrera", "Estudiante últimos semestres"];
 const EDU_FINANCE = ["Contaduría Pública", "Administración Financiera", "Economía", "Ingeniería Industrial", "Otra carrera", "Estudiante últimos semestres"];
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
+const PSYCH_INSTRUMENTS = ["DISC", "Betesa", "16PF", "Cleaver", "Wartegg", "Terman", "IPV", "Zavic", "MMPI", "Otro", "Ninguno"];
 const ATS_TOOLS = ["LinkedIn Recruiter", "Greenhouse", "Lever", "Workday", "BambooHR", "HiBob", "Otro ATS", "Ninguno"];
 const ACCOUNTING_SYSTEMS = ["SAP", "Oracle NetSuite", "QuickBooks", "Microsoft Dynamics", "Siigo", "World Office", "Otro", "Ninguno"];
 const DOC_TYPES = [
@@ -71,6 +72,9 @@ export default function PrefiltroForm() {
   const [atsTools, setAtsTools] = useState<string[]>([]);
   const [pipelineFromScratch, setPipelineFromScratch] = useState("");
   const [teamSizeLed, setTeamSizeLed] = useState("");
+  const [psychometricsYears, setPsychometricsYears] = useState("");
+  const [psychInstruments, setPsychInstruments] = useState<string[]>([]);
+  const [beiCertified, setBeiCertified] = useState("");
   const [hrFocus, setHrFocus] = useState("");
   // Finance
   const [yearsFinance, setYearsFinance] = useState("");
@@ -140,6 +144,10 @@ export default function PrefiltroForm() {
   function toggleCrm(c: string) {
     setCrms((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   }
+  function togglePsych(t: string) {
+    setPsychInstruments((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
+
   function toggleAts(t: string) {
     setAtsTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   }
@@ -172,7 +180,7 @@ export default function PrefiltroForm() {
     );
     if (!commonOk) return false;
     if (isHR) {
-      return !!(yearsHR !== "" && atsTools.length > 0 && pipelineFromScratch);
+      return !!(yearsHR !== "" && atsTools.length > 0 && pipelineFromScratch && psychometricsYears !== "" && beiCertified);
     }
     if (isFinance) {
       return !!(yearsFinance !== "" && accountingSystems.length > 0 && ifrsFamiliar);
@@ -262,6 +270,9 @@ export default function PrefiltroForm() {
         ats_tools_used: atsTools,
         pipeline_from_scratch: pipelineFromScratch === "si",
         team_size_led: parseInt(teamSizeLed) || 0,
+        psychometrics_years: parseInt(psychometricsYears) || 0,
+        psych_instruments: psychInstruments,
+        bei_certified: beiCertified,
         hr_focus: hrFocus.trim(),
       };
     } else if (isFinance) {
@@ -661,6 +672,19 @@ export default function PrefiltroForm() {
             </Q>
             <Q label="¿Cuántas personas has liderado directamente? (escribe 0 si nunca)">
               <input type="number" min={0} max={500} value={teamSizeLed} onChange={(e) => setTeamSizeLed(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="Años aplicando e interpretando pruebas psicométricas y elaborando informes">
+              <input type="number" min={0} max={50} value={psychometricsYears} onChange={(e) => setPsychometricsYears(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="¿Qué instrumentos psicométricos has aplicado? (selecciona todos los que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {PSYCH_INSTRUMENTS.map((t) => (
+                  <button key={t} type="button" onClick={() => togglePsych(t)} style={chipStyle(psychInstruments.includes(t))}>{t}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="¿Tienes formación o certificación en entrevista por competencias (BEI / STAR)?">
+              <SelectChips value={beiCertified} onChange={setBeiCertified} options={[{label:"Sí, certificación formal",value:"certificacion"},{label:"Sí, formación interna o curso",value:"formacion"},{label:"No",value:"no"}]} />
             </Q>
             <Q label="¿Cuál es tu foco preferido: atracción · desarrollo · cultura · todos? (opcional)">
               <input value={hrFocus} onChange={(e) => setHrFocus(e.target.value)} style={inputStyle} placeholder="Ej. atracción senior + desarrollo de líderes" />
