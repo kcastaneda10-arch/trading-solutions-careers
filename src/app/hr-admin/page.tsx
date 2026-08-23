@@ -2603,6 +2603,7 @@ type AgentDetailModalData = {
 
 function Vacantes() {
   const [publicandoWeb, setPublicandoWeb] = useState(false);
+  const [recuperando, setRecuperando] = useState(false);
   const [vacancies, setVacancies] = useState<LiveVacancy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2659,6 +2660,46 @@ function Vacantes() {
     alert(`✓ Invitaciones enviadas: ${ok}/${candidates.length}`);
     setSelectedCandidates((prev) => ({ ...prev, [vid]: new Set() }));
     window.location.reload();
+  }
+
+  // Trae al funnel las aplicaciones que se guardaron en Neon pero nunca
+  // llegaron al ATS. Pasa cuando alguien aplica a una vacante que todavía no
+  // existe en ht_vacancies: la aplicación se guarda y al candidato le llega el
+  // correo de recibido, pero el equipo nunca la ve. El endpoint ya existía sin
+  // ninguna pantalla que lo llamara.
+  async function recuperarAplicaciones() {
+    if (!confirm(
+      'Buscar aplicaciones de los últimos 30 días que no hayan entrado al funnel ' +
+      'y meterlas.\n\nNo duplica: si el candidato ya está en el ATS, solo lo toca.'
+    )) return;
+    setRecuperando(true);
+    try {
+      const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const r = await fetch('/api/admin/sync-applications-to-funnel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since: desde }),
+      });
+      const j = await r.json();
+      if (!r.ok) { alert(`No se pudo recuperar: ${[j.error, j.detail].filter(Boolean).join(' · ')}`); return; }
+      const lineas = [
+        `Entraron al funnel: ${j.inserted ?? 0}`,
+        `Ya estaban: ${j.updated ?? 0}`,
+        `Sin poder ubicar: ${j.skipped ?? 0}`,
+      ];
+      const problemas = (j.details || []).filter((d: any) => d.action === 'skipped');
+      if (problemas.length) {
+        lineas.push('', 'NO ENTRARON — su vacante no existe en el ATS:');
+        problemas.slice(0, 15).forEach((d: any) => lineas.push(`  ${d.email} · ${d.reason || ''}`));
+        lineas.push('', 'Publicá la vacante primero y volvé a correr esto.');
+      }
+      alert(lineas.join('\n'));
+      window.location.reload();
+    } catch (e: any) {
+      alert(`No se pudo recuperar: ${e?.message || 'error de red'}`);
+    } finally {
+      setRecuperando(false);
+    }
   }
 
   // Publica en la página pública las vacantes definidas en src/data/jobs.ts.
@@ -2854,6 +2895,15 @@ function Vacantes() {
               title="Publica en la página pública las vacantes definidas en el código y crea su funnel en el ATS"
             >
               <Sparkles className="w-3.5 h-3.5" /> {publicandoWeb ? 'Publicando…' : 'Publicar en la web'}
+            </button>
+            <button
+              className="pill-btn pill-btn-outline text-xs disabled:opacity-50"
+              style={{ padding: '9px 14px' }}
+              onClick={recuperarAplicaciones}
+              disabled={recuperando}
+              title="Busca aplicaciones que se guardaron pero no entraron al funnel y las mete"
+            >
+              {recuperando ? 'Recuperando…' : 'Recuperar aplicaciones'}
             </button>
             <button className="pill-btn pill-btn-primary text-xs" style={{ padding: '9px 14px' }}>
               <Plus className="w-3.5 h-3.5" /> Nueva requisición
