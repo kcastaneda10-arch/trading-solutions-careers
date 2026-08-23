@@ -9,6 +9,28 @@ import { useLanguage } from "@/i18n/context";
 import { fetchOpenJobs, type Job } from "@/lib/vacancies-adapter";
 import { ArrowLeft, MapPin, Check, ArrowUpRight, Upload, X, CheckCircle } from "lucide-react";
 
+/**
+ * Acepta el perfil de LinkedIn como venga y lo deja en una URL utilizable.
+ *
+ * Al copiar un perfil, LinkedIn entrega cosas como "linkedin.com/in/perfil",
+ * "www.linkedin.com/in/perfil" o la URL con parámetros de seguimiento. Antes
+ * el campo era type="url" y el navegador rechazaba todo lo que no empezara con
+ * https://, con un mensaje genérico que no decía qué corregir. Una candidata
+ * quedó bloqueada por esto.
+ */
+function normalizarLinkedin(valor: string): string {
+  const v = (valor || "").trim().replace(/\s+/g, "");
+  if (!v) return "";
+  // Solo el usuario, sin dominio: "juanperez" o "/in/juanperez"
+  if (!/linkedin\./i.test(v)) {
+    const usuario = v.replace(/^\/?(in\/)?/i, "");
+    return usuario ? `https://www.linkedin.com/in/${usuario}` : "";
+  }
+  // Con dominio pero sin esquema
+  if (!/^https?:\/\//i.test(v)) return `https://${v}`;
+  return v;
+}
+
 export default function JobDetailPage() {
   const { id } = useParams();
   const searchParams = useSearchParams();
@@ -98,6 +120,7 @@ export default function JobDetailPage() {
           job_id: job.id,
           job_title: job.title[locale],
           ...formData,
+          linkedin: normalizarLinkedin(formData.linkedin),
           cv_filename,
           cv_data,
           ref, // ?ref=interno cuando viene del newsletter interno
@@ -231,7 +254,12 @@ export default function JobDetailPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.linkedin}</label>
-                    <input type="url" className="input-field" placeholder={t.jobs.linkedinPlaceholder} name="linkedin" value={formData.linkedin} onChange={handleChange} />
+                    {/* type="url" exigía el https:// y el navegador rechazaba
+                        "linkedin.com/in/perfil" o "www.linkedin.com/in/perfil",
+                        que es exactamente lo que sale al copiar el perfil desde
+                        LinkedIn. El mensaje era el genérico del navegador y no
+                        explicaba nada. Se normaliza al enviar. */}
+                    <input type="text" inputMode="url" className="input-field" placeholder={t.jobs.linkedinPlaceholder} name="linkedin" value={formData.linkedin} onChange={handleChange} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">{t.jobs.cvLabel}</label>
