@@ -16,6 +16,15 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import Anthropic from "@anthropic-ai/sdk";
 
+/**
+ * El estudio pide siete secciones en una sola respuesta y tarda del orden de
+ * minutos. Esta ruta no declaraba maxDuration, así que corría con el límite por
+ * defecto de la plataforma: la función se cortaba a mitad de la generación y
+ * quedaba un error genérico después de la espera. 300s es el techo del plan y
+ * ya se usa en otra ruta larga del proyecto.
+ */
+export const maxDuration = 300;
+
 let _anthropic: Anthropic | null = null;
 function getAnthropic(): Anthropic {
   if (_anthropic) return _anthropic;

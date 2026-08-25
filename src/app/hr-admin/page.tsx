@@ -2027,6 +2027,29 @@ type MarketResearchReport = {
   };
 };
 
+/**
+ * Cuenta el tiempo de espera del estudio de mercado.
+ *
+ * El modal decía "~30s" — un número que nunca se midió. El estudio pide seis
+ * secciones completas en una sola respuesta y tarda cerca de tres minutos, así
+ * que la promesa se rompía siempre y parecía que se había colgado. Ver el
+ * contador correr no lo acelera, pero deja claro que sigue trabajando.
+ */
+function TiempoDeEspera() {
+  const [segundos, setSegundos] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const mm = Math.floor(segundos / 60);
+  const ss = String(segundos % 60).padStart(2, "0");
+  return (
+    <span className="tabular-nums">
+      {mm}:{ss}
+    </span>
+  );
+}
+
 function VacancyMarketResearchModal({
   vacancyId,
   vacancyTitle,
@@ -2156,7 +2179,14 @@ function VacancyMarketResearchModal({
                 <Brain className="w-7 h-7 text-purple-600" />
               </div>
               <h3 className="text-base font-bold text-gray-900">Claude está investigando…</h3>
-              <p className="text-xs text-gray-500 mt-1">Analizando mercado de logística internacional Colombia 2026 · ~30s</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Analizando mercado de logística internacional Colombia 2026 · <TiempoDeEspera />
+              </p>
+              <p className="text-[11px] text-gray-400 mt-2">
+                Suele tardar entre 2 y 3 minutos. Podés cerrar este recuadro y seguir
+                trabajando — mientras no cierres la pestaña, el estudio termina y queda
+                guardado.
+              </p>
             </div>
           )}
 
