@@ -136,12 +136,36 @@ export async function POST(req: NextRequest) {
         // La otra mitad del problema: sin fila en ht_vacancies la vacante se ve
         // en la web pero las aplicaciones no tienen funnel donde entrar. Publicar
         // en dos bases distintas a mano es justo donde se rompía antes.
-        const { data: enAts } = await supabaseAdmin
+        // Acá había un maybeSingle(). Postgrest devuelve ERROR cuando el título
+        // coincide con más de una fila, y el error se descartaba: el sync creía
+        // que la vacante no existía en el ATS y creaba OTRA. Con dos ya era
+        // frágil; con tres, la aplicación de un candidato entra al funnel que
+        // el azar decida. Ahora se traen todas y se elige, sin crear nunca una
+        // segunda con el mismo título.
+        const { data: enAtsTodas } = await supabaseAdmin
           .from("ht_vacancies")
-          .select("id, form_template_key")
+          .select("id, form_template_key, status, requisition_id")
           .eq("client_id", TS_CLIENT_ID)
-          .ilike("title", job.title.es)
-          .maybeSingle();
+          .ilike("title", job.title.es);
+
+        const candidatas = enAtsTodas || [];
+        // Manda la que nació de una requisición: es la que tiene líder y
+        // trazabilidad. Después, cualquiera que esté abierta.
+        const enAts =
+          candidatas.find((v: any) => v.requisition_id) ||
+          candidatas.find((v: any) => v.status == null || v.status === "open") ||
+          candidatas[0] ||
+          null;
+
+        if (candidatas.length > 1) {
+          fallidas.push({
+            slug: job.slug,
+            error:
+              `hay ${candidatas.length} vacantes en el ATS con el título "${job.title.es}". ` +
+              `No se creó ninguna nueva, pero hay que cerrar las que sobran: ` +
+              `mientras haya más de una abierta, las aplicaciones pueden caer en la equivocada.`,
+          });
+        }
 
         const plantilla = plantillaDePrefiltro(job);
 
