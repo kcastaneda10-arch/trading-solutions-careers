@@ -298,7 +298,12 @@ function Tarjeta({
     }
   }
 
+  // El perfil es lo que el CWO aprueba: después de la aprobación se congela.
   const editable = req.status === "pedida" || req.status === "con_perfil" || req.status === "devuelta";
+  // Los datos de publicación no son parte de lo aprobado, y encima se
+  // necesitan DESPUÉS de aprobar. Bloquearlos junto con el perfil dejaba la
+  // vacante aprobada sin poder publicarse nunca.
+  const editablePublicacion = editable || req.status === "aprobada" || req.status === "publicada";
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -438,6 +443,56 @@ function Tarjeta({
                 />
               </label>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">Tope salarial (COP)</span>
+                  <input
+                    type="number"
+                    value={perfil.salary_cap_cop}
+                    onChange={(e) => setPerfil({ ...perfil, salary_cap_cop: e.target.value })}
+                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Ej: 4500000"
+                  />
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    El prefiltro marca a quien pida por encima. No lo rechaza solo.
+                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">Cuestionario de prefiltro</span>
+                  <select
+                    value={perfil.form_template_key}
+                    onChange={(e) => setPerfil({ ...perfil, form_template_key: e.target.value })}
+                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                  >
+                    <option value="">Elegir…</option>
+                    {Object.values(PREFILTER_TEMPLATES).map((t) => (
+                      <option key={t.key} value={t.key}>{t.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    Sin esto, a un psicólogo se le pregunta por Incoterms.
+                  </span>
+                </label>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={perfil.english_required}
+                  onChange={(e) => setPerfil({ ...perfil, english_required: e.target.checked })}
+                />
+                El cargo exige inglés B2 o superior
+              </label>
+            </div>
+          )}
+
+          {/* Datos de publicación · siguen editables después de aprobar */}
+          {editablePublicacion && (
+            <div className="space-y-4 border-t border-gray-200 pt-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Para publicar
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="block">
                   <span className="text-xs font-medium text-gray-700">Ubicación</span>
@@ -528,47 +583,6 @@ function Tarjeta({
                 </div>
               </details>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="block">
-                  <span className="text-xs font-medium text-gray-700">Tope salarial (COP)</span>
-                  <input
-                    type="number"
-                    value={perfil.salary_cap_cop}
-                    onChange={(e) => setPerfil({ ...perfil, salary_cap_cop: e.target.value })}
-                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Ej: 4500000"
-                  />
-                  <span className="text-[11px] text-gray-400 mt-1 block">
-                    El prefiltro marca a quien pida por encima. No lo rechaza solo.
-                  </span>
-                </label>
-
-                <label className="block">
-                  <span className="text-xs font-medium text-gray-700">Cuestionario de prefiltro</span>
-                  <select
-                    value={perfil.form_template_key}
-                    onChange={(e) => setPerfil({ ...perfil, form_template_key: e.target.value })}
-                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"
-                  >
-                    <option value="">Elegir…</option>
-                    {Object.values(PREFILTER_TEMPLATES).map((t) => (
-                      <option key={t.key} value={t.key}>{t.label}</option>
-                    ))}
-                  </select>
-                  <span className="text-[11px] text-gray-400 mt-1 block">
-                    Sin esto, a un psicólogo se le pregunta por Incoterms.
-                  </span>
-                </label>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={perfil.english_required}
-                  onChange={(e) => setPerfil({ ...perfil, english_required: e.target.checked })}
-                />
-                El cargo exige inglés B2 o superior
-              </label>
             </div>
           )}
 
@@ -596,7 +610,7 @@ function Tarjeta({
 
           {/* Acciones */}
           <div className="flex flex-wrap gap-2 pt-1">
-            {editable && (
+            {editablePublicacion && (
               <button
                 onClick={() => mover("")}
                 disabled={!!enviando}
