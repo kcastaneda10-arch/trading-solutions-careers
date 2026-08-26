@@ -26,8 +26,9 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { sql } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase";
 import { jobs } from "@/data/jobs";
-
-const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
+// modeloDeCompetencias y nivelDeJerarquia se comparten con la aprobación de
+// requisiciones: los dos caminos crean vacantes y no pueden divergir.
+import { modeloDeCompetencias, nivelDeJerarquia, TS_CLIENT_ID } from "@/lib/competency-model";
 
 /**
  * Plantilla de prefiltro según el área del cargo.
@@ -43,44 +44,6 @@ function plantillaDePrefiltro(job: { dept: string; slug: string; location: strin
   if (d.includes("finanz") || d.includes("contab") || d.includes("finance")) return "finance";
   if (d.includes("talento") || d.includes("wellness") || d.includes("people") || d.includes("human")) return "hr_lead";
   return "comex";
-}
-
-// ht_vacancies.role_level tiene un CHECK: solo 'entry', 'lead' y 'c_suite'.
-// Son niveles de jerarquía, no de seniority — un cargo junior o mid es 'entry'.
-function nivelDeJerarquia(level: string): string {
-  const l = (level || "").toLowerCase();
-  if (l.includes("senior") || l.includes("lead")) return "lead";
-  return "entry";
-}
-
-/**
- * ht_vacancies.model_id es NOT NULL y no tiene default: apunta al modelo de
- * competencias (los 16 mandatos) contra el que se evalúa a los candidatos.
- * Sin él la fila no entra, y ese fue exactamente el motivo por el que Talent
- * Acquisition Specialist quedó publicada en la web sin funnel en el ATS.
- *
- * Todas las vacantes del cliente comparten el mismo modelo, así que se
- * reutiliza el que ya está en uso. Se prefiere el modelo activo; si por lo que
- * sea no hay ninguno marcado así, se toma el de cualquier vacante existente.
- */
-async function modeloDeCompetencias(): Promise<string | null> {
-  const { data: modelo } = await supabaseAdmin
-    .from("ht_competency_models")
-    .select("id")
-    .eq("client_id", TS_CLIENT_ID)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-  if (modelo?.id) return modelo.id;
-
-  const { data: otraVacante } = await supabaseAdmin
-    .from("ht_vacancies")
-    .select("model_id")
-    .eq("client_id", TS_CLIENT_ID)
-    .not("model_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-  return otraVacante?.model_id ?? null;
 }
 
 export async function POST(req: NextRequest) {
