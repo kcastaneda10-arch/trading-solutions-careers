@@ -25,6 +25,7 @@ export const runtime = "nodejs";
 
 const CAMPOS =
   "id, lead_email, lead_name, area, title, requisition_type, reason, needed_by, " +
+  "lead_responsibilities, lead_must_haves, " +
   "job_description, requirements, salary_cap_cop, form_template_key, english_required, " +
   "status, approved_at, approved_by, decision_note, vacancy_id, created_at, updated_at";
 

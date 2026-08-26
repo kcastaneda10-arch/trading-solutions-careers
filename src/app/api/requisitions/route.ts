@@ -66,6 +66,13 @@ export async function POST(req: NextRequest) {
         requisition_type: tipo,
         reason: body.reason || null,
         needed_by: body.needed_by || null,
+        // Lo que aporta el líder, en crudo. No se copia solo a
+        // job_description/requirements: un cargo descrito en lenguaje interno
+        // no se puede publicar tal cual, y los requisitos escritos sin filtro
+        // son donde aparecen los criterios que no se pueden pedir. Wellness
+        // lo traduce.
+        lead_responsibilities: body.lead_responsibilities || null,
+        lead_must_haves: body.lead_must_haves || null,
         status: "pedida",
       })
       .select("id, status, created_at")
@@ -119,6 +126,7 @@ export async function GET(req: NextRequest) {
       .from("ht_requisitions")
       .select(
         "id, lead_email, lead_name, area, title, requisition_type, reason, needed_by, " +
+        "lead_responsibilities, lead_must_haves, " +
           "job_description, requirements, salary_cap_cop, form_template_key, english_required, " +
           "status, approved_at, approved_by, decision_note, vacancy_id, created_at, updated_at",
       )

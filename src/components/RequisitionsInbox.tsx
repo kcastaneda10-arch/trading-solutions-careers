@@ -34,6 +34,8 @@ type Requisicion = {
   requisition_type: "reemplazo" | "incremental";
   reason: string | null;
   needed_by: string | null;
+  lead_responsibilities: string | null;
+  lead_must_haves: string | null;
   job_description: string | null;
   requirements: string | null;
   salary_cap_cop: number | null;
@@ -322,11 +324,50 @@ function Tarjeta({
             </div>
           )}
 
+          {/* Lo que aportó el líder, al lado de los campos que hay que llenar.
+              No se copia solo: se ofrece como base para que Wellness lo
+              traduzca en vez de publicar el lenguaje interno del área. */}
+          {editable && (req.lead_responsibilities || req.lead_must_haves) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-900">
+                  Lo que escribió {req.lead_name || "el líder"}
+                </p>
+                <button
+                  onClick={() => setPerfil({
+                    ...perfil,
+                    job_description: perfil.job_description || req.lead_responsibilities || "",
+                    requirements: perfil.requirements || req.lead_must_haves || "",
+                  })}
+                  className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full bg-white border border-blue-300 text-blue-900 hover:bg-blue-100"
+                >
+                  Usar como base
+                </button>
+              </div>
+              {req.lead_responsibilities && (
+                <div>
+                  <p className="text-[11px] font-semibold text-blue-900/70 uppercase tracking-wide">Qué va a hacer</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap mt-0.5">{req.lead_responsibilities}</p>
+                </div>
+              )}
+              {req.lead_must_haves && (
+                <div>
+                  <p className="text-[11px] font-semibold text-blue-900/70 uppercase tracking-wide">Qué no puede faltar</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap mt-0.5">{req.lead_must_haves}</p>
+                </div>
+              )}
+              <p className="text-[11px] text-blue-900/60 leading-relaxed">
+                Está en el lenguaje del área. Antes de publicarlo, revisá que no
+                pida nada que no se pueda pedir: edad, estado civil, apariencia.
+              </p>
+            </div>
+          )}
+
           {/* El perfil */}
           {editable && (
             <div className="space-y-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Perfil del cargo
+                Perfil del cargo · como se va a publicar
               </p>
 
               <label className="block">
