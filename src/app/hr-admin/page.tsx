@@ -60,6 +60,8 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
+// La bandeja donde caen las vacantes que piden los líderes desde WXM.
+import RequisitionsInbox from "@/components/RequisitionsInbox";
 import { factorXTS } from "@/data/assessments";
 import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
@@ -69,6 +71,7 @@ import ReminderRulesEditor from "@/components/ReminderRulesEditor";
 
 type Tab =
   | "dashboard"
+  | "requisiciones"
   | "vacantes"
   | "funnel"
   | "onboarding"
@@ -77,6 +80,7 @@ type Tab =
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "requisiciones", label: "Requisiciones", icon: Inbox },
   { id: "vacantes", label: "Vacantes", icon: Briefcase },
   { id: "funnel", label: "Funnel", icon: Kanban },
   { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
@@ -84,7 +88,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "plantillas", label: "Plantillas", icon: SettingsIcon },
 ];
 
-const VALID_TABS: Tab[] = ["dashboard", "vacantes", "funnel", "onboarding", "cvbank", "plantillas"];
+const VALID_TABS: Tab[] = ["dashboard", "requisiciones", "vacantes", "funnel", "onboarding", "cvbank", "plantillas"];
 
 function getInitialTab(): Tab {
   if (typeof window === 'undefined') return 'dashboard';
@@ -326,6 +330,7 @@ export default function HRAdminPage() {
 
       <main className="max-w-[1440px] mx-auto px-6 py-7 pb-16">
         {tab === "dashboard" && <Dashboard setTab={setTab} />}
+        {tab === "requisiciones" && <RequisitionsInbox />}
         {tab === "vacantes" && <Vacantes />}
         {tab === "funnel" && <PipelineFunnel />}
         {tab === "onboarding" && <OnboardingTab />}
