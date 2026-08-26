@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { construirAviso, type DatosDelAviso } from "@/lib/job-post";
 
 type Fuente = {
   key: string;
@@ -31,19 +32,19 @@ type Publicacion = {
 
 export default function PublishPanel({
   vacancyId,
-  titulo,
-  descripcion,
-  requisitos,
+  requisicionId,
+  datos,
   urlAplicacion,
   onCerrar,
 }: {
   vacancyId: string;
-  titulo: string;
-  descripcion?: string | null;
-  requisitos?: string | null;
+  /** Para publicar en careers hace falta la requisición, no la vacante. */
+  requisicionId?: string | null;
+  datos: DatosDelAviso;
   urlAplicacion?: string | null;
   onCerrar: () => void;
 }) {
+  const titulo = datos.title;
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
   const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -72,16 +73,9 @@ export default function PublishPanel({
 
   const enlace = urlAplicacion || "";
 
-  const texto = [
-    titulo,
-    "",
-    descripcion || "",
-    requisitos ? "\nLo que buscamos:\n" + requisitos : "",
-    enlace ? `\nPara aplicar: ${enlace}` : "",
-    "\nTrading Solutions · Barranquilla, Colombia",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  // El aviso sale con el formato estándar de la compañía. Antes se armaba a
+  // mano y cada vacante quedaba distinta según quién la escribiera.
+  const texto = construirAviso(datos, enlace || null);
 
   async function copiar() {
     try {
@@ -93,7 +87,35 @@ export default function PublishPanel({
     }
   }
 
+  const [publicandoWeb, setPublicandoWeb] = useState(false);
+
+  /** La página de empleo sí se puede publicar desde acá: escribe en Neon. */
+  async function publicarEnCareers() {
+    if (!requisicionId) {
+      setError("Esta vacante no viene de una requisición, así que se publica desde la pestaña Vacantes.");
+      return;
+    }
+    setPublicandoWeb(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/requisitions/${requisicionId}/publish-web`, { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) {
+        setError([j.error, j.detail].filter(Boolean).join(" · "));
+        return;
+      }
+      window.alert(`Publicada en la página de empleo.\n\n${j.url}`);
+      cargar();
+    } catch (e: any) {
+      setError(e?.message || "Error de red");
+    } finally {
+      setPublicandoWeb(false);
+    }
+  }
+
   async function marcar(source: string, ya: boolean) {
+    // La página de empleo no se "marca": se publica.
+    if (source === "careers" && !ya) return publicarEnCareers();
     try {
       if (ya) {
         await fetch(`/api/vacancies/${vacancyId}/postings?source=${source}`, { method: "DELETE" });
@@ -144,10 +166,10 @@ export default function PublishPanel({
 
           {!enlace && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
-              Esta vacante todavía no está en la página de empleo, así que no hay enlace
-              de aplicación. Publicala primero en la web desde <strong>Vacantes</strong>:
-              sin enlace, quien la vea en un portal no tiene dónde aplicar y hay que
-              recibir hojas de vida por correo.
+              Todavía no está en la página de empleo, así que el aviso no tiene enlace
+              donde aplicar. Publicala primero acá arriba, en <strong>Página de empleo</strong>:
+              sin enlace, quien la vea en LinkedIn tiene que mandar la hoja de vida por
+              correo y no entra al funnel.
             </div>
           )}
 
@@ -188,7 +210,7 @@ export default function PublishPanel({
                               )}
                             </>
                           ) : f.automatico ? (
-                            "Se publica desde el botón de la pestaña Vacantes"
+                            "Se publica desde acá, con lo que armaste en la requisición"
                           ) : (
                             "Hay que montarla a mano en el portal"
                           )}
@@ -203,7 +225,11 @@ export default function PublishPanel({
                             : "border border-gray-300 text-gray-700 hover:bg-gray-50")
                         }
                       >
-                        {f.publicada ? "Publicada ✓" : "Marcar publicada"}
+                        {f.publicada
+                          ? "Publicada ✓"
+                          : f.key === "careers"
+                            ? publicandoWeb ? "Publicando…" : "Publicar ahora"
+                            : "Marcar publicada"}
                       </button>
                     </div>
                   );

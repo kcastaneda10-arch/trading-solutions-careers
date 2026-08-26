@@ -23,11 +23,7 @@ import { modeloDeCompetencias, nivelDeJerarquia, TS_CLIENT_ID } from "@/lib/comp
 
 export const runtime = "nodejs";
 
-const CAMPOS =
-  "id, lead_email, lead_name, area, title, requisition_type, reason, needed_by, " +
-  "lead_responsibilities, lead_must_haves, " +
-  "job_description, requirements, salary_cap_cop, form_template_key, english_required, " +
-  "status, approved_at, approved_by, decision_note, vacancy_id, created_at, updated_at";
+const CAMPOS = "*";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const authError = requireAdmin(req);
@@ -83,10 +79,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const cambios: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const campo of [
       "job_description",
+      "responsibilities",
       "requirements",
+      "nice_to_have",
       "salary_cap_cop",
       "form_template_key",
       "english_required",
+      // Lo necesario para publicar
+      "location",
+      "work_mode",
+      "salary_public",
+      // El aviso sale en inglés
+      "title_en",
+      "hook_en",
+      "description_en",
+      "responsibilities_en",
+      "requirements_en",
+      "nice_to_have_en",
     ]) {
       if (body[campo] !== undefined) cambios[campo] = body[campo];
     }

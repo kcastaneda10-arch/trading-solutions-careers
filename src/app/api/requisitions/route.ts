@@ -124,12 +124,10 @@ export async function GET(req: NextRequest) {
 
     let q = supabaseAdmin
       .from("ht_requisitions")
-      .select(
-        "id, lead_email, lead_name, area, title, requisition_type, reason, needed_by, " +
-        "lead_responsibilities, lead_must_haves, " +
-          "job_description, requirements, salary_cap_cop, form_template_key, english_required, " +
-          "status, approved_at, approved_by, decision_note, vacancy_id, created_at, updated_at",
-      )
+      // Se piden todas las columnas: la lista explícita se quedó corta cada vez
+      // que se agregó un campo, y el síntoma era un dato que no aparecía
+      // en pantalla sin ningún error de por medio.
+      .select("*")
       .eq("client_id", TS_CLIENT_ID)
       .order("created_at", { ascending: false });
 

@@ -36,6 +36,18 @@ type Requisicion = {
   needed_by: string | null;
   lead_responsibilities: string | null;
   lead_must_haves: string | null;
+  responsibilities: string | null;
+  nice_to_have: string | null;
+  location: string | null;
+  work_mode: string | null;
+  salary_public: string | null;
+  hook_en: string | null;
+  title_en: string | null;
+  description_en: string | null;
+  requirements_en: string | null;
+  responsibilities_en: string | null;
+  nice_to_have_en: string | null;
+  web_vacancy_id: number | null;
   job_description: string | null;
   requirements: string | null;
   salary_cap_cop: number | null;
@@ -193,10 +205,24 @@ function Tarjeta({
 }) {
   const [perfil, setPerfil] = useState({
     job_description: req.job_description || "",
+    responsibilities: req.responsibilities || "",
     requirements: req.requirements || "",
+    nice_to_have: req.nice_to_have || "",
     salary_cap_cop: req.salary_cap_cop ? String(req.salary_cap_cop) : "",
     form_template_key: req.form_template_key || "",
     english_required: !!req.english_required,
+    // Lo que hace falta para publicar. Sin esto la vacante vive en el ATS y
+    // no tiene dónde aplicar.
+    location: req.location || "",
+    work_mode: req.work_mode || "Presencial",
+    salary_public: req.salary_public || "",
+    // El aviso de la compañía sale en inglés.
+    title_en: req.title_en || "",
+    hook_en: req.hook_en || "",
+    description_en: req.description_en || "",
+    responsibilities_en: req.responsibilities_en || "",
+    requirements_en: req.requirements_en || "",
+    nice_to_have_en: req.nice_to_have_en || "",
   });
   const [nota, setNota] = useState("");
   const [enviando, setEnviando] = useState<string | null>(null);
@@ -246,11 +272,9 @@ function Tarjeta({
         body: JSON.stringify({
           accion: accion || undefined,
           nota: nota || undefined,
-          job_description: perfil.job_description,
-          requirements: perfil.requirements,
+          ...perfil,
           salary_cap_cop: perfil.salary_cap_cop ? Number(perfil.salary_cap_cop) : null,
           form_template_key: perfil.form_template_key || null,
-          english_required: perfil.english_required,
         }),
       });
       const j = await r.json();
@@ -392,6 +416,118 @@ function Tarjeta({
                 />
               </label>
 
+              <label className="block">
+                <span className="text-xs font-medium text-gray-700">Qué va a hacer · una por línea</span>
+                <textarea
+                  value={perfil.responsibilities}
+                  onChange={(e) => setPerfil({ ...perfil, responsibilities: e.target.value })}
+                  rows={5}
+                  className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Cada línea es una viñeta del aviso."
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-medium text-gray-700">Nice to have · una por línea</span>
+                <textarea
+                  value={perfil.nice_to_have}
+                  onChange={(e) => setPerfil({ ...perfil, nice_to_have: e.target.value })}
+                  rows={3}
+                  className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Lo que suma pero no descarta."
+                />
+              </label>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">Ubicación</span>
+                  <input
+                    type="text"
+                    value={perfil.location}
+                    onChange={(e) => setPerfil({ ...perfil, location: e.target.value })}
+                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Barranquilla, Colombia"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">Modalidad</span>
+                  <select
+                    value={perfil.work_mode}
+                    onChange={(e) => setPerfil({ ...perfil, work_mode: e.target.value })}
+                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                  >
+                    <option>Presencial</option>
+                    <option>Híbrido</option>
+                    <option>Remoto</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-700">Salario en el aviso</span>
+                  <input
+                    type="text"
+                    value={perfil.salary_public}
+                    onChange={(e) => setPerfil({ ...perfil, salary_public: e.target.value })}
+                    className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="A convenir"
+                  />
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    Esto lo ve el candidato. No es el tope.
+                  </span>
+                </label>
+              </div>
+
+              <details className="border border-gray-200 rounded-lg">
+                <summary className="text-xs font-medium text-gray-700 px-3 py-2 cursor-pointer">
+                  Versión en inglés · es la que se publica en LinkedIn
+                </summary>
+                <div className="px-3 pb-3 space-y-3">
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Título</span>
+                    <input type="text" value={perfil.title_en}
+                      onChange={(e) => setPerfil({ ...perfil, title_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                      placeholder={req.title} />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Gancho de la primera línea</span>
+                    <input type="text" value={perfil.hook_en}
+                      onChange={(e) => setPerfil({ ...perfil, hook_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+                      placeholder="to connect markets and build international agent networks" />
+                    <span className="text-[11px] text-gray-400 mt-1 block">
+                      Completa la frase «We&apos;re looking for a [cargo] …!»
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Descripción</span>
+                    <textarea value={perfil.description_en} rows={4}
+                      onChange={(e) => setPerfil({ ...perfil, description_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">What You&apos;ll Do</span>
+                    <textarea value={perfil.responsibilities_en} rows={5}
+                      onChange={(e) => setPerfil({ ...perfil, responsibilities_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Requirements</span>
+                    <textarea value={perfil.requirements_en} rows={4}
+                      onChange={(e) => setPerfil({ ...perfil, requirements_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-600">Nice to Have</span>
+                    <textarea value={perfil.nice_to_have_en} rows={3}
+                      onChange={(e) => setPerfil({ ...perfil, nice_to_have_en: e.target.value })}
+                      className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2" />
+                  </label>
+                  <p className="text-[11px] text-gray-400">
+                    Lo que dejes vacío cae al español, así que la vacante nunca queda con un hueco.
+                  </p>
+                </div>
+              </details>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block">
                   <span className="text-xs font-medium text-gray-700">Tope salarial (COP)</span>
@@ -511,9 +647,24 @@ function Tarjeta({
           {publicando && req.vacancy_id && (
             <PublishPanel
               vacancyId={req.vacancy_id}
-              titulo={req.title}
-              descripcion={req.job_description}
-              requisitos={req.requirements}
+              requisicionId={req.id}
+              datos={{
+                title: req.title,
+                title_en: req.title_en,
+                hook_en: req.hook_en,
+                area: req.area,
+                location: req.location,
+                work_mode: req.work_mode,
+                salary_public: req.salary_public,
+                description: req.job_description,
+                description_en: req.description_en,
+                responsibilities: req.responsibilities,
+                responsibilities_en: req.responsibilities_en,
+                requirements: req.requirements,
+                requirements_en: req.requirements_en,
+                nice_to_have: req.nice_to_have,
+                nice_to_have_en: req.nice_to_have_en,
+              }}
               urlAplicacion={urlAplicacion}
               onCerrar={() => {
                 setPublicando(false);
