@@ -19,7 +19,12 @@ import crypto from "crypto";
  * estatus de cualquier líder.
  */
 export function requireWxm(req: NextRequest): NextResponse | null {
-  const secret = process.env.WXM_SERVICE_SECRET;
+  // Se normaliza igual que del lado de WXM: al pegar la llave desde una
+  // terminal se cuela el prompt del shell ("abc123 usuario@Mac ~ %"). Tomar
+  // solo el primer token hace que los dos lados coincidan aunque a uno le haya
+  // quedado basura pegada, en vez de fallar con un "token inválido" que no
+  // explica nada.
+  const secret = (process.env.WXM_SERVICE_SECRET || "").trim().split(/\s+/)[0];
   if (!secret) {
     return NextResponse.json(
       { error: "WXM_SERVICE_SECRET no está configurado en el ATS" },
@@ -28,7 +33,7 @@ export function requireWxm(req: NextRequest): NextResponse | null {
   }
 
   const auth = req.headers.get("authorization") || "";
-  const enviado = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const enviado = (auth.startsWith("Bearer ") ? auth.slice(7) : "").trim().split(/\s+/)[0];
   if (!enviado) {
     return NextResponse.json({ error: "Falta el token de servicio" }, { status: 401 });
   }
