@@ -48,6 +48,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
 
   try {
+    // La tabla `vacancies` nació con el salario y las etiquetas en un solo
+    // idioma. Las columnas en inglés se agregaron después, pero solo las creaba
+    // el botón «Publicar en la web» de la pestaña Vacantes — así que publicar
+    // desde una requisición fallaba con «column "salary_range_en" does not
+    // exist» en cualquier base donde ese botón todavía no se hubiera apretado.
+    // Depender de que alguien haya hecho clic en otra pantalla no es una
+    // dependencia: es una trampa. Con IF NOT EXISTS esto es inofensivo.
+    await sql`ALTER TABLE vacancies ADD COLUMN IF NOT EXISTS salary_range_en TEXT`;
+    await sql`ALTER TABLE vacancies ADD COLUMN IF NOT EXISTS tags_en TEXT`;
+
     const { data: raw, error } = await supabaseAdmin
       .from("ht_requisitions")
       .select("*")

@@ -2940,9 +2940,10 @@ function Vacantes() {
             >
               {recuperando ? 'Recuperando…' : 'Recuperar aplicaciones'}
             </button>
-            <button className="pill-btn pill-btn-primary text-xs" style={{ padding: '9px 14px' }}>
-              <Plus className="w-3.5 h-3.5" /> Nueva requisición
-            </button>
+            {/* No hay botón de «Nueva requisición» acá a propósito: las pide el
+                líder desde WXM, y eso es lo que garantiza que la vacante nazca
+                con un responsable de contratación de verdad. El botón estaba
+                puesto sin onClick: no hacía nada al apretarlo. */}
           </>
         }
       />
