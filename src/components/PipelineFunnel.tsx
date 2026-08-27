@@ -105,9 +105,11 @@ function candidatosDe(v: Vacancy): number {
  * no hay forma de saber cuál es cuál, y elegir la equivocada significa mirar un
  * funnel vacío creyendo que no hay candidatos.
  *
- * Ahora: las abiertas primero, las cerradas aparte y solo si tienen gente
- * adentro (una cerrada y vacía no le sirve a nadie), y cuando un título está
- * repetido se le agrega el conteo y la fecha para poder distinguirlas.
+ * Ahora el desplegable muestra SOLO las abiertas. Las cerradas que todavía
+ * tienen gente adentro no se borran de la vista: quedan detrás de la casilla
+ * «ver cerradas», porque el proceso de esas personas existió y a veces hay que
+ * volver a mirarlo. Y cuando un título está repetido se le agrega el conteo y
+ * la fecha, para poder distinguir cuál es cuál.
  */
 function opcionesDeVacante(vacancies: Vacancy[]) {
   const vistos = new Set<string>();
@@ -210,6 +212,8 @@ export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
   const opcionesVacante = useMemo(() => opcionesDeVacante(vacancies), [vacancies]);
+  // El desplegable arranca solo con las abiertas: es lo que se está trabajando.
+  const [verCerradas, setVerCerradas] = useState(false);
   // Inicializar vacFilter desde URL query (?vacancy=UUID) — persiste entre reloads.
   // Usamos query string (no hash) porque el HR Admin ya usa el hash para el tab.
   const [vacFilter, setVacFilterState] = useState(() => {
@@ -343,14 +347,34 @@ export default function PipelineFunnel() {
                 {opcionesVacante.abiertas.map(o => (
                   <option key={o.id} value={o.id}>{o.label}</option>
                 ))}
-                {opcionesVacante.cerradas.length > 0 && (
+                {/* Las cerradas solo aparecen si se piden. Se sigue mostrando
+                    la que esté seleccionada aunque esté cerrada: si no, el
+                    selector quedaría en blanco filtrando por algo invisible. */}
+                {opcionesVacante.cerradas
+                  .filter(o => verCerradas || o.id === vacFilter)
+                  .length > 0 && (
                   <optgroup label="Cerradas (con candidatos)">
-                    {opcionesVacante.cerradas.map(o => (
-                      <option key={o.id} value={o.id}>{o.label}</option>
-                    ))}
+                    {opcionesVacante.cerradas
+                      .filter(o => verCerradas || o.id === vacFilter)
+                      .map(o => (
+                        <option key={o.id} value={o.id}>{o.label}</option>
+                      ))}
                   </optgroup>
                 )}
               </select>
+              {opcionesVacante.cerradas.length > 0 && (
+                <label
+                  className="flex items-center gap-1.5 text-[11px] text-[var(--ts-gray-60)] whitespace-nowrap cursor-pointer"
+                  title="Las vacantes cerradas que todavía tienen candidatos en el proceso"
+                >
+                  <input
+                    type="checkbox"
+                    checked={verCerradas}
+                    onChange={(e) => setVerCerradas(e.target.checked)}
+                  />
+                  ver cerradas ({opcionesVacante.cerradas.length})
+                </label>
+              )}
               {vacFilter !== "all" && (
                 <a
                   href={`/hr-admin/comparar/${vacFilter}`}
