@@ -62,6 +62,7 @@ import {
 import { jobs } from "@/data/jobs";
 // La bandeja donde caen las vacantes que piden los líderes desde WXM.
 import RequisitionsInbox from "@/components/RequisitionsInbox";
+import NuevaVacanteModal from "@/components/NuevaVacanteModal";
 import { factorXTS } from "@/data/assessments";
 import { STAGE_SLA_DAYS, STAGE_ACTION } from "@/lib/stage-labels";
 import PrefiltrosPanel from "@/components/PrefiltrosPanel";
@@ -2648,6 +2649,8 @@ function Vacantes() {
   const [showJobWriter, setShowJobWriter] = useState(false);
   const [showMarketResearch, setShowMarketResearch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNuevaVacante, setShowNuevaVacante] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [screeningModal, setScreeningModal] = useState<ScreeningModalData | null>(null);
   const [agentModal, setAgentModal] = useState<AgentDetailModalData | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -2786,7 +2789,7 @@ function Vacantes() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
 
   // Cargar stats per vacancy en paralelo (apps + scores + ranking + assessment status)
   useEffect(() => {
@@ -2910,6 +2913,9 @@ function Vacantes() {
         desc={loading ? 'Cargando desde Neon…' : `${active.length} activa(s) · ${closed.length} cerrada(s) · ${totalApplications} aplicaciones totales`}
         actions={
           <>
+            <button className="pill-btn text-xs bg-black text-white hover:bg-gray-800" style={{ padding: '9px 14px' }} onClick={() => setShowNuevaVacante(true)}>
+              + Nueva vacante
+            </button>
             <button className="pill-btn pill-btn-outline text-xs" style={{ padding: '9px 14px' }} onClick={() => setShowSettings(true)}>
               ⚙ Email & Calendly
             </button>
@@ -2947,6 +2953,13 @@ function Vacantes() {
           </>
         }
       />
+
+      {showNuevaVacante && (
+        <NuevaVacanteModal
+          onCerrar={() => setShowNuevaVacante(false)}
+          onCreada={() => { setShowNuevaVacante(false); setReloadKey((k) => k + 1); }}
+        />
+      )}
 
       <div className="grid grid-cols-4 gap-3 mb-4">
         <KPI label="Activas" value={loading ? '…' : String(active.length)} delta="En Neon" tone="neutral" />

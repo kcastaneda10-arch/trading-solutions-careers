@@ -97,6 +97,7 @@ export default function RequisitionsInbox() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [nueva, setNueva] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -144,13 +145,28 @@ export default function RequisitionsInbox() {
             )}
           </p>
         </div>
-        <button
-          onClick={cargar}
-          className="ml-auto text-sm text-gray-500 hover:text-gray-900 underline"
-        >
-          Actualizar
-        </button>
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => setNueva(true)}
+            className="text-sm px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 font-medium"
+          >
+            + Nueva requisición
+          </button>
+          <button
+            onClick={cargar}
+            className="text-sm text-gray-500 hover:text-gray-900 underline"
+          >
+            Actualizar
+          </button>
+        </div>
       </div>
+
+      {nueva && (
+        <NuevaRequisicion
+          onCerrar={() => setNueva(false)}
+          onCreada={() => { setNueva(false); cargar(); }}
+        />
+      )}
 
       {items.length === 0 && (
         <div className="mt-8 border border-dashed border-gray-300 rounded-xl p-10 text-center">
@@ -688,6 +704,166 @@ function Tarjeta({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Levantar una requisición desde el ATS (cuando ningún líder la pidió).
+// Cae en "Para armar el perfil", igual que las que llegan de WXM, y sigue el
+// mismo flujo: armar perfil → aprobar → nace la vacante → publicar.
+// ─────────────────────────────────────────────────────────────────────────────
+function NuevaRequisicion({
+  onCerrar,
+  onCreada,
+}: {
+  onCerrar: () => void;
+  onCreada: () => void;
+}) {
+  const [f, setF] = useState({
+    title: "",
+    lead_email: "",
+    lead_name: "",
+    area: "",
+    requisition_type: "incremental" as "reemplazo" | "incremental",
+    reason: "",
+    needed_by: "",
+    lead_responsibilities: "",
+    lead_must_haves: "",
+  });
+  const [enviando, setEnviando] = useState(false);
+  const [problema, setProblema] = useState<string | null>(null);
+
+  function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) {
+    setF((p) => ({ ...p, [k]: v }));
+  }
+
+  async function enviar() {
+    if (!f.title.trim()) { setProblema("Falta el cargo que necesitas."); return; }
+    if (!f.lead_email.trim()) { setProblema("Falta el correo del líder solicitante."); return; }
+    setEnviando(true);
+    setProblema(null);
+    try {
+      const r = await fetch("/api/requisitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: f.title.trim(),
+          lead_email: f.lead_email.trim().toLowerCase(),
+          lead_name: f.lead_name.trim() || null,
+          area: f.area.trim() || null,
+          requisition_type: f.requisition_type,
+          reason: f.reason.trim() || null,
+          needed_by: f.needed_by || null,
+          lead_responsibilities: f.lead_responsibilities.trim() || null,
+          lead_must_haves: f.lead_must_haves.trim() || null,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setProblema([j.error, j.detail].filter(Boolean).join(" · ") || "No se pudo crear"); return; }
+      onCreada();
+    } catch (e: any) {
+      setProblema(e?.message || "Error de red");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCerrar(); }}
+      className="fixed inset-0 z-50 bg-black/35 flex items-start justify-center px-4 py-10 overflow-y-auto"
+    >
+      <div className="bg-white rounded-2xl w-full max-w-xl p-6">
+        <h2 className="text-lg font-bold">Nueva requisición</h2>
+        <p className="text-sm text-gray-500 mt-0.5 mb-5">
+          Levántala tú cuando ningún líder la pidió. Cae en «Para armar el perfil» y sigue el mismo flujo.
+        </p>
+
+        <label className="block mb-4">
+          <span className="block text-xs font-semibold mb-1.5">Cargo que necesitas *</span>
+          <input value={f.title} onChange={(e) => set("title", e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+            placeholder="Ej: Operations Executive" />
+        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <label className="block">
+            <span className="block text-xs font-semibold mb-1.5">Líder solicitante · correo *</span>
+            <input value={f.lead_email} onChange={(e) => set("lead_email", e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+              placeholder="lider@tradingsolutions.com" />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-semibold mb-1.5">Nombre del líder</span>
+            <input value={f.lead_name} onChange={(e) => set("lead_name", e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+              placeholder="Opcional" />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <label className="block">
+            <span className="block text-xs font-semibold mb-1.5">Área</span>
+            <input value={f.area} onChange={(e) => set("area", e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+              placeholder="Ej: Operations" />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-semibold mb-1.5">Tipo</span>
+            <select value={f.requisition_type}
+              onChange={(e) => set("requisition_type", e.target.value as "reemplazo" | "incremental")}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white">
+              <option value="incremental">Incremental · puesto nuevo (Chief + CWO)</option>
+              <option value="reemplazo">Reemplazo · el cupo ya existe (Chief)</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="block mb-4">
+          <span className="block text-xs font-semibold mb-1.5">¿Por qué se necesita?</span>
+          <textarea value={f.reason} onChange={(e) => set("reason", e.target.value)} rows={3}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+            placeholder="Lo que sustenta la vacante ante el CWO." />
+        </label>
+
+        <label className="block mb-4">
+          <span className="block text-xs font-semibold mb-1.5">¿Qué va a hacer? · una por línea</span>
+          <textarea value={f.lead_responsibilities} onChange={(e) => set("lead_responsibilities", e.target.value)} rows={3}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+            placeholder="Las tareas del día a día." />
+        </label>
+
+        <label className="block mb-4">
+          <span className="block text-xs font-semibold mb-1.5">¿Qué no puede faltar? · una por línea</span>
+          <textarea value={f.lead_must_haves} onChange={(e) => set("lead_must_haves", e.target.value)} rows={3}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
+            placeholder="Solo lo indispensable." />
+        </label>
+
+        <label className="block mb-4">
+          <span className="block text-xs font-semibold mb-1.5">¿Para cuándo?</span>
+          <input type="date" value={f.needed_by} onChange={(e) => set("needed_by", e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2" />
+        </label>
+
+        {problema && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 mb-3">
+            {problema}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-2">
+          <button onClick={onCerrar}
+            className="text-sm px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={enviar} disabled={enviando}
+            className="text-sm px-5 py-2 rounded-full bg-black text-white hover:bg-gray-800 font-medium disabled:opacity-50">
+            {enviando ? "Creando…" : "Crear requisición"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

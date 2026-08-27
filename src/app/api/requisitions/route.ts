@@ -36,9 +36,14 @@ async function registrarEvento(
 }
 
 export async function POST(req: NextRequest) {
-  // Solo WXM crea requisiciones: es la pantalla del líder.
-  const authError = requireWxm(req);
-  if (authError) return authError;
+  // La requisición la crea el líder desde WXM (token de servicio) o
+  // Wellness/HR directamente desde el ATS (cookie de sesión de HR-admin).
+  // Basta con una de las dos.
+  const okWxm = requireWxm(req) === null;
+  if (!okWxm) {
+    const adminError = requireAdmin(req);
+    if (adminError) return adminError;
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
