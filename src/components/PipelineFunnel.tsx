@@ -81,7 +81,61 @@ type PrefilterData = {
   submitted_at?: string;
 };
 
-type Vacancy = { id: string; title: string };
+type Vacancy = {
+  id: string;
+  title: string;
+  status?: string | null;
+  created_at?: string | null;
+  requisition_id?: string | null;
+  ht_candidates?: { count: number }[];
+};
+
+/** Cuántos candidatos tiene una vacante, según el conteo que ya trae la API. */
+function candidatosDe(v: Vacancy): number {
+  return v.ht_candidates?.[0]?.count ?? 0;
+}
+
+/**
+ * Arma las opciones del selector de vacante.
+ *
+ * POR QUÉ NO ES UN .map() DIRECTO
+ * El desplegable listaba todas las vacantes tal cual, incluidas las cerradas y
+ * las repetidas. Con cinco «Talent Acquisition Specialist» seguidas —resultado
+ * de que el sync creara una nueva cada vez que el título ya estaba duplicado—
+ * no hay forma de saber cuál es cuál, y elegir la equivocada significa mirar un
+ * funnel vacío creyendo que no hay candidatos.
+ *
+ * Ahora: las abiertas primero, las cerradas aparte y solo si tienen gente
+ * adentro (una cerrada y vacía no le sirve a nadie), y cuando un título está
+ * repetido se le agrega el conteo y la fecha para poder distinguirlas.
+ */
+function opcionesDeVacante(vacancies: Vacancy[]) {
+  const vistos = new Set<string>();
+  const repetidos = new Set<string>();
+  for (const v of vacancies) {
+    const t = v.title.trim().toLowerCase();
+    if (vistos.has(t)) repetidos.add(t);
+    vistos.add(t);
+  }
+
+  const etiqueta = (v: Vacancy) => {
+    if (!repetidos.has(v.title.trim().toLowerCase())) return v.title;
+    const n = candidatosDe(v);
+    const partes: string[] = [n === 1 ? "1 candidato" : `${n} candidatos`];
+    if (v.requisition_id) partes.push("con requisición");
+    if (v.created_at) partes.push(new Date(v.created_at).toLocaleDateString("es-CO"));
+    return `${v.title} · ${partes.join(" · ")}`;
+  };
+
+  const esAbierta = (v: Vacancy) => v.status == null || v.status === "open";
+
+  return {
+    abiertas: vacancies.filter(esAbierta).map((v) => ({ id: v.id, label: etiqueta(v) })),
+    cerradas: vacancies
+      .filter((v) => !esAbierta(v) && candidatosDe(v) > 0)
+      .map((v) => ({ id: v.id, label: etiqueta(v) })),
+  };
+}
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
@@ -155,6 +209,7 @@ const CATEGORY_STYLE: Record<StageCategory, { headerBg: string; headerText: stri
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const opcionesVacante = useMemo(() => opcionesDeVacante(vacancies), [vacancies]);
   // Inicializar vacFilter desde URL query (?vacancy=UUID) — persiste entre reloads.
   // Usamos query string (no hash) porque el HR Admin ya usa el hash para el tab.
   const [vacFilter, setVacFilterState] = useState(() => {
@@ -285,7 +340,16 @@ export default function PipelineFunnel() {
                 style={{ borderRadius: 0 }}
               >
                 <option value="all">Todas las vacantes</option>
-                {vacancies.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+                {opcionesVacante.abiertas.map(o => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+                {opcionesVacante.cerradas.length > 0 && (
+                  <optgroup label="Cerradas (con candidatos)">
+                    {opcionesVacante.cerradas.map(o => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               {vacFilter !== "all" && (
                 <a
