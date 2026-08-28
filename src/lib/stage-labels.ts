@@ -85,16 +85,18 @@ export const STAGES: StageDef[] = [
     action: 'Revisar respuestas y decidir avance',
   },
   {
-    id: 'pruebas', order: 5, phase: 'seleccion',
-    label: 'Pruebas', labelLong: 'Batería de pruebas psicotécnicas',
-    owner: 'Espera candidato', sla: 4,
-    action: 'Revisar qué prueba está frenando al candidato',
-  },
-  {
-    id: 'recruiter_interview', order: 6, phase: 'seleccion',
+    id: 'recruiter_interview', order: 5, phase: 'seleccion',
     label: 'Entrevista reclutador', labelLong: 'Entrevista con el reclutador',
     owner: 'Recruiter', sla: 5,
     action: 'Completar scorecard y decidir avance',
+  },
+  {
+    // Van DESPUÉS de la entrevista: aplicarlas antes gasta cupo de pruebas y
+    // tiempo del candidato en gente que la entrevista habría descartado igual.
+    id: 'pruebas', order: 6, phase: 'seleccion',
+    label: 'Pruebas psicométricas', labelLong: 'Batería de pruebas psicométricas',
+    owner: 'Espera candidato', sla: 4,
+    action: 'Revisar qué prueba está frenando al candidato',
   },
   {
     id: 'prueba_tecnica', order: 7, phase: 'seleccion',
@@ -340,6 +342,26 @@ export function stagePhase(code: string | null | undefined): Phase | null {
 /** Posición 1..13 en el proceso */
 export function stageOrder(code: string | null | undefined): number {
   return stageDef(code)?.order ?? 0;
+}
+
+/**
+ * La etapa que sigue, según este archivo y nada más.
+ *
+ * POR QUÉ ESTÁ ACÁ Y NO EN LA PANTALLA
+ * El orden del proceso estaba escrito por tercera vez dentro del componente
+ * del funnel —un mapa de transiciones y una cadena de if/else, las dos de la
+ * versión de mayo— y se quedaron viejas: el botón «avanzar» mandaba desde la
+ * entrevista a etapas que ya no existen y que, al normalizarse, caían en
+ * Terna. O sea que el candidato se saltaba pruebas y prueba técnica sin que
+ * nadie lo hubiera decidido. Derivarlo del orden canónico es lo que impide
+ * que vuelva a pasar.
+ *
+ * Acepta codes históricos: `stageDef` los normaliza antes.
+ */
+export function siguienteEtapa(code: string | null | undefined): StageDef | null {
+  const actual = stageDef(code);
+  if (!actual || actual.id === 'rechazado') return null;
+  return STAGES.find((s) => s.order === actual.order + 1) ?? null;
 }
 
 /**

@@ -149,6 +149,7 @@ import {
   STAGE_CATEGORY,
   normalizeStage,
   stageOrder,
+  siguienteEtapa,
 } from "@/lib/stage-labels";
 
 type StageCategory = "screening" | "assessment" | "interview" | "decision" | "terminal-positive" | "terminal-negative";
@@ -158,9 +159,6 @@ type StageCategory = "screening" | "assessment" | "interview" | "decision" | "te
 //   shared    → coordinación entre ambos (touring requiere agenda + asistencia)
 type StageOwner = "candidate" | "recruiter" | "shared" | "terminal";
 
-// 2026-05-12 v3: Pipeline definitivo de Kelly al cierre · simplificado y sin Elevare/IA.
-// 3 entrevistas antes de psico (Recruiter → Hiring Lead → CWO+HM) · luego pruebas Mary.
-// Onboarding agregado como etapa post-contratación.
 // v4 · 18-ago-2026 — las etapas ya NO se declaran acá.
 // Salen de src/lib/stage-labels.ts, que es la fuente única de verdad del
 // proceso (Selección 8 etapas → Contratación 5). Este bloque solo traduce
@@ -561,28 +559,45 @@ export default function PipelineFunnel() {
   );
 }
 
-// Mapa de transiciones naturales (avanzar al siguiente stage)
-// 2026-05-12 v3: Pipeline final · 3 entrevistas → psico (con Mary, batch 2x/día) → Turing → terna → oferta → contratado → onboarding
-const NEXT_STAGE: Record<string, { id: string; label: string; emoji: string }> = {
-  aplico: { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" },
-  prefiltro_pasado: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
-  prefiltro_revision: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter (override)", emoji: "💬" },
-  // Legacy · candidatos que ya estaban en Elevare/IA salen igual a recruiter_interview
-  assessment_completado: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
-  entrevista_ia: { id: "recruiter_interview", label: "Pasar a Entrevista Recruiter", emoji: "💬" },
-  // 3 rondas de entrevista en secuencia
-  recruiter_interview: { id: "hiring_lead_interview", label: "Pasar a Entrevista Hiring Lead", emoji: "👤" },
-  hiring_lead_interview: { id: "cwo_interview", label: "Pasar a CWO + Hiring Manager", emoji: "👔" },
-  // Post 3-rondas · cola de Pruebas Psicométricas (Mary aplica en batch 2x/día)
-  cwo_interview: { id: "bateria_psicometrica", label: "Pasar a cola Pruebas Psicométricas", emoji: "🧪" },
-  // Batch enviado a Mary · ella mueve a Touring (o rechaza)
-  bateria_psicometrica: { id: "solicitud_enviada_mary", label: "Enviar solicitud a HR Specialist", emoji: "📨" },
-  solicitud_enviada_mary: { id: "touring", label: "Pasar a Máquina de Turing", emoji: "🧮" },
-  // Final
-  touring: { id: "terna", label: "Pasar a Terna", emoji: "🏆" },
-  terna: { id: "oferta", label: "Pasar a Oferta", emoji: "📨" },
-  oferta: { id: "contratado", label: "Marcar Contratado", emoji: "🎉" },
-  contratado: { id: "onboarding", label: "Iniciar Onboarding", emoji: "🚀" },
+/**
+ * A dónde va el botón «avanzar».
+ *
+ * Antes acá vivía un mapa escrito a mano, de mayo, con el pipeline de tres
+ * entrevistas. Se quedó viejo sin que nadie lo notara: desde la entrevista
+ * mandaba a `hiring_lead_interview`, que hoy normaliza a Terna, así que el
+ * candidato se saltaba pruebas y prueba técnica. Ahora sale del orden
+ * canónico de stage-labels y no puede volver a desfasarse.
+ *
+ * `aplico` es la excepción: no cambia de etapa, dispara el envío del
+ * prefiltro, y de ahí en adelante manda el orden.
+ */
+function siguienteDelBoton(stage: string | null | undefined): { id: string; label: string; emoji: string } | null {
+  const actual = normalizeStage(stage || "aplico");
+  if (actual === "aplico") {
+    return { id: "prefiltro_enviado", label: "Enviar prefiltro", emoji: "📋" };
+  }
+  const siguiente = siguienteEtapa(actual);
+  if (!siguiente) return null;
+  return {
+    id: siguiente.id,
+    label: `Pasar a ${siguiente.label}`,
+    emoji: EMOJI_ETAPA[siguiente.id] || "➡️",
+  };
+}
+
+const EMOJI_ETAPA: Record<string, string> = {
+  prefiltro_enviado: "📋",
+  prefiltro_pasado: "✅",
+  prefiltro_revision: "🔍",
+  recruiter_interview: "💬",
+  pruebas: "🧪",
+  prueba_tecnica: "🧮",
+  terna: "🏆",
+  examenes_medicos: "🩺",
+  estudio_seguridad: "🛡️",
+  documentacion_ingreso: "📄",
+  oferta: "📨",
+  contratado: "🎉",
 };
 
 // ─── Rechazados · sección rediseñada (colapsable + búsqueda + grupos) ─
@@ -733,25 +748,30 @@ function BulkActionBar({
   const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0][0];
   const allSameStage = Object.keys(stageCounts).length === 1;
 
-  const stageActions: Record<string, { label: string; emoji: string; endpoint: (id: string) => string; method: "POST" }> = {
+  /**
+   * Acciones que NO son "pasar a la etapa siguiente": estas tienen endpoint
+   * propio o hacen algo distinto de mover al candidato. Todo lo demás se
+   * deriva del orden canónico, para no volver a mantener el pipeline en tres
+   * lugares distintos.
+   */
+  const accionesEspeciales: Record<string, { label: string; emoji: string; endpoint: (id: string) => string; method: "POST" }> = {
     aplico: { label: "Enviar prefiltro", emoji: "📋", endpoint: (id) => `/api/headhunting/candidates/${id}/send-prefilter`, method: "POST" },
-    // 2026-05-12 v3: post-prefiltro va directo a Recruiter Interview
-    prefiltro_pasado: { label: "Pasar a Entrevista Recruiter", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    prefiltro_revision: { label: "Pasar a Entrevista Recruiter (override)", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    // Legacy · candidatos ya en Elevare/IA salen igual a Recruiter Interview
-    assessment_completado: { label: "Pasar a Entrevista Recruiter", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    entrevista_ia: { label: "Pasar a Entrevista Recruiter", emoji: "💬", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    // 3 rondas de entrevista en secuencia
-    recruiter_interview: { label: "Pasar a Hiring Lead", emoji: "👤", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    hiring_lead_interview: { label: "Pasar a CWO + Hiring Manager", emoji: "👔", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    cwo_interview: { label: "Pasar a Pruebas Psicométricas", emoji: "🧪", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    // Mary terminó pruebas · pasar a Máquina de Turing
-    solicitud_enviada_mary: { label: "Pasar a Máquina de Turing", emoji: "🧮", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
-    touring: { label: "Pasar a Terna", emoji: "🏆", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
     rechazado: { label: "Enviar encuesta NPS", emoji: "📊", endpoint: (id) => `/api/headhunting/candidates/${id}/send-experience-survey?send=true`, method: "POST" },
-    contratado: { label: "Iniciar onboarding", emoji: "🚀", endpoint: (id) => `/api/headhunting/candidates/${id}/stage`, method: "POST" },
   };
-  const stageAction = allSameStage ? stageActions[dominantStage] : null;
+
+  const avanceDerivado = (() => {
+    const siguiente = siguienteDelBoton(dominantStage);
+    if (!siguiente) return null;
+    return {
+      label: siguiente.label,
+      emoji: siguiente.emoji,
+      endpoint: (id: string) => `/api/headhunting/candidates/${id}/stage`,
+      method: "POST" as const,
+    };
+  })();
+  const stageAction = allSameStage
+    ? (accionesEspeciales[normalizeStage(dominantStage)] ?? avanceDerivado)
+    : null;
 
   async function runBulk(action: "stage_action" | "advance" | "reject") {
     if (running) return;
@@ -768,30 +788,13 @@ function BulkActionBar({
         if (action === "stage_action" && stageAction) {
           url = stageAction.endpoint(c.id);
           // For stage transitions: incluir el target stage en el body
-          // 2026-05-12 v3 · pipeline: Prefiltro → Recruiter → Hiring Lead → CWO+HM → Pruebas Psicométricas → Solicitud Mary → Turing → Terna
-          if (dominantStage === "prefiltro_pasado" || dominantStage === "prefiltro_revision") {
-            body = { stage: "recruiter_interview" };
-          } else if (
-            dominantStage === "assessment_completado" ||
-            dominantStage === "entrevista_ia"
-          ) {
-            // Legacy · siguen a recruiter_interview
-            body = { stage: "recruiter_interview" };
-          } else if (dominantStage === "recruiter_interview") {
-            body = { stage: "hiring_lead_interview" };
-          } else if (dominantStage === "hiring_lead_interview") {
-            body = { stage: "cwo_interview" };
-          } else if (dominantStage === "cwo_interview") {
-            body = { stage: "bateria_psicometrica" };
-          } else if (dominantStage === "solicitud_enviada_mary") {
-            body = { stage: "touring" };
-          } else if (dominantStage === "touring") {
-            body = { stage: "terna" };
-          } else if (dominantStage === "contratado") {
-            body = { stage: "onboarding" };
+          // La misma derivación que el botón: una sola definición del orden.
+          const siguiente = siguienteDelBoton(dominantStage);
+          if (siguiente && normalizeStage(dominantStage) !== "aplico") {
+            body = { stage: siguiente.id };
           }
         } else if (action === "advance") {
-          const next = NEXT_STAGE[c.stage || "aplico"];
+          const next = siguienteDelBoton(c.stage);
           if (!next) { fail++; setProgress({ done: i + 1, total: n, ok, fail }); continue; }
           url = `/api/headhunting/candidates/${c.id}/stage`;
           body = { stage: next.id };
@@ -1074,7 +1077,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showJointScheduling, setShowJointScheduling] = useState(false);
   const currentStage = cand.stage || "aplico";
-  const nextStage = NEXT_STAGE[currentStage];
+  const nextStage = siguienteDelBoton(currentStage);
   const isTerminal = currentStage === "rechazado" || currentStage === "contratado";
 
   async function moveToStage(targetStage: string, label: string) {
