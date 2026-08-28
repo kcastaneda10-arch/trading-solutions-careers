@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/i18n/context";
+import { LOGO_TS, LOGO_TS_CLASE_EN_OSCURO } from "@/lib/brand";
 
 export default function Footer() {
   const { t } = useLanguage();
@@ -13,9 +14,9 @@ export default function Footer() {
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/69026c53bdd2f248a012a1d2_New%20logo%20Trading%20SOlutions-03.jpg"
+              src={LOGO_TS}
               alt="Trading Solutions"
-              className="h-8 brightness-0 invert mb-6"
+              className={`h-8 w-auto mb-6 ${LOGO_TS_CLASE_EN_OSCURO}`}
             />
             <p className="text-sm text-gray-500 leading-relaxed">{t.footer.tagline}</p>
           </div>

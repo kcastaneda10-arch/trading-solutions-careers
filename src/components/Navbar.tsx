@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, X, ArrowUpRight } from "lucide-react";
 import { useLanguage } from "@/i18n/context";
 import LanguageBanner from "./LanguageBanner";
+import { LOGO_TS } from "@/lib/brand";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -18,9 +19,9 @@ export default function Navbar() {
           <Link href="/" className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/69026c53bdd2f248a012a1d2_New%20logo%20Trading%20SOlutions-03.jpg"
+              src={LOGO_TS}
               alt="Trading Solutions"
-              className="h-8"
+              className="h-8 w-auto"
             />
           </Link>
           <div className="hidden md:flex items-center gap-8">
