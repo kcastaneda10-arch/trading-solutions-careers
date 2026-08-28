@@ -22,6 +22,16 @@
 export const LOGO_TS = "/logo-trading-solutions.png";
 
 /**
+ * Solo el símbolo, recortado del mismo archivo para que no se desincronicen.
+ *
+ * Va en la barra de navegación: ahí el nombre de la compañía ya aparece en el
+ * título de la página y en el contenido, así que el logotipo completo repetía
+ * la palabra y competía con el menú. En el pie sigue el logotipo entero, que
+ * es donde cierra la marca.
+ */
+export const LOGO_TS_SIMBOLO = "/logo-trading-solutions-simbolo.png";
+
+/**
  * Sobre fondo negro se invierte con CSS en vez de servir un segundo archivo:
  * `brightness-0 invert` deja el logo blanco sólido sea cual sea el color de
  * origen, así que sigue funcionando si mañana cambia el archivo.

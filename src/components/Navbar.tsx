@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Menu, X, ArrowUpRight } from "lucide-react";
 import { useLanguage } from "@/i18n/context";
 import LanguageBanner from "./LanguageBanner";
-import { LOGO_TS } from "@/lib/brand";
+import { LOGO_TS_SIMBOLO } from "@/lib/brand";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -19,7 +19,7 @@ export default function Navbar() {
           <Link href="/" className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={LOGO_TS}
+              src={LOGO_TS_SIMBOLO}
               alt="Trading Solutions"
               className="h-8 w-auto"
             />
