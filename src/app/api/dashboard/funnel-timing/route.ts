@@ -27,6 +27,8 @@ import {
   type Phase,
 } from "@/lib/stage-labels";
 
+import { diasActivos, diasEnPausa, enPausa, inicioDelReloj, type Pausa } from "@/lib/reloj";
+
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
 function daysSince(dt?: string | null): number {
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
     // ── Vacantes de Trading Solutions, abiertas ──────────────────
     let vacQuery = supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, country, status")
+      .select("id, title, country, status, search_restarted_at")
       .eq("client_id", TS_CLIENT_ID);
     if (byVacancy) vacQuery = vacQuery.eq("id", vacancyFilter);
     if (countryFilter && countryFilter !== "all") {
@@ -61,6 +63,23 @@ export async function GET(req: NextRequest) {
     const vacById = new Map(openVacs.map((v: any) => [v.id, v]));
     if (vacById.size === 0) {
       return NextResponse.json({ stages: [], phases: [], totals: emptyTotals(), approx_ratio: 0 });
+    }
+
+    // ── Pausas por vacante ───────────────────────────────────────
+    // Los días de stand-by no son demora del equipo de Talento: los pidió el
+    // área. Se descuentan del reloj y la vacante sale del semáforo mientras
+    // dure la pausa, para que el rojo siga significando algo.
+    const pausasPorVacante = new Map<string, Pausa[]>();
+    {
+      const { data: holds } = await supabaseAdmin
+        .from("ht_vacancy_holds")
+        .select("vacancy_id, started_at, ended_at, reason, requested_by")
+        .in("vacancy_id", Array.from(vacById.keys()));
+      for (const h of (holds || []) as any[]) {
+        const arr = pausasPorVacante.get(h.vacancy_id) || [];
+        arr.push(h as Pausa);
+        pausasPorVacante.set(h.vacancy_id, arr);
+      }
     }
 
     // ── Candidatos vivos ─────────────────────────────────────────
@@ -128,15 +147,25 @@ export async function GET(req: NextRequest) {
       // desaparecería justo cuando los números son menos confiables.
       const approx = !ev || ev.source === "backfill";
       if (approx) approxCount++;
-      const since = ev?.at || c.updated_at || c.created_at;
+      const vac: any = vacById.get(c.vacancy_id);
+      const pausas = pausasPorVacante.get(c.vacancy_id) || [];
+      // Si el área cambió el perfil, quien entró antes pertenece a la
+      // búsqueda anterior: su reloj arranca en el reinicio.
+      const since = inicioDelReloj(ev?.at || c.updated_at || c.created_at, vac?.search_restarted_at);
+      const pausado = !!enPausa(pausas);
       return {
         id: c.id,
         name: c.name,
         vacancy_id: c.vacancy_id,
-        vacancy_title: vacById.get(c.vacancy_id)?.title ?? "—",
+        vacancy_title: vac?.title ?? "—",
         stage: normalizeStage(c.stage),
         raw_stage: c.stage,
-        days: daysSince(since),
+        // El SLA se mide contra días activos. Los calendario van aparte
+        // porque son los que esperó la persona, y eso no se borra.
+        days: diasActivos(since, pausas),
+        days_calendario: daysSince(since),
+        days_pausa: diasEnPausa(pausas, since),
+        pausado,
         approx,
         pending_tests: (testsByCandidate.get(c.id) || []).map((t: any) => t.test_id),
       };
@@ -151,7 +180,9 @@ export async function GET(req: NextRequest) {
       const avg = count ? inStage.reduce((s, c) => s + c.days, 0) / count : 0;
       const avgDays = Math.round(avg * 10) / 10;
       const maxDays = count ? inStage[0].days : 0;
-      const overSla = inStage.filter((c) => c.days > def.sla).length;
+      // Una vacante en stand-by no entra al semáforo: si entrara, todas las
+      // pausadas se pintarían de rojo y el rojo dejaría de significar algo.
+      const overSla = inStage.filter((c) => !c.pausado && c.days > def.sla).length;
 
       // Desglose de sub-pruebas, cuando la etapa lo tiene
       const subDefs = STAGE_BREAKDOWN[def.id];
