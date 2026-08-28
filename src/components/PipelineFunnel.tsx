@@ -1075,7 +1075,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
           onClose();
         }, 1000);
       } else {
-        setFeedback(`❌ ${j.error || "Error"}`);
+        setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "Error"}`);
       }
     } catch (e) {
       setFeedback(`❌ ${(e as Error).message}`);
@@ -1154,7 +1154,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                     setFeedback(j.channel === "gmail-draft" ? "✅ Draft Gmail listo con link nuevo" : `⚠️ ${j.note || j.channel}`);
                     setTimeout(() => setFeedback(""), 4000);
                   } else {
-                    setFeedback(`❌ ${j.error || "Error"}`);
+                    setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "Error"}`);
                   }
                 } catch (e) {
                   setFeedback(`❌ ${(e as Error).message}`);
@@ -1190,7 +1190,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                     }
                     setTimeout(() => setFeedback(""), 4000);
                   } else {
-                    setFeedback(`❌ ${j.error || "Error"}`);
+                    setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "Error"}`);
                   }
                 } catch (e) {
                   setFeedback(`❌ ${(e as Error).message}`);
@@ -1225,7 +1225,7 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                     setFeedback("✅ Draft individual para Mary listo · candidato en Pruebas Psicométricas");
                     setTimeout(() => setFeedback(""), 4000);
                   } else {
-                    setFeedback(`❌ ${j.error || "Error"}`);
+                    setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "Error"}`);
                   }
                 } catch (e) {
                   setFeedback(`❌ ${(e as Error).message}`);
@@ -1550,7 +1550,7 @@ function AIInterviewBlock({ candidateId, candidateEmail }: { candidateId: string
         setFeedback(`✅ Entrevista lista · revisa tu Gmail Drafts y envía a candidato`);
         load();
       } else {
-        setFeedback(`❌ ${j.error || "Error"}`);
+        setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "Error"}`);
       }
     } catch (e) {
       setFeedback(`❌ ${(e as Error).message}`);
