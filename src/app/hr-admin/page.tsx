@@ -1,6 +1,7 @@
 "use client";
 
 import FunnelTiming from "@/components/FunnelTiming";
+import { LOGO_TS_SIMBOLO } from "@/lib/brand";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
@@ -187,39 +188,36 @@ export default function HRAdminPage() {
   }, [searchOpen]);
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: "#EBEBEB" }}>
-      {/* Top bar — estilo TS minimalista negro */}
-      <header className="sticky top-0 z-50 bg-black border-b border-white/5">
+    // data-ui enciende el lenguaje visual del panel (ver globals.css). La
+    // página pública NO lo lleva: sigue siendo la de la marca.
+    <div data-ui="apple" className="min-h-screen">
+      {/* Barra superior · translúcida, se queda fija sobre el contenido */}
+      <header className="ts-barra sticky top-0 z-50">
         <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-white">
+          <div className="flex items-center gap-3">
             {/* Logo TS oficial */}
             <img
-              src="https://cdn.prod.website-files.com/68fb7b9474bf8f90808cd50f/6913594489519813fe9e620e_logo%20web-03.png"
+              src={LOGO_TS_SIMBOLO}
               alt="Trading Solutions"
-              className="h-8 w-auto"
+              className="h-[22px] w-auto"
             />
-            <div className="flex items-center gap-2 ml-2 pl-3 border-l border-white/15">
-              <span className="text-[11px] font-medium text-white/60 tracking-[0.04em] uppercase">HR Admin</span>
-              <span className="text-[9px] font-bold tracking-[1.5px] uppercase text-white/50 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-sm">
-                Enabler
-              </span>
-            </div>
+            <span className="text-[14px] font-semibold tracking-[-0.012em]">HR Panel</span>
           </div>
           <div className="flex items-center gap-2.5">
             {/* Buscador global */}
             <button
               onClick={() => setSearchOpen(true)}
-              className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/[0.12] text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors"
+              className="flex items-center gap-2 bg-[var(--relleno)] hover:bg-[rgba(10,10,10,0.09)] text-[var(--texto-2)] hover:text-[var(--texto)] text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors"
               title="Buscar candidatos (Cmd+K)"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Buscar</span>
-              <kbd className="text-[9px] font-mono bg-white/10 border border-white/15 rounded px-1 py-0.5 ml-1">⌘K</kbd>
+              <kbd className="text-[9px] font-mono bg-[var(--relleno)] border border-[var(--sep)] rounded px-1 py-0.5 ml-1">⌘K</kbd>
             </button>
             {/* Importar */}
             <button
               onClick={() => setImportOpen(true)}
-              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1.5 text-[var(--texto-2)] hover:text-[var(--texto)] text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-[var(--relleno)] transition-colors"
               title="Importar candidatos desde Excel"
             >
               <Download className="w-3.5 h-3.5" style={{ transform: 'rotate(180deg)' }} />
@@ -228,7 +226,7 @@ export default function HRAdminPage() {
             {/* Gmail audit */}
             <button
               onClick={() => setGmailAuditOpen(true)}
-              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1.5 text-[var(--texto-2)] hover:text-[var(--texto)] text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-[var(--relleno)] transition-colors"
               title="Auditar Gmail vs ATS"
             >
               <Mail className="w-3.5 h-3.5" />
@@ -237,7 +235,7 @@ export default function HRAdminPage() {
             {/* Decision nudges */}
             <button
               onClick={() => setDecisionsOpen(true)}
-              className="flex items-center gap-1.5 text-white/70 hover:text-white text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1.5 text-[var(--texto-2)] hover:text-[var(--texto)] text-[12px] font-medium px-3 py-1.5 rounded-full hover:bg-[var(--relleno)] transition-colors"
               title="Pedir decisión a CWO/Hiring Manager"
             >
               <Hand className="w-3.5 h-3.5" />
@@ -246,7 +244,7 @@ export default function HRAdminPage() {
             {/* Agendar entrevista — pill negra estilo TS con borde blanco */}
             <button
               onClick={() => setScheduleOpen(true)}
-              className="flex items-center gap-1.5 bg-white text-black hover:bg-white/90 text-[12px] font-semibold px-3.5 py-1.5 rounded-full transition-colors"
+              className="flex items-center gap-1.5 bg-[var(--texto)] text-white hover:opacity-90 text-[12px] font-semibold px-3.5 py-1.5 rounded-full transition-colors"
               title="Agendar entrevista"
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -254,7 +252,7 @@ export default function HRAdminPage() {
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="text-white/60 hover:text-white p-1.5"
+              className="text-[var(--texto-3)] hover:text-[var(--texto)] p-1.5"
               title="Settings · metas del dashboard"
             >
               <SettingsIcon className="w-[18px] h-[18px]" />
@@ -263,31 +261,31 @@ export default function HRAdminPage() {
               href="https://mail.google.com/mail/u/0/#drafts"
               target="_blank"
               rel="noreferrer"
-              className="text-white/60 hover:text-white relative p-1.5"
+              className="text-[var(--texto-3)] hover:text-[var(--texto)] relative p-1.5"
               title={draftsPending > 0 ? `${draftsPending} drafts esperando tu revisión en Gmail (últimas 48h)` : 'Sin drafts pendientes'}
             >
               <Mail className="w-[18px] h-[18px]" />
               {draftsPending > 0 ? (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-black tabular-nums">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-white tabular-nums">
                   {draftsPending > 99 ? '99+' : draftsPending}
                 </span>
               ) : null}
             </a>
             <button
               onClick={() => setReferralsOpen(true)}
-              className="text-white/60 hover:text-white relative p-1.5"
+              className="text-[var(--texto-3)] hover:text-[var(--texto)] relative p-1.5"
               title={referralsPending > 0 ? `${referralsPending} hojas de vida pendientes de revisar` : 'Sin notificaciones nuevas'}
             >
               <Bell className="w-[18px] h-[18px]" />
               {referralsPending > 0 ? (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-black tabular-nums">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-white tabular-nums">
                   {referralsPending > 99 ? '99+' : referralsPending}
                 </span>
               ) : null}
             </button>
-            <div className="flex items-center gap-2 pl-2 ml-1 border-l border-white/10">
+            <div className="flex items-center gap-2 pl-2 ml-1 border-l border-[var(--sep)]">
               <Avatar name="Kelly Castañeda" size={28} />
-              <span className="text-white text-[12px] font-medium hidden sm:inline">Kelly Castañeda</span>
+              <span className="text-[12px] font-medium hidden sm:inline">Kelly Castañeda</span>
             </div>
             <button
               onClick={async () => {
@@ -298,7 +296,7 @@ export default function HRAdminPage() {
                 }
               }}
               title="Cerrar sesión"
-              className="flex items-center gap-1.5 text-white/60 hover:text-white text-[12px] font-medium px-2.5 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1.5 text-[var(--texto-3)] hover:text-[var(--texto)] text-[12px] font-medium px-2.5 py-1.5 rounded-full hover:bg-[var(--relleno)] transition-colors"
             >
               <LogOut className="w-[14px] h-[14px]" />
             </button>
@@ -306,26 +304,26 @@ export default function HRAdminPage() {
         </div>
       </header>
 
-      {/* Sub nav tabs */}
-      <nav className="sticky top-14 z-40 bg-white border-b border-gray-200">
-        <div className="max-w-[1440px] mx-auto px-4 flex gap-1 overflow-x-auto">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => {
-                setTab(id);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={`flex items-center gap-2 px-3.5 py-3.5 text-[13px] whitespace-nowrap border-b-2 transition-colors ${
-                tab === id
-                  ? "text-black border-black font-semibold"
-                  : "text-gray-500 border-transparent hover:text-black font-medium"
-              }`}
-            >
-              <Icon className="w-[15px] h-[15px]" />
-              {label}
-            </button>
-          ))}
+      {/* Secciones · control segmentado en vez de pestañas subrayadas:
+          ocupa menos alto y deja claro que son excluyentes. */}
+      <nav className="sticky top-14 z-40 ts-barra">
+        <div className="max-w-[1440px] mx-auto px-4 py-2">
+          <div className="ts-seg flex overflow-x-auto">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                aria-current={tab === id}
+                onClick={() => {
+                  setTab(id);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="ts-seg-item flex items-center justify-center gap-2 flex-1 whitespace-nowrap"
+              >
+                <Icon className="w-[15px] h-[15px]" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 

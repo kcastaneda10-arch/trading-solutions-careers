@@ -111,3 +111,196 @@
     line-height: 1;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HR PANEL · lenguaje visual del sistema operativo
+   28-ago-2026 · Kelly eligió esta dirección sobre la de careers.
+
+   POR QUÉ ESTÁ ACOTADO A [data-ui="apple"]
+   La página pública y el panel comparten esta hoja y la config de
+   Tailwind. La página de empleo tiene que seguir siendo la de la marca
+   —Open Sauce Sans, esquinas rectas, negro pleno—, así que todo esto
+   cuelga de un atributo que solo pone el panel. Sacarlo devuelve el
+   panel a como estaba, sin tocar nada más.
+
+   POR QUÉ REDEFINE UTILIDADES DE TAILWIND
+   El panel tiene ~800 lugares con bg-white, border-gray-200, rounded-lg
+   escritos a mano en 8.500 líneas. Redefinir qué significan esas clases
+   dentro del panel cambia las pantallas de una vez y de forma pareja;
+   convertirlas una por una habría tomado semanas y dejado mitad y mitad
+   durante el camino. Cada regla gana por especificidad (0,2,0), no con
+   !important, así que una clase puesta después en el JSX sigue mandando.
+
+   Es un solo tema, claro, a propósito: el panel se usa de día en una
+   oficina y no tiene modo oscuro.
+   ══════════════════════════════════════════════════════════════════ */
+
+[data-ui="apple"] {
+  --sup:        #ffffff;   /* tarjetas */
+  --sup-1:      #fbfbfc;   /* tarjeta apenas hundida */
+  --fondo:      #f2f2f4;   /* fondo de página */
+  --texto:      #0a0a0a;   /* el negro de Trading Solutions, sin cambios */
+  --texto-2:    #6e6e73;
+  --texto-3:    #8e8e93;
+  --sep:        rgba(10, 10, 10, 0.09);
+  --relleno:    rgba(10, 10, 10, 0.05);
+  --barra:      rgba(255, 255, 255, 0.72);
+
+  /* Los colores de estado son los de la marca. No se tocan: son los que
+     dicen si un candidato está dentro o fuera del SLA. */
+  --ok:    #1a7d3e;  --ok-t:    #e6f3ec;
+  --alerta:#b45309;  --alerta-t:#fbf0e2;
+  --mal:   #c41818;  --mal-t:   #fbeaea;
+
+  --sombra-1: 0 1px 2px rgba(10,10,10,.05), 0 8px 24px -12px rgba(10,10,10,.16);
+
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+               "Helvetica Neue", Helvetica, Arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* ── Superficies ── */
+[data-ui="apple"] .bg-white     { background-color: var(--sup); }
+[data-ui="apple"] .bg-gray-50   { background-color: var(--sup-1); }
+[data-ui="apple"] .bg-gray-100  { background-color: var(--relleno); }
+
+/* ── Separadores: hairline, no borde ── */
+[data-ui="apple"] .border-gray-100,
+[data-ui="apple"] .border-gray-200,
+[data-ui="apple"] .border-gray-300 { border-color: var(--sep); }
+
+/* ── Texto secundario ── */
+[data-ui="apple"] .text-gray-400 { color: var(--texto-3); }
+[data-ui="apple"] .text-gray-500,
+[data-ui="apple"] .text-gray-600 { color: var(--texto-2); }
+
+/* ── Radios: más suaves y más parejos ── */
+[data-ui="apple"] .rounded         { border-radius: 7px; }
+[data-ui="apple"] .rounded-md      { border-radius: 8px; }
+[data-ui="apple"] .rounded-lg      { border-radius: 10px; }
+[data-ui="apple"] .rounded-xl      { border-radius: 13px; }
+[data-ui="apple"] .rounded-2xl     { border-radius: 17px; }
+[data-ui="apple"] .rounded-t-xl { border-radius: 13px 13px 0 0; }
+[data-ui="apple"] .rounded-b-xl { border-radius: 0 0 13px 13px; }
+/* rounded-full se deja igual: avatares y píldoras siguen siendo redondos */
+
+/* ── Profundidad: la sombra reemplaza al borde ── */
+[data-ui="apple"] .shadow-sm,
+[data-ui="apple"] .shadow,
+[data-ui="apple"] .shadow-md,
+[data-ui="apple"] .shadow-lg { box-shadow: var(--sombra-1); }
+
+/* ── Tipografía de las etiquetas ──
+   Se conserva la versalita porque está escrita en 198 lugares, pero se
+   afloja: el espaciado de 2.5px era de un sistema de reportes impresos y
+   en pantalla obliga a deletrear. */
+[data-ui="apple"] .ts-eyebrow {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--texto-3);
+}
+[data-ui="apple"] .ts-heading,
+[data-ui="apple"] .ts-display {
+  font-weight: 700;
+  letter-spacing: -0.026em;
+}
+
+/* ── Botones ── */
+[data-ui="apple"] .pill-btn {
+  border-radius: 9px;
+  padding: 7px 15px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+}
+[data-ui="apple"] .pill-btn-primary { background: var(--texto); color: var(--sup); font-weight: 600; }
+[data-ui="apple"] .pill-btn-outline { background: var(--relleno); color: var(--texto); border: none; }
+[data-ui="apple"] .pill-btn-outline:hover { background: rgba(10,10,10,.09); color: var(--texto); }
+
+[data-ui="apple"] .tag {
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--relleno);
+  border: none;
+  color: var(--texto-2);
+}
+[data-ui="apple"] .input-field {
+  border-radius: 9px;
+  background: var(--relleno);
+  border: 1px solid transparent;
+  padding: 9px 13px;
+}
+[data-ui="apple"] .filter-chip {
+  border-radius: 9px;
+  border-color: var(--sep);
+  font-weight: 500;
+}
+
+/* ── Barra superior translúcida ── */
+[data-ui="apple"] .ts-barra {
+  background: var(--barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--sep);
+}
+
+/* ── Control segmentado, en vez de pestañas subrayadas ── */
+[data-ui="apple"] .ts-seg {
+  background: var(--relleno);
+  border-radius: 11px;
+  padding: 2px;
+  gap: 2px;
+}
+[data-ui="apple"] .ts-seg-item {
+  border-radius: 9px;
+  padding: 7px 13px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--texto-2);
+  letter-spacing: -0.006em;
+  transition: background .15s, color .15s;
+}
+[data-ui="apple"] .ts-seg-item:hover { color: var(--texto); }
+[data-ui="apple"] .ts-seg-item[aria-current="true"] {
+  background: var(--sup);
+  color: var(--texto);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(10,10,10,.10);
+}
+
+/* ── Cabecera de etapa del funnel · opción C ──
+   El contraste lo pone el peso de la letra y un fondo apenas marcado, no
+   una barra negra: cinco barras negras seguidas se comen el tablero y
+   compiten con los nombres de los candidatos, que es lo que hay que leer. */
+[data-ui="apple"] .ts-etapa {
+  background: var(--relleno);
+  border-bottom: 1px solid var(--sep);
+}
+[data-ui="apple"] .ts-etapa-nombre {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+  color: var(--texto);
+}
+[data-ui="apple"] .ts-etapa-conteo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--texto);
+  background: var(--sup);
+  border: 1px solid var(--sep);
+  border-radius: 999px;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+[data-ui="apple"] .ts-etapa-duenio {
+  font-size: 12px;
+  color: var(--texto-3);
+}

@@ -196,15 +196,11 @@ const OWNER_STYLE: Record<StageOwner, { label: string; barColor: string; bgTint:
   terminal:  { label: "—",          barColor: "#737373", bgTint: "transparent" },
 };
 
-// Paleta sobria por categoría (estilo editorial TS · NO neón)
-const CATEGORY_STYLE: Record<StageCategory, { headerBg: string; headerText: string; accentBar: string; columnBg: string }> = {
-  "screening":         { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#737373", columnBg: "#fafafa" },
-  "assessment":        { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#b45309", columnBg: "#fafafa" },
-  "interview":         { headerBg: "#1a1a1a", headerText: "#ffffff", accentBar: "#1e40af", columnBg: "#fafafa" },
-  "decision":          { headerBg: "#0a0a0a", headerText: "#ffffff", accentBar: "#1a7d3e", columnBg: "#fafafa" },
-  "terminal-positive": { headerBg: "#1a7d3e", headerText: "#ffffff", accentBar: "#1a7d3e", columnBg: "#f4faf6" },
-  "terminal-negative": { headerBg: "#c41818", headerText: "#ffffff", accentBar: "#c41818", columnBg: "#fdf6f6" },
-};
+// El rediseño del 28-ago retiró CATEGORY_STYLE, que pintaba cada cabecera de
+// negro y cada columna de un tono según la categoría. Ahora la etapa se
+// distingue por el peso del nombre y un punto de color; el fondo dejó de
+// cargar significado, y con eso el tablero deja de competir con los nombres
+// de los candidatos.
 
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
@@ -411,69 +407,47 @@ export default function PipelineFunnel() {
               {visibleStages.map((stage) => {
                 const cands = byStage[stage.id] || [];
                 const stageSelected = cands.filter(c => selectedIds.has(c.id)).length;
-                const style = CATEGORY_STYLE[stage.category];
                 const ownerStyle = OWNER_STYLE[stage.owner];
                 const OwnerIcon = stage.owner === 'candidate' ? User : stage.owner === 'recruiter' ? UserCheck : stage.owner === 'shared' ? Users : null;
                 return (
                   <div key={stage.id} className="w-[260px] flex-shrink-0">
-                    {/* Owner bar · indica de quién depende mover este stage */}
-                    <div
-                      className="h-[5px] flex items-center"
-                      style={{ background: ownerStyle.barColor }}
-                      title={`Depende de: ${ownerStyle.label}`}
-                    />
-                    {/* Column header · negro editorial con accent bar lateral */}
-                    <div
-                      className="px-3.5 py-3 relative"
-                      style={{
-                        background: style.headerBg,
-                        color: style.headerText,
-                        borderLeft: `3px solid ${style.accentBar}`,
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <StageIcon stage={stage.id} className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
-                          {OwnerIcon && (
-                            <OwnerIcon
-                              className="w-3 h-3 opacity-60"
-                              aria-label={`Depende de: ${ownerStyle.label}`}
-                            />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {cands.length > 0 && (
-                            <button
-                              onClick={() => stageSelected === cands.length ? cands.forEach(c => toggleSelect(c.id)) : selectAllInStage(stage.id)}
-                              className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-100 transition-opacity"
-                              title={stageSelected === cands.length ? "Deseleccionar" : "Seleccionar todos"}
-                            >
-                              {stageSelected === cands.length ? "−" : "+"}
-                            </button>
-                          )}
-                          <span className="text-[18px] font-extrabold ts-tabular leading-none" style={{ letterSpacing: '-0.04em' }}>
-                            {cands.length}
-                          </span>
-                        </div>
+                    {/* Cabecera de etapa · opción C
+                        El contraste sale del peso de la letra y de un fondo
+                        apenas marcado, no de una barra negra: cinco barras
+                        negras seguidas se comen el tablero y compiten con los
+                        nombres de los candidatos, que es lo que hay que leer.
+                        De quién depende la etapa se dice con un punto de color
+                        y con el texto, no pintando la columna entera. */}
+                    <div className="ts-etapa rounded-t-xl px-3.5 pt-3 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-[7px] h-[7px] rounded-full flex-shrink-0"
+                          style={{ background: ownerStyle.barColor }}
+                          title={`Depende de: ${ownerStyle.label}`}
+                        />
+                        <span className="ts-etapa-nombre flex-1 min-w-0">{stage.label}</span>
+                        {cands.length > 0 && (
+                          <button
+                            onClick={() => stageSelected === cands.length ? cands.forEach(c => toggleSelect(c.id)) : selectAllInStage(stage.id)}
+                            className="text-[13px] text-[var(--texto-3)] hover:text-[var(--texto)] transition-colors leading-none"
+                            title={stageSelected === cands.length ? "Deseleccionar todos" : "Seleccionar todos"}
+                          >
+                            {stageSelected === cands.length ? "−" : "+"}
+                          </button>
+                        )}
+                        <span className="ts-etapa-conteo inline-flex items-center justify-center">
+                          {cands.length}
+                        </span>
                       </div>
-                      <div className="text-[10px] font-bold uppercase tracking-[1.8px] leading-tight">
-                        {stage.label}
-                      </div>
-                      <div
-                        className="text-[9px] uppercase tracking-[1.5px] mt-1.5 opacity-60"
-                        style={{ color: style.headerText }}
-                      >
-                        {ownerStyle.label}
-                      </div>
+                      <div className="ts-etapa-duenio mt-1 pl-[15px]">{ownerStyle.label}</div>
                     </div>
                     {/* Column body */}
                     <div
-                      className="border-l border-r border-b border-[var(--ts-gray-10)] p-2 min-h-[120px] max-h-[600px] overflow-y-auto"
-                      style={{ background: style.columnBg }}
+                      className="border border-t-0 border-gray-200 rounded-b-xl p-2 min-h-[120px] max-h-[600px] overflow-y-auto bg-white"
                     >
                       {cands.length === 0 ? (
-                        <div className="ts-eyebrow text-[9px] text-[var(--ts-gray-40)] text-center py-6">
-                          Sin candidatos
+                        <div className="text-[13px] text-[var(--texto-3)] text-center py-7">
+                          Nadie en esta etapa
                         </div>
                       ) : cands.map(c => {
                         const isSelected = selectedIds.has(c.id);
