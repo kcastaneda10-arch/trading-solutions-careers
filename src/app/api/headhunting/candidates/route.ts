@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ candidates: data || [] });
   } catch (err) {
     console.error('List candidates error:', err);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error interno', detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }
 
@@ -84,7 +87,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ candidate: data }, { status: 201 });
   } catch (err) {
     console.error('Create candidate error:', err);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error interno', detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }
 
@@ -113,7 +119,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Update candidate error:', err);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error interno', detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }
 
@@ -136,6 +145,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Delete candidate error:', err);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error interno', detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }

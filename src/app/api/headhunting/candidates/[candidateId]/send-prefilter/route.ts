@@ -124,6 +124,9 @@ export async function POST(
     });
   } catch (err) {
     console.error("send-prefilter error:", err);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error interno", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }
