@@ -1170,6 +1170,50 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             </button>
           )}
 
+          {/* La hoja de vida vive en la otra base, indexada por aplicación. La
+              ruta hace ese puente por correo para que desde acá sea un clic y
+              no una consulta a Neon. */}
+          <button
+            onClick={async () => {
+              if (busy) return;
+              setBusy(true);
+              setFeedback("Buscando la hoja de vida…");
+              try {
+                const r = await fetch(`/api/admin/candidates/${cand.id}/cv`);
+                if (!r.ok) {
+                  const j = await r.json().catch(() => ({}));
+                  setFeedback(`❌ ${[j.error, j.detail].filter(Boolean).join(" · ") || "No se pudo abrir"}`);
+                  return;
+                }
+                // Se descarga desde el blob y no abriendo la URL: así el
+                // navegador manda la cookie de sesión igual que el resto del
+                // panel, sin depender de que la pestaña nueva la lleve.
+                const blob = await r.blob();
+                const cabecera = r.headers.get("Content-Disposition") || "";
+                const nombre = /filename="([^"]+)"/.exec(cabecera)?.[1] || "hoja-de-vida.pdf";
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = nombre;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                setFeedback("✅ Descargada");
+                setTimeout(() => setFeedback(""), 3000);
+              } catch (e) {
+                setFeedback(`❌ ${(e as Error).message}`);
+              } finally {
+                setBusy(false);
+              }
+            }}
+            disabled={busy}
+            className="text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-300 text-gray-800 bg-white hover:bg-gray-50 disabled:opacity-50"
+            title="Descarga el PDF que subió el candidato al aplicar"
+          >
+            📄 Hoja de vida
+          </button>
+
           {!isTerminal && (
             <button
               onClick={async () => {
