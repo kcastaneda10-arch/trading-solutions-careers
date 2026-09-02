@@ -22,33 +22,14 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 import { recordStageEvent } from "@/lib/stage-events";
+import {
+  buildRejectionHtml,
+  rejectionSubject,
+  REJECTION_FROM_NAME,
+  REJECTION_REPLY_TO,
+} from "@/lib/rejection-email";
 
 export const runtime = "nodejs";
-
-const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
-
-function buildRejectionHtml(firstName: string, vacancyTitle: string, body: string): string {
-  // Sustituye placeholders en el body en caso que llegue del template
-  const renderedBody = body
-    .replace(/\{firstName\}/g, firstName)
-    .replace(/\{vacancy\}/g, vacancyTitle)
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/\n/g, "<br>");
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
-  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
-  a { color: #0a0a0a; text-decoration: underline; }
-  p { margin: 0 0 14px; font-size: 14px; }
-</style></head><body>
-  <div class="container">
-    <p>${renderedBody}</p>
-    <p>Tu información queda en nuestra base por si se abre una posición que te calce mejor. Si querés mantenerte cerca, podés seguirnos en <a href="${TS_LINKEDIN_URL}">LinkedIn</a>.</p>
-    <p>Un abrazo,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>Trading Solutions</p>
-  </div>
-</body></html>`;
-}
 
 export async function POST(
   req: NextRequest,
@@ -139,10 +120,10 @@ export async function POST(
             const html = buildRejectionHtml(firstName, vacancyTitle, messageBody);
             const draftRes = await createDraftViaGmail({
               to: candidate.email as string,
-              subject: `Trading Solutions · Sobre tu aplicación a ${vacancyTitle}`,
+              subject: rejectionSubject(vacancyTitle),
               html,
-              fromName: "Kelly Castañeda",
-              replyTo: "jointheteam@tradingsolutions.com",
+              fromName: REJECTION_FROM_NAME,
+              replyTo: REJECTION_REPLY_TO,
             });
             if (draftRes.ok) {
               draftId = draftRes.draft_id;

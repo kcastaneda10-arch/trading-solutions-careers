@@ -54,6 +54,8 @@ type Cand = {
   rejection_sub_detail?: string | null;
   rejection_save_for_future?: boolean | null;
   rejected_at?: string | null;
+  rejection_note_public?: string | null;
+  rejection_sent_at?: string | null;
 };
 
 type PrefilterData = {
@@ -502,6 +504,7 @@ export default function PipelineFunnel() {
               selectedIds={selectedIds}
               onToggle={toggleSelect}
               onSelect={setSelectedCand}
+              onChanged={() => { void load(); }}
             />
           </div>
 
@@ -920,12 +923,54 @@ function RejectedColumn({
   selectedIds,
   onToggle,
   onSelect,
+  onChanged,
 }: {
   cands: Cand[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   onSelect: (c: Cand) => void;
+  onChanged?: () => void;
 }) {
+  // Estado del reenvío, por candidato: evita que un clic bloquee toda la columna.
+  const [correo, setCorreo] = useState<Record<string, string>>({});
+  const [enviando, setEnviando] = useState<string | null>(null);
+
+  async function reenviarCorreo(c: Cand) {
+    if (enviando) return;
+    if (!c.email) {
+      setCorreo(p => ({ ...p, [c.id]: "Sin correo registrado" }));
+      return;
+    }
+    const yaSalio = Boolean(c.rejection_sent_at);
+    const aviso = yaSalio
+      ? `El correo de rechazo ya se le envió a ${c.email} el ${new Date(c.rejection_sent_at as string).toLocaleDateString("es-CO")}.\n\n¿Enviarlo otra vez?`
+      : `Enviar el correo de rechazo a ${c.email}?`;
+    if (!window.confirm(aviso)) return;
+
+    setEnviando(c.id);
+    setCorreo(p => ({ ...p, [c.id]: "Enviando…" }));
+    try {
+      const r = await fetch(`/api/admin/candidates/${c.id}/resend-rejection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "send" }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        // El detalle es lo único que dice por qué falló: sin él quedaría
+        // "Error interno" y habría que ir a los logs de Vercel.
+        setCorreo(p => ({ ...p, [c.id]: [j.error, j.detail].filter(Boolean).join(" · ") }));
+        return;
+      }
+      setCorreo(p => ({ ...p, [c.id]: j.warning || "Enviado ✓" }));
+      onChanged?.();
+    } catch (e: any) {
+      setCorreo(p => ({ ...p, [c.id]: e?.message || "No se pudo enviar" }));
+    } finally {
+      setEnviando(null);
+    }
+  }
+
   // Filtro por categoría · solo los rechazos clasificados
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showSavedOnly, setShowSavedOnly] = useState(false);
@@ -1028,6 +1073,30 @@ function RejectedColumn({
                     </div>
                   )}
                 </button>
+
+                {/* Correo de rechazo · se puede reenviar si nunca salió */}
+                <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-[var(--ts-gray-10)]">
+                  {c.rejection_sent_at ? (
+                    <span className="text-[9px] uppercase tracking-[1px] text-[var(--ts-green)] font-bold">
+                      ✓ Enviado {new Date(c.rejection_sent_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] uppercase tracking-[1px] text-[var(--ts-gray-40)] font-bold">
+                      Sin enviar
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); reenviarCorreo(c); }}
+                    disabled={enviando === c.id}
+                    title={c.rejection_sent_at ? "Volver a enviar el correo de rechazo" : "Enviar el correo de rechazo"}
+                    className="ml-auto text-[9px] uppercase tracking-[1px] font-bold px-2 py-0.5 border border-[var(--ts-gray-10)] text-[var(--ts-gray-60)] hover:border-[var(--ts-black)] hover:text-[var(--ts-black)] disabled:opacity-40 disabled:cursor-wait transition-colors"
+                  >
+                    {enviando === c.id ? "···" : c.rejection_sent_at ? "Reenviar" : "✉ Enviar"}
+                  </button>
+                </div>
+                {correo[c.id] && (
+                  <div className="text-[9px] text-[var(--ts-gray-60)] mt-1 leading-snug">{correo[c.id]}</div>
+                )}
               </div>
             );
           })}
