@@ -41,31 +41,31 @@ INSERT INTO vacancies (
 
 En Trading Solutions estamos redefiniendo el futuro de la logística global, uniendo tecnología de punta, visibilidad en tiempo real y coordinación fluida entre continentes. Le damos a las empresas la capacidad de moverse más rápido, con más inteligencia y con total confianza en cada embarque.
 
-Buscamos un Especialista SIG-SST que sea dueño del sistema de gestión completo de Trading Solutions: sostener nuestras certificaciones y cerrar en fecha nuestras obligaciones legales, en un freight forwarder boutique donde cada cliente se atiende de manera personal. Es un rol end to end —calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad, más el plan anual de formación, el programa de auditorías internas y la investigación de cada incidente— con un estándar que resiste a un auditor externo y se sustenta con evidencia. Vas a trabajar con toda la compañía y en terreno: reportas al CWO, lideras a un analista y a un practicante, y eres nuestra voz técnica ante la certificadora, BASC, la DIAN y los clientes internacionales que nos auditan como proveedor. El cargo se mide por dos resultados: certificaciones sostenidas sin hallazgos mayores, y obligaciones legales cerradas en fecha.',
+Buscamos un Especialista SIG-SST que lidere el sistema que mantiene a Trading Solutions operando al nivel por el que nuestros clientes ya nos reconocen. Es un rol end to end —calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad— e incluye el plan anual de formación, el programa de auditorías internas y las prácticas del día a día que mantienen nuestra operación segura y consistente. Vas a trabajar con toda la compañía y en terreno: reportas al CWO, lideras a un analista y a un practicante, y eres nuestra voz técnica con clientes y aliados alrededor del mundo. El cargo se mide por dos cosas: certificaciones que se mantienen fuertes, y un equipo que trabaja seguro todos los días.',
 
   'We are looking for an Integrated Management Systems & HSE Specialist to join our team!
 
 At Trading Solutions, we are redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We empower businesses to move faster, smarter, and with absolute confidence in every shipment.
 
-We are looking for an Integrated Management Systems & HSE Specialist to own the entire management system of Trading Solutions: keeping our certifications alive and our legal obligations closed on time, in a boutique freight forwarder where every client is handled personally. It is an end-to-end role - quality, environment, occupational health and safety, supply chain security and food safety, plus the annual training plan, the internal audit programme and the investigation of every incident - held to a standard that survives an external auditor, backed by evidence. You will work across the whole company and out in the field: you report to the CWO, lead an analyst and an intern, and are our technical voice before the certification body, BASC, Customs and the international clients who audit us as a supplier. The role is measured on two outcomes: certifications sustained with no major findings, and legal obligations closed on time.',
+We are looking for an Integrated Management Systems & HSE Specialist to lead the system that keeps Trading Solutions operating at the standard our clients already know us for. It is an end-to-end role - quality, environment, occupational health and safety, supply chain security and food safety - including the annual training plan, the internal audit programme and the everyday practices that keep our operation safe and consistent. You will work across the whole company and out in the field: you report to the CWO, lead an analyst and an intern, and are our technical voice with clients and partners around the world. The role is measured on two things: certifications that stay strong, and a team that works safely every day.',
 
-  '["Mantener y hacer auditable el Sistema Integrado de Gestión: ISO 9001, ISO 14001, ISO 45001, BASC V6:2022, régimen OEA e inocuidad",
-    "Ejercer como responsable del SG-SST con licencia vigente: estándares mínimos, matriz de peligros, plan anual de trabajo, programas de vigilancia epidemiológica y plan de emergencias",
-    "Investigar accidentes e incidentes dentro de los términos de ley y responder por la estadística de accidentalidad y ausentismo",
-    "Sostener el Sistema de Gestión en Control y Seguridad: cargos críticos, estudios de seguridad, inspección de unidades de carga, control de sellos ISO 17712 y acuerdos con asociados de negocio",
-    "Ser dueño del plan anual de formación de los cinco sistemas, con eficacia medida y no digitada, sobre metas de 80 % de cobertura y 80 % de eficacia",
-    "Planear y ejecutar el programa anual de auditorías internas y preparar a la compañía para las auditorías externas",
-    "Ser el interlocutor técnico ante la certificadora, BASC, la ARL, la DIAN, la autoridad ambiental y los clientes internacionales que nos auditan como proveedor",
+  '["Mantener y fortalecer el Sistema Integrado de Gestión: calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad",
+    "Liderar el sistema de seguridad y salud en el trabajo: matriz de peligros, plan anual de trabajo, programas de vigilancia epidemiológica y plan de emergencias",
+    "Acompañar la prevención en el día a día: inspecciones planeadas, análisis de incidentes y seguimiento de los indicadores de seguridad",
+    "Sostener las prácticas de seguridad de la cadena de suministro: inspección de unidades de carga, control de sellos, estudios de seguridad y acuerdos con nuestros aliados",
+    "Ser dueño del plan anual de formación de los cinco sistemas y de la medición de su eficacia",
+    "Planear y ejecutar el programa anual de auditorías internas y preparar a la compañía para las evaluaciones externas",
+    "Ser nuestra voz técnica ante clientes internacionales, aliados y entes certificadores",
     "Liderar al Analista SIG y al practicante, y llevar el sistema a bodega, patio y puerto — no solo al escritorio"]'::jsonb,
 
-  '["Keep the Integrated Management System auditable at all times: ISO 9001, ISO 14001, ISO 45001, BASC V6:2022, AEO regime and food safety",
-    "Act as the licensed owner of the Colombian OHS management system: minimum standards, hazard matrix, annual work plan, health surveillance programmes and the emergency plan",
-    "Investigate accidents and incidents within legal deadlines and own the accident and absenteeism statistics",
-    "Sustain the supply chain security management system: critical roles, background studies, cargo unit inspections, ISO 17712 seal control and business partner security agreements",
-    "Own the annual training plan across all five systems, with effectiveness that is measured rather than typed in, against targets of 80 % coverage and 80 % effectiveness",
-    "Plan and run the annual internal audit programme and get the company ready for external audits",
-    "Be the technical counterpart before the certification body, BASC, the occupational risk insurer, Customs, the environmental authority and the international clients who audit us as a supplier",
-    "Lead the SIG Analyst and the intern, and take the system to the warehouse, the yard and the port — not just to the desk"]'::jsonb,
+  '["Maintain and strengthen the Integrated Management System: quality, environment, occupational health and safety, supply chain security and food safety",
+    "Lead the occupational health and safety system: hazard matrix, annual work plan, health surveillance programmes and the emergency plan",
+    "Support prevention day to day: planned inspections, incident analysis and follow-up on safety indicators",
+    "Sustain our supply chain security practices: cargo unit inspections, seal control, background studies and agreements with our partners",
+    "Own the annual training plan across all five systems and the measurement of its effectiveness",
+    "Plan and run the annual internal audit programme and prepare the company for external assessments",
+    "Be our technical voice with international clients, partners and certification bodies",
+    "Lead the SIG Analyst and the intern, and take the system to the warehouse, the yard and the port - not just to the desk"]'::jsonb,
 
   '["Profesional en Ingeniería Industrial, Ambiental, de Procesos, Administración o Seguridad y Salud en el Trabajo, con posgrado en SST, HSEQ o Sistemas Integrados de Gestión",
     "Licencia vigente en Seguridad y Salud en el Trabajo (Resolución 908 de 2025). Se verifica número, entidad expedidora y fecha de vencimiento antes de la entrevista técnica",
