@@ -24,6 +24,10 @@ const ENGLISH = ["A1 (básico)", "A2 (elemental)", "B1 (intermedio)", "B2 (inter
 const EDU_COMEX = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
 const EDU_HR = ["Psicología", "Administración / Negocios", "Recursos Humanos", "Comunicación / Mercadeo", "Otra carrera", "Estudiante últimos semestres"];
 const EDU_FINANCE = ["Contaduría Pública", "Administración Financiera", "Economía", "Ingeniería Industrial", "Otra carrera", "Estudiante últimos semestres"];
+const EDU_SIG = ["Ingeniería Industrial", "Ingeniería Ambiental / Procesos", "Seguridad y Salud en el Trabajo", "Administración", "Otra ingeniería", "Otra carrera"];
+const AUDITOR_CERTS = ["ISO 9001", "ISO 14001", "ISO 45001", "BASC V6:2022", "Auditor líder IRCA / RABQSA", "Ninguna todavía"];
+const SIG_SYSTEMS = ["Calidad", "Ambiental", "Seguridad y salud en el trabajo", "Seguridad de la cadena de suministro", "Inocuidad", "Ninguno de estos"];
+const SIG_SECTORS = ["Logística / freight forwarding", "Aduanas / puerto / zona franca", "Manufactura", "Alimentos", "Construcción / obra", "Servicios / oficina", "Otro"];
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
 const ATS_TOOLS = ["LinkedIn Recruiter", "Greenhouse", "Lever", "Workday", "BambooHR", "HiBob", "Otro ATS", "Ninguno"];
 const ACCOUNTING_SYSTEMS = ["SAP", "Oracle NetSuite", "QuickBooks", "Microsoft Dynamics", "Siigo", "World Office", "Otro", "Ninguno"];
@@ -77,6 +81,22 @@ export default function PrefiltroForm() {
   const [accountingSystems, setAccountingSystems] = useState<string[]>([]);
   const [ifrsFamiliar, setIfrsFamiliar] = useState("");
   const [auditExp, setAuditExp] = useState("");
+  // SIG-SST
+  const [licenseStatus, setLicenseStatus] = useState("");
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [licenseExpiry, setLicenseExpiry] = useState("");
+  const [course50, setCourse50] = useState("");
+  const [course20, setCourse20] = useState("");
+  const [course20Year, setCourse20Year] = useState("");
+  const [postgradSig, setPostgradSig] = useState("");
+  const [auditorCerts, setAuditorCerts] = useState<string[]>([]);
+  const [sigSystems, setSigSystems] = useState<string[]>([]);
+  const [sigSectors, setSigSectors] = useState<string[]>([]);
+  const [yearsSig, setYearsSig] = useState("");
+  const [yearsLeadingSig, setYearsLeadingSig] = useState("");
+  const [certAuditCycles, setCertAuditCycles] = useState("");
+  const [excelSig, setExcelSig] = useState("");
+  const [sigCase, setSigCase] = useState("");
   // Comunes
   const [whyTs, setWhyTs] = useState("");
   const [nextRole, setNextRole] = useState("");
@@ -102,6 +122,7 @@ export default function PrefiltroForm() {
   const isHR = templateKey === "hr_lead";
   const isFinance = templateKey === "finance";
   const isChina = templateKey === "china";
+  const isSIG = templateKey === "sig_sst";
 
   // Prefill de nombre/email del candidato cuando cargan los datos (China)
   useEffect(() => {
@@ -147,6 +168,16 @@ export default function PrefiltroForm() {
     setAccountingSystems((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
+  function toggleAuditorCert(v: string) {
+    setAuditorCerts((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+  }
+  function toggleSigSystem(v: string) {
+    setSigSystems((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+  }
+  function toggleSigSector(v: string) {
+    setSigSectors((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+  }
+
   function isFormValid() {
     // China · validación propia (inglés, knock-outs, PIPL)
     if (isChina) {
@@ -171,6 +202,18 @@ export default function PrefiltroForm() {
       salary && availability && relocate && englishLevel && eduType && whyTs.trim().length >= 20
     );
     if (!commonOk) return false;
+    if (isSIG) {
+      const licenseOk = licenseStatus === "no"
+        ? true
+        : licenseNumber.trim().length >= 3 && licenseExpiry.trim().length >= 4;
+      return !!(
+        licenseStatus && licenseOk &&
+        course50 && course20 && postgradSig &&
+        auditorCerts.length > 0 && sigSystems.length > 0 && sigSectors.length > 0 &&
+        yearsSig !== "" && yearsLeadingSig !== "" && certAuditCycles !== "" &&
+        excelSig && sigCase.trim().length >= 40
+      );
+    }
     if (isHR) {
       return !!(yearsHR !== "" && atsTools.length > 0 && pipelineFromScratch);
     }
@@ -251,7 +294,26 @@ export default function PrefiltroForm() {
       submitted_at: new Date().toISOString(),
     };
     let payload: Record<string, unknown> = { ...basePayload };
-    if (isHR) {
+    if (isSIG) {
+      payload = {
+        ...payload,
+        license_status: licenseStatus,
+        license_number: licenseStatus === "si" ? licenseNumber.trim() : "",
+        license_expiry: licenseStatus === "si" ? licenseExpiry.trim() : "",
+        course_50h: course50 === "si",
+        course_20h: course20 === "si",
+        course_20h_year: course20 === "si" ? course20Year.trim() : "",
+        postgrad_sig: postgradSig === "si",
+        auditor_certs: auditorCerts,
+        systems_managed: sigSystems,
+        sectors: sigSectors,
+        years_sig: parseInt(yearsSig) || 0,
+        years_leading_sig: parseInt(yearsLeadingSig) || 0,
+        cert_audit_cycles: parseInt(certAuditCycles) || 0,
+        excel_level: parseInt(excelSig) || 0,
+        case_answer: sigCase.trim(),
+      };
+    } else if (isHR) {
       payload = {
         ...payload,
         years_hr: parseInt(yearsHR) || 0,
@@ -634,13 +696,88 @@ export default function PrefiltroForm() {
             <SelectChips
               value={eduType}
               onChange={setEduType}
-              options={isHR ? EDU_HR : isFinance ? EDU_FINANCE : EDU_COMEX}
+              options={isSIG ? EDU_SIG : isHR ? EDU_HR : isFinance ? EDU_FINANCE : EDU_COMEX}
             />
           </Q>
         </Section>
 
         {/* Sección 5 · Experiencia específica por template */}
-        {isHR ? (
+        {isSIG ? (
+          <Section title="5 · Credenciales y experiencia en sistemas de gestión">
+            <Q label="¿Tienes licencia vigente en Seguridad y Salud en el Trabajo?">
+              <SelectChips
+                value={licenseStatus}
+                onChange={setLicenseStatus}
+                options={[
+                  { label: "Sí, vigente", value: "si" },
+                  { label: "La tengo pero está vencida", value: "vencida" },
+                  { label: "En trámite", value: "tramite" },
+                  { label: "No la tengo", value: "no" },
+                ]}
+              />
+            </Q>
+            {(licenseStatus === "si" || licenseStatus === "vencida") && (
+              <>
+                <Q label="Número de licencia y entidad que la expidió">
+                  <input value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} style={inputStyle} placeholder="Ej. 12345 · Secretaría de Salud del Atlántico" />
+                </Q>
+                <Q label="Fecha de vencimiento de la licencia">
+                  <input value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} style={inputStyle} placeholder="Ej. 14/03/2032" />
+                </Q>
+              </>
+            )}
+            <Q label="¿Tienes el curso de 50 horas del SG-SST?">
+              <SelectChips value={course50} onChange={setCourse50} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+            </Q>
+            <Q label="¿Tienes vigente el curso de actualización de 20 horas?">
+              <SelectChips value={course20} onChange={setCourse20} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+            </Q>
+            {course20 === "si" && (
+              <Q label="¿En qué año lo hiciste?">
+                <input value={course20Year} onChange={(e) => setCourse20Year(e.target.value)} style={inputStyle} placeholder="Ej. 2025" />
+              </Q>
+            )}
+            <Q label="¿Tienes posgrado en SST, HSEQ o Sistemas Integrados de Gestión?">
+              <SelectChips value={postgradSig} onChange={setPostgradSig} options={[{label:"Sí",value:"si"},{label:"No",value:"no"}]} />
+            </Q>
+            <Q label="¿En qué normas estás certificado como auditor? (selecciona todas las que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {AUDITOR_CERTS.map((c) => (
+                  <button key={c} type="button" onClick={() => toggleAuditorCert(c)} style={chipStyle(auditorCerts.includes(c))}>{c}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="¿Qué sistemas has manejado directamente? (selecciona todos los que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {SIG_SYSTEMS.map((c) => (
+                  <button key={c} type="button" onClick={() => toggleSigSystem(c)} style={chipStyle(sigSystems.includes(c))}>{c}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="Años totales de experiencia en sistemas de gestión y SST">
+              <input type="number" min={0} max={50} value={yearsSig} onChange={(e) => setYearsSig(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="De esos, ¿cuántos años has sido tú el responsable del sistema? (no de apoyo)">
+              <input type="number" min={0} max={50} value={yearsLeadingSig} onChange={(e) => setYearsLeadingSig(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="¿En cuántos ciclos de auditoría de certificación o recertificación externa has participado de forma directa?">
+              <input type="number" min={0} max={50} value={certAuditCycles} onChange={(e) => setCertAuditCycles(e.target.value)} style={inputStyle} placeholder="0" />
+            </Q>
+            <Q label="¿En qué sectores has trabajado? (selecciona todos los que apliquen)">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {SIG_SECTORS.map((c) => (
+                  <button key={c} type="button" onClick={() => toggleSigSector(c)} style={chipStyle(sigSectors.includes(c))}>{c}</button>
+                ))}
+              </div>
+            </Q>
+            <Q label="Tu nivel de Excel (1 = básico, 5 = experto con tablas dinámicas, fórmulas anidadas y validación de datos)">
+              <SelectChips value={excelSig} onChange={setExcelSig} options={["1","2","3","4","5"]} />
+            </Q>
+            <Q label={`Caso corto: tienes una auditoría externa en seis semanas y encuentras que la evaluación de eficacia de varias capacitaciones del año pasado quedó sin registrar. ¿Qué haces? (mín. 40 caracteres) — ${sigCase.length}/700`}>
+              <textarea value={sigCase} onChange={(e) => setSigCase(e.target.value.slice(0, 700))} rows={5} style={inputStyle} placeholder="Cuéntanos qué priorizas, qué corriges y qué no se puede corregir hacia atrás…" />
+            </Q>
+          </Section>
+        ) : isHR ? (
           <Section title="5 · Experiencia en HR · Talent Acquisition">
             <Q label="Años de experiencia en HR / Talent Acquisition / Learning & Development">
               <input type="number" min={0} max={50} value={yearsHR} onChange={(e) => setYearsHR(e.target.value)} style={inputStyle} placeholder="0" />

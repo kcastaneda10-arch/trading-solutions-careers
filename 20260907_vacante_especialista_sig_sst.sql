@@ -99,14 +99,15 @@ ON CONFLICT (slug) DO NOTHING;
 -- PARTE B · SUPABASE  (SQL Editor del proyecto mojbhvphztnadndhnraf)
 -- ============================================================================
 
-INSERT INTO ht_vacancies (client_id, title, area, status, role_level, vacancy_type)
+INSERT INTO ht_vacancies (client_id, title, area, status, role_level, vacancy_type, form_template_key)
 VALUES (
   '98b62872-5767-4815-9b49-1394b9527c1f',
   'Especialista SIG-SST',
   'Wellness',
   'open',
   'Senior',
-  'internal'
+  'internal',
+  'sig_sst'                   -- <<< plantilla de prefiltro propia de este cargo
 )
 RETURNING id, title, status;
 
