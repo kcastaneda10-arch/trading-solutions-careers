@@ -117,9 +117,13 @@ WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
 LIMIT 1;
 
 -- PASO 2 · completar los datos del cargo
+-- NO se toca `role_level`: la columna tiene un CHECK (`ht_vacancies_role_level_check`)
+-- con un dominio propio en español (el default que puso el INSERT es 'Operativo').
+-- 'Senior' lo rechaza. Para ver los valores validos:
+--   SELECT pg_get_constraintdef(oid) FROM pg_constraint
+--   WHERE conname = 'ht_vacancies_role_level_check';
 UPDATE ht_vacancies
 SET area              = 'Wellness',
-    role_level        = 'Senior',
     vacancy_type      = 'incremental',
     form_template_key = 'sig_sst'   -- plantilla de prefiltro propia de este cargo
 WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
