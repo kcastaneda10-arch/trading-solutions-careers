@@ -99,19 +99,38 @@ ON CONFLICT (slug) DO NOTHING;
 -- PARTE B · SUPABASE  (SQL Editor del proyecto mojbhvphztnadndhnraf)
 -- ============================================================================
 
-INSERT INTO ht_vacancies (client_id, title, area, status, role_level, vacancy_type, form_template_key)
-VALUES (
-  '98b62872-5767-4815-9b49-1394b9527c1f',
-  'Especialista SIG-SST',
-  'Wellness',
-  'open',
-  'Senior',
-  'internal',
-  'sig_sst'                   -- <<< plantilla de prefiltro propia de este cargo
-)
-RETURNING id, title, status;
+-- OJO: `model_id` es NOT NULL y no tiene default. Es el modelo de competencias
+-- (los 16 mandatos) con el que se evalúa a los candidatos. Por eso el INSERT
+-- va con SELECT: reutiliza el mismo modelo que ya usan las demás vacantes de
+-- Trading Solutions y no hay que escribir ningún UUID a mano.
+-- (Mismo tropiezo del 19-ago con Talent Acquisition Specialist.)
 
--- >>> COPIAR el UUID que devuelve el RETURNING.
+-- PASO 1 · crear la vacante reutilizando el modelo de competencias vigente
+INSERT INTO ht_vacancies (client_id, model_id, title, status)
+SELECT '98b62872-5767-4815-9b49-1394b9527c1f',
+       model_id,
+       'Especialista SIG-SST',
+       'open'
+FROM ht_vacancies
+WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
+  AND model_id IS NOT NULL
+LIMIT 1;
+
+-- PASO 2 · completar los datos del cargo
+UPDATE ht_vacancies
+SET area              = 'Wellness',
+    role_level        = 'Senior',
+    vacancy_type      = 'incremental',
+    form_template_key = 'sig_sst'   -- plantilla de prefiltro propia de este cargo
+WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
+  AND title = 'Especialista SIG-SST';
+
+-- VERIFICAR · debe devolver UNA fila, con model_id lleno
+SELECT id, title, status, area, role_level, model_id, form_template_key
+FROM ht_vacancies
+WHERE title = 'Especialista SIG-SST';
+
+-- >>> COPIAR el UUID que devuelve el SELECT de verificacion.
 --
 -- En esta rama (`etapa2-funnel-china`) NO existe resolveVacancyId(): el parche
 -- `sin-variable-vercel.patch` sigue sin aplicar. Por lo tanto HAY que agregar la
