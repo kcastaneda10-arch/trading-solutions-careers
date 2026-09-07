@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     // 1. Vacancies + their milestones
     let vacQuery = supabaseAdmin
       .from("ht_vacancies")
-      .select("id, title, area, status, role_level, vacancy_type")
+      .select("id, title, area, status, role_level, vacancy_type, form_template_key")
       .eq("client_id", TS_CLIENT_ID);
     if (filterByVacancy) vacQuery = vacQuery.eq("id", vacancyId);
     const { data: vacs, error: vErr } = await vacQuery;
@@ -158,6 +158,7 @@ export async function GET(req: NextRequest) {
       return {
         vacancy_id: v.id,
         title: v.title,
+        form_template_key: v.form_template_key || null,
         area: v.area,
         role_level: v.role_level,
         vacancy_type: v.vacancy_type || 'incremental',

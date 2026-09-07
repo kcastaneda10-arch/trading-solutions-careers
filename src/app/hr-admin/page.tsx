@@ -1,6 +1,11 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { PREFILTER_TEMPLATES } from "@/lib/prefilter-templates";
+
+// Opciones del selector de cuestionario de prefiltro (una sola fuente de verdad:
+// src/lib/prefilter-templates.ts). Agregar una plantilla alla la hace aparecer aqui.
+const PREFILTER_TEMPLATE_OPTIONS = Object.values(PREFILTER_TEMPLATES);
 import {
   LayoutDashboard,
   Briefcase,
@@ -1116,7 +1121,7 @@ type DashboardStats = {
   htRejected: number;
 };
 
-type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string; ht_vacancy_id?: string };
+type VacancyOption = { id: number; title: string; status?: string; linkedin_url?: string; ht_vacancy_id?: string; form_template_key?: string };
 
 // Extrae score del why_ts cuando la columna `score` aún no está poblada
 function extractScoreFromText(why?: string | null): number | null {
@@ -1186,11 +1191,13 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
         // Cruce con ht_vacancies para obtener UUID por título — necesario para
         // filtrar los componentes nuevos del Dashboard (que usan UUID).
         let htMap: Record<string, string> = {};
+        const htTemplateMap: Record<string, string> = {};
         try {
           const htRes = await fetch('/api/headhunting/vacancies-overview', { cache: 'no-store' });
           const htJ = await htRes.json();
           (htJ.vacancies || []).forEach((hv: any) => {
             htMap[(hv.title || '').toLowerCase().trim()] = hv.vacancy_id;
+            htTemplateMap[(hv.title || '').toLowerCase().trim()] = hv.form_template_key || '';
           });
         } catch {}
 
@@ -1200,6 +1207,7 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
           status: v.status,
           linkedin_url: v.linkedin_url,
           ht_vacancy_id: htMap[(v.title || '').toLowerCase().trim()],
+          form_template_key: htTemplateMap[(v.title || '').toLowerCase().trim()],
         })));
 
         const apps = (appR.applications ?? appR.data ?? []) as Application[];
@@ -4763,6 +4771,31 @@ function Vacantes() {
                       );
                     })()}
                   </div>
+
+                  {v.ht_vacancy_id && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                      <span className="text-xs text-gray-500 shrink-0">Cuestionario de prefiltro</span>
+                      <select
+                        defaultValue={v.form_template_key || 'comex'}
+                        className="text-xs px-2 py-1 rounded border border-gray-300 bg-white"
+                        onChange={async (e) => {
+                          const key = e.target.value;
+                          const res = await fetch(`/api/headhunting/vacancies/${v.ht_vacancy_id}/template`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ form_template_key: key }),
+                          });
+                          if (!res.ok) { alert('No se pudo cambiar el cuestionario.'); return; }
+                          setVacanciesList((prev) => prev.map((x) => x.id === v.id ? { ...x, form_template_key: key } : x));
+                        }}
+                        title="Define qué preguntas ve el candidato cuando se le envía el prefiltro"
+                      >
+                        {PREFILTER_TEMPLATE_OPTIONS.map((t) => (
+                          <option key={t.key} value={t.key}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="flex gap-2 pt-2 border-t border-gray-200">
                     <button
