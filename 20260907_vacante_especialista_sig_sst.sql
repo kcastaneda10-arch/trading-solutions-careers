@@ -37,13 +37,17 @@ INSERT INTO vacancies (
   '2026-09-07',
   'SIG, SST, BASC V6, ISO 9001/14001/45001, Licencia SST, Bilingüe EN/ES',
 
-  'Trading Solutions es una compañía de logística internacional. Movemos carga entre continentes bajo cinco sistemas de gestión que se auditan de verdad: calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad.
+  'Somos un freight forwarder boutique, y esa palabra aquí significa algo concreto: somos 73 personas en Barranquilla moviendo carga entre continentes, todos nos conocemos por el nombre y a nadie se le pierde un embarque entre los procesos.
 
-Buscamos un Especialista SIG-SST que sea dueño de ese sistema completo, no de una parte. No buscamos a alguien que llene formatos antes de la auditoría: buscamos criterio normativo, rigor documental y presencia en terreno.',
+Boutique también significa que lo hacemos bien. Trabajamos con cinco sistemas de gestión —calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad— y no los tenemos colgados en la pared: nos los auditan de verdad, y de ahí sale la confianza que un cliente al otro lado del mundo pone en nosotros.
 
-  'Trading Solutions is an international logistics company. We move cargo across continents under five management systems that get audited for real: quality, environment, occupational health and safety, supply chain security and food safety.
+Ese sistema completo va a ser tuyo. Vas a trabajar al lado del CWO, con un analista y un practicante, y con la operación abierta de par en par: aquí el especialista del SIG camina la bodega, se sube al patio y habla con el conductor. Si te gusta dejar un sistema ordenado, medible y defendible frente a cualquier auditor —y que además se note en la gente, no solo en el papel—, queremos conocerte.',
 
-We are hiring an Integrated Management Systems & HSE Specialist to own that system end to end, not one piece of it. We are not looking for someone to fill in forms before the audit: we are looking for regulatory judgment, documentary rigour and presence on the ground.',
+  'We are a boutique freight forwarder, and here that word means something concrete: 73 people in Barranquilla moving cargo across continents, everyone on a first-name basis, and no shipment lost between processes.
+
+Boutique also means we do it properly. We run five management systems - quality, environment, occupational health and safety, supply chain security and food safety - and they are not framed on a wall: they get audited for real, and that is where the trust of a client on the other side of the world comes from.
+
+That whole system will be yours. You will work alongside the CWO, with an analyst and an intern, and with the operation wide open to you: here the management systems specialist walks the warehouse, climbs onto the yard and talks to the driver. If you like leaving a system tidy, measurable and defensible before any auditor - and want it to show in the people, not just on paper - we would like to meet you.',
 
   '["Mantener y hacer auditable el Sistema Integrado de Gestión: ISO 9001, ISO 14001, ISO 45001, BASC V6:2022, régimen OEA e inocuidad",
     "Ejercer como responsable del SG-SST con licencia vigente: estándares mínimos, matriz de peligros, plan anual de trabajo, programas de vigilancia epidemiológica y plan de emergencias",
