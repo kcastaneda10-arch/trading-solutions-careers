@@ -916,6 +916,7 @@ const REJECTION_CATEGORY_SHORT: Record<string, string> = {
   resultado_evaluacion: "Evaluación",
   comunicacion_proceso: "Comunicación",
   decision_candidato: "Decisión cand",
+  proceso_avanzado: "Fuera de tiempo",
 };
 
 function RejectedColumn({

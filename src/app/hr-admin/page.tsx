@@ -6711,7 +6711,7 @@ function GmailAuditModal({ onClose }: { onClose: () => void }) {
       const r = await fetch('/api/admin/audit-gmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ only_active: true }),
+        body: JSON.stringify({ only_active: true, audit_rejections: true }),
       });
       const j = await r.json();
       if (!r.ok) {

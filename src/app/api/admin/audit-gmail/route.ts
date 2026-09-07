@@ -39,10 +39,33 @@ type Finding = {
   last_message_subject: string;
   last_message_snippet: string;
   total_messages: number;
-  signal: 'response_pending' | 'stage_mismatch' | 'rejected_but_active' | 'never_sent' | 'no_findings';
+  signal: 'response_pending' | 'stage_mismatch' | 'rejected_but_active' | 'never_sent' | 'rechazo_sin_correo' | 'rechazo_en_borrador' | 'no_findings';
   suggested_action: string;
   severity: 'high' | 'medium' | 'low' | 'none';
 };
+
+/**
+ * ¿El correo de rechazo llegó a salir?
+ *
+ * POR QUÉ EXISTE: reject-with-reason NO envía el correo, crea un BORRADOR en
+ * Gmail. Si nadie lo abre y le da enviar, el candidato queda marcado como
+ * rechazado en el ATS y nunca se entera. Es el hueco más silencioso del proceso.
+ *
+ * El asunto lo arma rejectionSubject(): "Trading Solutions · Sobre tu aplicación a X".
+ */
+const ASUNTO_RECHAZO = /sobre tu aplicaci/i;
+
+function estadoDelCorreoDeRechazo(messages: { subject: string; label_ids: string[] }[]) {
+  let enviado = false;
+  let enBorrador = false;
+  for (const m of messages) {
+    if (!ASUNTO_RECHAZO.test(m.subject || "")) continue;
+    const labels = m.label_ids || [];
+    if (labels.includes("SENT")) enviado = true;
+    if (labels.includes("DRAFT")) enBorrador = true;
+  }
+  return { enviado, enBorrador };
+}
 
 function detectSignal(meta: {
   ats_stage: string;
@@ -52,9 +75,29 @@ function detectSignal(meta: {
   last_message_internal_date: number | null;
   last_updated_at: string | null;
   total_messages: number;
+  rechazo_enviado: boolean;
+  rechazo_en_borrador: boolean;
 }): { signal: Finding['signal']; suggested_action: string; severity: Finding['severity'] } {
   const subj = meta.last_message_subject.toLowerCase();
   const stage = meta.ats_stage;
+
+  // 0) Stage = rechazado y el correo de rechazo nunca salió. Va primero porque
+  //    es lo único de esta lista que deja a una persona esperando una respuesta
+  //    que ya se tomó.
+  if (stage === 'rechazado' && !meta.rechazo_enviado) {
+    if (meta.rechazo_en_borrador) {
+      return {
+        signal: 'rechazo_en_borrador',
+        suggested_action: 'El correo de rechazo quedó en BORRADORES y nunca se envió. Abrir Gmail y enviarlo.',
+        severity: 'high',
+      };
+    }
+    return {
+      signal: 'rechazo_sin_correo',
+      suggested_action: 'Marcado como rechazado pero no hay correo de rechazo ni borrador. Enviarlo desde la columna de rechazados.',
+      severity: 'high',
+    };
+  }
 
   // 1) Stage = rechazado pero hay correspondencia reciente del candidato (FROM él)
   if (stage === 'rechazado' && meta.last_message_direction === 'from_candidate') {
@@ -147,6 +190,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const vacancyFilter = body.vacancy_id || null;
     const onlyActive = body.only_active !== false; // default true
+    // Auditar los correos de rechazo: trae los rechazados aunque only_active siga true.
+    const auditarRechazos = body.audit_rejections === true;
 
     // 1. Pull candidatos del ATS
     let q = supabaseAdmin
@@ -157,7 +202,7 @@ export async function POST(req: NextRequest) {
       .not("email", "ilike", "%@tradingsolutions.com");
 
     if (vacancyFilter) q = q.eq('vacancy_id', vacancyFilter);
-    if (onlyActive) q = q.in('stage', ACTIVE_STAGES);
+    if (onlyActive) q = q.in('stage', auditarRechazos ? [...ACTIVE_STAGES, 'rechazado'] : ACTIVE_STAGES);
 
     const { data: cands } = await q.limit(100);
 
@@ -179,13 +224,38 @@ export async function POST(req: NextRequest) {
       const email = c.email as string;
       if (!email) continue;
 
-      const history = await getCandidateGmailHistory(email, 5, 180);
+      // 15 mensajes en vez de 5: en un proceso largo el correo de rechazo se
+      // sale de la ventana y lo daríamos por no enviado.
+      const history = await getCandidateGmailHistory(email, 15, 180);
       processed++;
 
       if (!history.ok || history.messages.length === 0) {
-        // Sin historial Gmail — no es un finding negativo, solo skip
+        // Sin historial Gmail. Para un rechazado esto NO es neutro: significa
+        // que nunca se le escribió.
+        if ((c.stage || '') === 'rechazado') {
+          withFindings++;
+          findings.push({
+            candidate_id: c.id,
+            candidate_name: c.name,
+            candidate_email: email,
+            // @ts-expect-error supabase relation
+            vacancy_title: c.ht_vacancies?.title || null,
+            ats_stage: 'rechazado',
+            ats_status: c.status || '',
+            last_message_date: null,
+            last_message_direction: null,
+            last_message_subject: '',
+            last_message_snippet: '',
+            total_messages: 0,
+            signal: 'rechazo_sin_correo',
+            suggested_action: 'Marcado como rechazado y no hay ningún correo con esta persona. Enviarle el rechazo.',
+            severity: 'high',
+          });
+        }
         continue;
       }
+
+      const rechazo = estadoDelCorreoDeRechazo(history.messages);
 
       const last = history.messages[0];
       // Direction: si el FROM contiene el email del candidato → from_candidate
@@ -200,6 +270,8 @@ export async function POST(req: NextRequest) {
         last_message_internal_date: last.internal_date,
         last_updated_at: c.updated_at,
         total_messages: history.messages.length,
+        rechazo_enviado: rechazo.enviado,
+        rechazo_en_borrador: rechazo.enBorrador,
       });
 
       if (signal.signal !== 'no_findings') {
