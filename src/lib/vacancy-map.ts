@@ -31,6 +31,9 @@ export const VACANCY_MAP: Record<number, string> = {
   4: "d354c55a-eb1c-4aee-bd02-b0a20162e1f1", // Pricing Junior
   5: "70c39cab-adaf-49a0-b137-29d0ff9b56b0", // Talent Acquisition and Development Lead
 
+  // ─── Wellness ────────────────────────────────────────────────────
+  12: "52e41180-79ca-48c5-97d1-f385f4d44dde", // Especialista SIG-SST (Wellness)
+
   // ─── CHINA · Builder Team (form_template_key='china', country='China') ──
   6: "ac368792-1cde-4afb-9185-24d5b4aa0579", // Customer Documentation and Support (Finance)
   7: "da9ca124-e610-450b-a9f1-56f4a538fd9a", // Operations Executive and Support (Operations)

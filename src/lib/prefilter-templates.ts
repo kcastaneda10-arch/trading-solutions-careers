@@ -10,7 +10,7 @@
  * archivo para validar qué campos son obligatorios según template.
  */
 
-export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech" | "china";
+export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech" | "china" | "sig_sst";
 
 export type SectionKey =
   | "personal"           // todos
@@ -22,6 +22,7 @@ export type SectionKey =
   | "hr_experience"      // solo hr_lead
   | "finance_experience" // solo finance
   | "china_core"         // solo china · form en inglés, innegociables
+  | "sig_experience"     // solo sig_sst · licencia, cursos, auditorías
   | "about_you";         // todos
 
 export type PrefilterTemplate = {
@@ -55,6 +56,12 @@ export const PREFILTER_TEMPLATES: Record<TemplateKey, PrefilterTemplate> = {
     label: "Tecnología · ingeniería · data",
     description: "Para roles técnicos · default si no hay otro template",
     sections: ["personal", "availability", "english", "education", "about_you"],
+  },
+  sig_sst: {
+    key: "sig_sst",
+    label: "SIG · SST · HSEQ (credenciales verificables)",
+    description: "Para Especialista SIG-SST y cargos de sistemas de gestión. Pide licencia vigente, cursos de ley, certificaciones de auditor y años liderando el sistema. Incluye una pregunta abierta de criterio que es el mejor discriminante del perfil.",
+    sections: ["personal", "availability", "english", "education", "sig_experience", "about_you"],
   },
   china: {
     key: "china",
@@ -104,6 +111,19 @@ export const TEMPLATE_REQUIRED_FIELDS: Record<TemplateKey, string[]> = {
     "doc_type", "doc_number", "phone", "city",
     "salary", "availability", "relocate",
     "english_level", "edu_type",
+    "why_ts",
+  ],
+  // SIG-SST · las credenciales son el filtro. Sin licencia vigente el cargo no
+  // se puede ejercer, así que license_status es knock-out duro. course_50h
+  // tambien es de ley. El resto son datos que ordenan la terna.
+  sig_sst: [
+    "doc_type", "doc_number", "phone", "city",
+    "salary", "availability", "relocate",
+    "english_level", "edu_type",
+    "license_status", "course_50h", "course_20h", "postgrad_sig",
+    "auditor_certs", "systems_managed",
+    "years_sig", "years_leading_sig", "cert_audit_cycles",
+    "excel_level", "case_answer",
     "why_ts",
   ],
   // China · form en inglés. NO pide doc_type/doc_number/nacionalidad. Salario

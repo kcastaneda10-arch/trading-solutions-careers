@@ -268,6 +268,66 @@ export async function POST(
       onsite_available: onsiteAvailable,
       pipl_consent: true,
     };
+  } else if (templateKey === "sig_sst") {
+    // ─── Rama SIG-SST · credenciales de ley + salario + inglés ──────
+    //   La licencia vigente en SST es knock-out duro: sin ella el cargo no
+    //   se puede ejercer. El curso de 50 horas tambien es de ley. El resto
+    //   (años liderando, ciclos de auditoría) no descarta: manda a review.
+    const salaryResult = decideFromSalary(
+      String(body.salary || ""),
+      String(candidate.vacancy_id)
+    );
+    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
+
+    const licenseStatus = String(body.license_status || "").trim().toLowerCase();
+    const licenseValid = licenseStatus === "si";
+    const course50 = isYes(body.course_50h);
+    const course20 = isYes(body.course_20h);
+    const yearsLeading = Number(body.years_leading_sig ?? 0);
+    const certCycles = Number(body.cert_audit_cycles ?? 0);
+
+    if (!licenseValid) {
+      decision = "reject";
+      rejectionReason = {
+        category: "requisito_excluyente",
+        sub_detail:
+          licenseStatus === "vencida" ? "licencia_sst_vencida"
+          : licenseStatus === "tramite" ? "licencia_sst_en_tramite"
+          : "sin_licencia_sst",
+      };
+    } else if (englishCheck.fails) {
+      decision = "reject";
+      rejectionReason = { category: "idioma_insuficiente", sub_detail: englishCheck.sub_detail || "ingles_b1" };
+    } else if (!course50) {
+      decision = "reject";
+      rejectionReason = { category: "requisito_excluyente", sub_detail: "sin_curso_50_horas" };
+    } else if (salaryResult.decision === "reject") {
+      decision = "reject";
+      rejectionReason = { category: "pretension_salarial", sub_detail: "sobre_banda" };
+    } else if (!course20 || yearsLeading < 3 || certCycles < 1) {
+      // Cumple lo de ley pero le falta recorrido · lo ve un humano
+      decision = "review";
+    } else {
+      decision = salaryResult.decision;
+    }
+
+    meta = {
+      sig_sst: true,
+      license_status: licenseStatus,
+      license_number: body.license_number ?? null,
+      license_expiry: body.license_expiry ?? null,
+      course_50h: course50,
+      course_20h: course20,
+      years_leading_sig: yearsLeading,
+      cert_audit_cycles: certCycles,
+      auditor_certs: body.auditor_certs ?? [],
+      systems_managed: body.systems_managed ?? [],
+      cap_used: salaryResult.cap,
+      salary_lower_bound: salaryResult.lowerBound,
+      english_min_required_rank: englishCheck.minRank,
+      english_candidate_rank: englishCheck.candidateRank,
+      english_fails: englishCheck.fails,
+    };
   } else {
     // ─── Rama estándar (comex/hr/finance/tech) · salario + inglés ────
     const salaryResult = decideFromSalary(
