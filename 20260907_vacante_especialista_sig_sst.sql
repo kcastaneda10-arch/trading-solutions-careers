@@ -114,16 +114,23 @@ SELECT '98b62872-5767-4815-9b49-1394b9527c1f',
 FROM ht_vacancies
 WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
   AND model_id IS NOT NULL
+  -- guarda contra duplicados: este INSERT no tiene ON CONFLICT y correrlo
+  -- dos veces crea dos vacantes con el mismo titulo (fue lo que paso con
+  -- Talent Acquisition Specialist, que quedo cinco veces en la tabla).
+  AND NOT EXISTS (
+    SELECT 1 FROM ht_vacancies
+    WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'
+      AND title = 'Especialista SIG-SST'
+  )
 LIMIT 1;
 
 -- PASO 2 · completar los datos del cargo
--- NO se toca `role_level`: la columna tiene un CHECK (`ht_vacancies_role_level_check`)
--- con un dominio propio en español (el default que puso el INSERT es 'Operativo').
--- 'Senior' lo rechaza. Para ver los valores validos:
---   SELECT pg_get_constraintdef(oid) FROM pg_constraint
---   WHERE conname = 'ht_vacancies_role_level_check';
+-- `role_level` tiene CHECK (`ht_vacancies_role_level_check`) y solo acepta
+-- 'entry' | 'lead' | 'c_suite'. NO es el nivel del career site ('Senior'):
+-- ese vive en Neon. Aqui va 'lead' porque el cargo tiene equipo a cargo.
 UPDATE ht_vacancies
 SET area              = 'Wellness',
+    role_level        = 'lead',
     vacancy_type      = 'incremental',
     form_template_key = 'sig_sst'   -- plantilla de prefiltro propia de este cargo
 WHERE client_id = '98b62872-5767-4815-9b49-1394b9527c1f'

@@ -35,6 +35,7 @@ const VACANCY_MAP: Record<string, string> = {
   "customer documentation specialist": "6e4838dd-8aea-4426-bd26-ea588f0f493a",
   "lead accounting finance": "8c246bb3-8244-4755-bf92-58c0c627821c",
   "talent acquisition and development lead": "70c39cab-adaf-49a0-b137-29d0ff9b56b0",
+  "especialista sig-sst": "52e41180-79ca-48c5-97d1-f385f4d44dde",
 };
 
 type ImportRow = {

@@ -20,6 +20,10 @@ const VACANCY_MAP: Record<number, string> = {
   7: "da9ca124-e610-450b-a9f1-56f4a538fd9a", // Operations Executive and Support (Operations)
   8: "81d82ac5-9746-4f80-94d5-4595d09bd7ab", // Overseas Sales Executive and Support (Commercial)
   9: "7350dc25-2791-4a9c-8d30-1c09fe48cbad", // Pricing Executive - Support (Pricing)
+
+  // ─── Wellness ────────────────────────────────────────────────────
+  // TODO 11: "<UUID>", // Talent Acquisition Specialist · falta el UUID
+  12: "52e41180-79ca-48c5-97d1-f385f4d44dde", // Especialista SIG-SST (Wellness)
 };
 
 let dbInitialized = false;
