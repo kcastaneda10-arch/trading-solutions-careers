@@ -42,6 +42,9 @@ function plantillaDePrefiltro(job: { dept: string; slug: string; location: strin
   if (job.slug.startsWith("china-") || /china|shanghai|shenzhen|guangzhou/i.test(job.location)) return "china";
   if (d.includes("tecnolog") || d.includes("technology")) return "tech";
   if (d.includes("finanz") || d.includes("contab") || d.includes("finance")) return "finance";
+  // SIG-SST va antes que Wellness: el cargo pertenece a Wellness pero su filtro
+  // son credenciales de ley (licencia, cursos, auditor), no experiencia en HR.
+  if (/sig|sst|hseq/i.test(job.slug)) return "sig_sst";
   if (d.includes("talento") || d.includes("wellness") || d.includes("people") || d.includes("human")) return "hr_lead";
   return "comex";
 }
