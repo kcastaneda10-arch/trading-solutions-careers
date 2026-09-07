@@ -42,6 +42,10 @@ const DEFAULT_ENGLISH_MIN_RANK = 4; // B2
 
 const ENGLISH_MIN_RANK_OVERRIDES: Record<string, number> = {
   "368006e7-98da-46a2-b871-6b741290821b": 5, // Pricing Senior · C1
+  // Especialista SIG-SST · B1. El aviso pide B2, pero el ingles NO descalifica
+  // en este cargo: el filtro real son las credenciales de ley. Decision de
+  // Wellness, 7-sep-2026.
+  "52e41180-79ca-48c5-97d1-f385f4d44dde": 3,
 };
 
 function getEnglishMinRank(vacancyId: string): number {
