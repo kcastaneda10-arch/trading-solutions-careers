@@ -37,13 +37,17 @@ INSERT INTO vacancies (
   '2026-09-07',
   'SIG, SST, BASC V6, ISO 9001/14001/45001, Licencia SST, Bilingüe EN/ES',
 
-  'Trading Solutions es un freight forwarder boutique. Movemos carga entre continentes con un servicio cercano, y eso solo se sostiene si nuestros sistemas de gestión funcionan de verdad y no solo en el papel.
+  '¡Buscamos un Especialista SIG-SST para unirse a nuestro equipo!
 
-Buscamos un Especialista SIG-SST: un profesional con licencia vigente que sea dueño del sistema completo —calidad, ambiental, SST, seguridad de la cadena de suministro e inocuidad—. No buscamos a alguien que llene formatos antes de la auditoría: buscamos criterio.',
+En Trading Solutions estamos redefiniendo el futuro de la logística global, uniendo tecnología de punta, visibilidad en tiempo real y coordinación fluida entre continentes. Le damos a las empresas la capacidad de moverse más rápido, con más inteligencia y con total confianza en cada embarque.
 
-  'Trading Solutions is a boutique freight forwarder. We move cargo across continents with close, personal service, and that only holds up if our management systems work for real and not just on paper.
+Buscamos un Especialista SIG-SST que sea dueño del sistema de gestión completo de Trading Solutions: sostener nuestras certificaciones y cerrar en fecha nuestras obligaciones legales, en un freight forwarder boutique donde cada cliente se atiende de manera personal. Es un rol end to end —calidad, ambiental, seguridad y salud en el trabajo, seguridad de la cadena de suministro e inocuidad, más el plan anual de formación, el programa de auditorías internas y la investigación de cada incidente— con un estándar que resiste a un auditor externo y se sustenta con evidencia. Vas a trabajar con toda la compañía y en terreno: reportas al CWO, lideras a un analista y a un practicante, y eres nuestra voz técnica ante la certificadora, BASC, la DIAN y los clientes internacionales que nos auditan como proveedor. El cargo se mide por dos resultados: certificaciones sostenidas sin hallazgos mayores, y obligaciones legales cerradas en fecha.',
 
-We are hiring an Integrated Management Systems & HSE Specialist: a licensed professional who owns the whole system - quality, environment, occupational health and safety, supply chain security and food safety. We are not looking for someone to fill in forms before the audit: we are looking for judgment.',
+  'We are looking for an Integrated Management Systems & HSE Specialist to join our team!
+
+At Trading Solutions, we are redefining the future of global logistics by merging cutting-edge technology, real-time visibility, and seamless coordination across continents. We empower businesses to move faster, smarter, and with absolute confidence in every shipment.
+
+We are looking for an Integrated Management Systems & HSE Specialist to own the entire management system of Trading Solutions: keeping our certifications alive and our legal obligations closed on time, in a boutique freight forwarder where every client is handled personally. It is an end-to-end role - quality, environment, occupational health and safety, supply chain security and food safety, plus the annual training plan, the internal audit programme and the investigation of every incident - held to a standard that survives an external auditor, backed by evidence. You will work across the whole company and out in the field: you report to the CWO, lead an analyst and an intern, and are our technical voice before the certification body, BASC, Customs and the international clients who audit us as a supplier. The role is measured on two outcomes: certifications sustained with no major findings, and legal obligations closed on time.',
 
   '["Mantener y hacer auditable el Sistema Integrado de Gestión: ISO 9001, ISO 14001, ISO 45001, BASC V6:2022, régimen OEA e inocuidad",
     "Ejercer como responsable del SG-SST con licencia vigente: estándares mínimos, matriz de peligros, plan anual de trabajo, programas de vigilancia epidemiológica y plan de emergencias",
