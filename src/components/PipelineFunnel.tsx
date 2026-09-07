@@ -81,6 +81,30 @@ type PrefilterData = {
   next_role?: string;
   extra?: string;
   submitted_at?: string;
+  // SIG-SST · plantilla sig_sst. Sin esto la ficha mostraba el prefiltro de
+  // comex y las respuestas de credenciales quedaban invisibles.
+  license_status?: string;
+  license_number?: string;
+  license_expiry?: string;
+  course_50h?: boolean;
+  course_20h?: boolean;
+  course_20h_year?: string;
+  postgrad_sig?: boolean;
+  auditor_certs?: string[];
+  systems_managed?: string[];
+  sectors?: string[];
+  years_sig?: number;
+  years_leading_sig?: number;
+  cert_audit_cycles?: number;
+  case_answer?: string;
+};
+
+/** Etiqueta legible del estado de la licencia en SST. */
+const LICENCIA_LABEL: Record<string, string> = {
+  si: "Vigente",
+  vencida: "Vencida",
+  tramite: "En trámite",
+  no: "No la tiene",
 };
 
 type Vacancy = {
@@ -1474,6 +1498,40 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                 )}
               </Section>
 
+              {pf.license_status && (
+                <Section title="🛡️ Credenciales SIG-SST">
+                  <Row
+                    k="Licencia en SST"
+                    v={
+                      <strong className={pf.license_status === "si" ? "text-emerald-700" : "text-red-700"}>
+                        {LICENCIA_LABEL[pf.license_status] || pf.license_status}
+                      </strong>
+                    }
+                  />
+                  {pf.license_number && <Row k="Número y entidad" v={pf.license_number} />}
+                  {pf.license_expiry && <Row k="Vence" v={pf.license_expiry} />}
+                  {typeof pf.course_50h === "boolean" && <Row k="Curso 50 horas" v={pf.course_50h ? "Sí" : "No"} />}
+                  {typeof pf.course_20h === "boolean" && (
+                    <Row k="Actualización 20 horas" v={pf.course_20h ? `Sí${pf.course_20h_year ? ` · ${pf.course_20h_year}` : ""}` : "No"} />
+                  )}
+                  {typeof pf.postgrad_sig === "boolean" && <Row k="Posgrado SST/HSEQ/SIG" v={pf.postgrad_sig ? "Sí" : "No"} />}
+                  {pf.auditor_certs && pf.auditor_certs.length > 0 && (
+                    <Row k="Auditor certificado en" v={pf.auditor_certs.join(", ")} />
+                  )}
+                  {pf.systems_managed && pf.systems_managed.length > 0 && (
+                    <Row k="Sistemas manejados" v={pf.systems_managed.join(", ")} />
+                  )}
+                  {typeof pf.years_sig === "number" && <Row k="Años en SIG y SST" v={`${pf.years_sig} años`} />}
+                  {typeof pf.years_leading_sig === "number" && (
+                    <Row k="Años liderando el sistema" v={<strong>{pf.years_leading_sig} años</strong>} />
+                  )}
+                  {typeof pf.cert_audit_cycles === "number" && (
+                    <Row k="Ciclos de auditoría externa" v={`${pf.cert_audit_cycles}`} />
+                  )}
+                  {pf.sectors && pf.sectors.length > 0 && <Row k="Sectores" v={pf.sectors.join(", ")} />}
+                </Section>
+              )}
+
               <Section title="💰 Ventas, pricing, liderazgo">
                 {typeof pf.years_sales === "number" && <Row k="Años en ventas" v={`${pf.years_sales} años`} />}
                 {typeof pf.pricing_exp === "boolean" && <Row k="Experiencia pricing" v={pf.pricing_exp ? "Sí" : "No"} />}
@@ -1484,8 +1542,16 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                 )}
               </Section>
 
-              {(pf.why_ts || pf.next_role || pf.extra) && (
+              {(pf.why_ts || pf.next_role || pf.extra || pf.case_answer) && (
                 <Section title="✍️ Sobre el candidato">
+                  {pf.case_answer && (
+                    <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 mb-2">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-amber-800 mb-1">
+                        Caso · eficacia sin registrar, auditoría en 6 semanas
+                      </p>
+                      <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{pf.case_answer}</p>
+                    </div>
+                  )}
                   {pf.why_ts && (
                     <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-2">
                       <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-800 mb-1">¿Por qué TS?</p>
