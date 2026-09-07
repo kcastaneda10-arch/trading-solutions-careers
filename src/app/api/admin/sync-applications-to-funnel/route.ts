@@ -29,7 +29,6 @@ const VACANCY_MAP: Record<number, string> = {
   3: "6e4838dd-8aea-4426-bd26-ea588f0f493a", // Customer Documentation Specialist
   4: "d354c55a-eb1c-4aee-bd02-b0a20162e1f1", // Pricing Junior
   5: "70c39cab-adaf-49a0-b137-29d0ff9b56b0", // Talent Acquisition and Development Lead
-  // TODO 11: "<UUID>", // Talent Acquisition Specialist · falta el UUID
   12: "52e41180-79ca-48c5-97d1-f385f4d44dde", // Especialista SIG-SST (Wellness)
 };
 

@@ -22,7 +22,6 @@ const VACANCY_MAP: Record<number, string> = {
   9: "7350dc25-2791-4a9c-8d30-1c09fe48cbad", // Pricing Executive - Support (Pricing)
 
   // ─── Wellness ────────────────────────────────────────────────────
-  // TODO 11: "<UUID>", // Talent Acquisition Specialist · falta el UUID
   12: "52e41180-79ca-48c5-97d1-f385f4d44dde", // Especialista SIG-SST (Wellness)
 };
 
