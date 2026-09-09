@@ -23,6 +23,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     .select('item_code, answer')
     .eq('session_id', session.id);
 
+  // Sin no-store el navegador y el CDN sirven el estado viejo de la sesion:
+  // un candidato que reanuda ve la pantalla de habeas data otra vez, y el panel
+  // reporta 'sin empezar' una prueba que ya se presento.
   return NextResponse.json({
     session: {
       id: session.id,
@@ -40,5 +43,5 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       items: ITEMS.filter((i) => i.block === b).map(sanitizeForCandidate),
     })),
     existing: Object.fromEntries((answers ?? []).map((a: any) => [a.item_code, a.answer])),
-  });
+  }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }

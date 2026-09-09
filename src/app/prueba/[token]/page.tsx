@@ -177,7 +177,10 @@ export default function PruebaPage() {
 
   const capture = useCallback(() => {
     const v = videoRef.current;
-    if (!v || v.readyState < 2) return;
+    if (!v || v.readyState < 2) {
+      logEvent('cam_lost', `captura omitida · video ${v ? `readyState ${v.readyState}` : 'no montado'}`);
+      return;
+    }
     const c = document.createElement("canvas");
     c.width = 320; c.height = 240;
     const ctx = c.getContext("2d");
@@ -188,18 +191,29 @@ export default function PruebaPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, image: c.toDataURL("image/jpeg", 0.6), block: blockRef.current }),
     }).catch(() => {});
-  }, [token]);
+  }, [token, logEvent]);
 
   useEffect(() => {
     if ((phase !== "test" && phase !== "blockIntro") || camState !== "on") return;
-    capture();
+    const primera = setTimeout(capture, 2500);
     const id = setInterval(() => {
       const track = streamRef.current?.getVideoTracks()?.[0];
       if (!track || track.readyState !== "live") { logEvent("cam_lost"); setCamState("denied"); return; }
       capture();
     }, SNAPSHOT_EVERY_MS);
-    return () => clearInterval(id);
+    return () => { clearTimeout(primera); clearInterval(id); };
   }, [phase, camState, capture, logEvent]);
+
+  // El elemento <video> solo existe en la fase de prueba, pero el permiso de
+  // cámara se pide antes (en el habeas data). El stream quedaba sin adjuntar y
+  // capture() salía siempre por readyState < 2: cámara autorizada, cero fotos.
+  // Al montarse el elemento se le vuelve a adjuntar el stream que ya se tenía.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !streamRef.current || v.srcObject) return;
+    v.srcObject = streamRef.current;
+    v.play().catch(() => {});
+  }, [phase]);
 
   useEffect(() => () => { streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
   useEffect(() => () => { if (advTimer.current) clearTimeout(advTimer.current); }, []);
