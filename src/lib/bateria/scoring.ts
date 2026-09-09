@@ -1,35 +1,49 @@
 /**
- * Batería SIG-SST · motor de puntuación
+ * Bateria de Seleccion TS · motor de puntuacion
  *
- * Reglas que no se negocian y por eso están aquí y no en la interfaz:
- *  · Los bloques ipsativos (parte 3) NO producen puntajes comparables entre
- *    candidatos. Solo distancia al perfil de referencia del cargo.
- *  · No se calcula ni se reporta ningún cociente intelectual. Percentil interno
+ * Reglas que no se negocian y por eso viven aqui y no en la interfaz:
+ *  · El bloque DISC es ipsativo. NO ordena candidatos entre si: solo mide
+ *    distancia al perfil de referencia de un cargo. Un "D alto" ipsativo no
+ *    significa mas dominante que otra persona, significa mas dominante que
+ *    los otros tres ejes DENTRO de esta persona.
+ *  · No se calcula ni se reporta ningun cociente intelectual. Percentil interno
  *    contra las sesiones ya completadas, con el n a la vista.
- *  · Los índices de validez no miden a la persona: miden si el dato sirve.
+ *  · Los indices de validez no miden a la persona: miden si el dato sirve.
+ *  · Ninguna escala se convierte en diagnostico. Estabilidad emocional baja es
+ *    un rango de una escala de personalidad laboral, no una condicion.
  */
 
 import { ITEMS, findItem, type Item } from './items';
+import { FACTORS, CARGOS_TIPO, DISC_PATRONES, type FactorKey } from './interpretacion';
 
-export type RawAnswer = {
-  item_code: string;
-  answer: any;
-  latency_ms?: number | null;
-};
+export type RawAnswer = { item_code: string; answer: any; latency_ms?: number | null };
+
+type Axis = 'D' | 'I' | 'S' | 'C';
+const AXES: Axis[] = ['D', 'I', 'S', 'C'];
+const FACTOR_ORDER: FactorKey[] = ['EXT', 'APE', 'AMA', 'RES', 'EST'];
 
 export type Scores = {
-  conocimiento: { total: number; correct: number; of: number; bySubdomain: Record<string, { correct: number; of: number; pct: number }> };
-  razonamiento: { total: number; correct: number; of: number; bySubdomain: Record<string, { correct: number; of: number; pct: number }> };
-  estilo: {
-    natural: Record<string, number>;
-    adaptado: Record<string, number>;
-    motivadores: Record<string, number>;
-    procesamiento: Record<string, number>;
-    tensionRol: number | null;
+  personalidad: {
+    factores: Record<string, number>;
+    facetas: Record<string, number>;
+    arquetipo: string;
+    arquetipoAlterno: string | null;
+    itemsRespondidos: number;
+  };
+  disc: {
+    natural: Record<string, { pct: number; seg: number }>;
+    mascara: Record<string, { pct: number; seg: number }>;
+    presion: Record<string, { pct: number; seg: number }>;
+    patron: string;
+    tetradasRespondidas: number;
+    afinidades: { key: string; nombre: string; pct: number; nota: string }[];
+  };
+  motivadores: { pct: Record<string, number>; orden: string[] };
+  razonamiento: {
+    total: number; correct: number; of: number;
+    bySubdomain: Record<string, { correct: number; of: number; pct: number }>;
   };
   integridad: { byDimension: Record<string, number>; permisividadGlobal: number | null };
-  criterio: { total: number | null; of: number };
-  muestraAbierta: { palabras: number; texto: string | null; pendienteRubrica: true }[];
 };
 
 export type Validity = {
@@ -37,109 +51,172 @@ export type Validity = {
   consistencia: { pares: number; concordantes: number; alerta: boolean };
   latencia: { rapidos: number; itemCodes: string[]; alerta: boolean };
   patronPlano: { alerta: boolean; detalle: string | null };
+  completitud: { respondidos: number; total: number; alerta: boolean };
   proctoring: { eventos: number; capturas: number; alerta: boolean };
   veredicto: 'sin_alertas' | 'con_reservas' | 'no_interpretable';
 };
 
-const LIKERT_MIN = 1;
-const LIKERT_MAX = 5;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const pctOf = (c: number, o: number) => (o === 0 ? 0 : Math.round((c / o) * 100));
 
-function pct(correct: number, of: number) {
-  return of === 0 ? 0 : Math.round((correct / of) * 100);
+/** Likert bruto → 0-100, aplicando inversion. */
+function likertPct(value: number, scale: 5 | 7, reverse?: boolean): number {
+  const v = reverse ? scale + 1 - value : value;
+  return ((v - 1) / (scale - 1)) * 100;
 }
 
-/** Normaliza un reparto ipsativo a base 100 sobre el total repartido. */
-function normalizeIpsative(raw: Record<string, number>): Record<string, number> {
-  const total = Object.values(raw).reduce((a, b) => a + b, 0);
-  if (total === 0) return raw;
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw)) out[k] = Math.round((v / total) * 100);
-  return out;
+/** % relativo del eje (los cuatro suman ~100) → segmento 1-7. Midline = 25% = 4. */
+function toSegment(pct: number): number {
+  if (pct <= 12) return 1;
+  if (pct <= 17) return 2;
+  if (pct <= 22) return 3;
+  if (pct <= 27) return 4;
+  if (pct <= 33) return 5;
+  if (pct <= 40) return 6;
+  return 7;
 }
 
 export function score(answers: RawAnswer[]): { scores: Scores; validity: Validity } {
   const byCode = new Map<string, RawAnswer>();
   for (const a of answers) byCode.set(a.item_code, a);
 
-  // ── Conocimiento y razonamiento ────────────────────────────
-  const mkBucket = () => ({
-    total: 0,
-    correct: 0,
-    of: 0,
-    bySubdomain: {} as Record<string, { correct: number; of: number; pct: number }>,
-  });
-  const conocimiento = mkBucket();
-  const razonamiento = mkBucket();
-
+  // ══ PARTE 1 · Personalidad ═════════════════════════════════
+  const facetAcc: Record<string, { sum: number; n: number }> = {};
+  let personalidadRespondidos = 0;
   for (const item of ITEMS) {
+    if (item.block !== 'A' || item.type !== 'likert') continue;
+    const v = Number(byCode.get(item.code)?.answer?.value);
+    if (!Number.isFinite(v)) continue;
+    personalidadRespondidos += 1;
+    const acc = (facetAcc[item.subdomain] ||= { sum: 0, n: 0 });
+    acc.sum += likertPct(v, item.scale, item.reverse);
+    acc.n += 1;
+  }
+  const facetas: Record<string, number> = {};
+  for (const [k, v] of Object.entries(facetAcc)) facetas[k] = Math.round(v.sum / v.n);
+
+  const factores: Record<string, number> = {};
+  for (const fk of FACTOR_ORDER) {
+    const keys = FACTORS[fk].facets.map((f) => f.key).filter((k) => facetas[k] != null);
+    factores[fk] = keys.length ? Math.round(keys.reduce((a, k) => a + facetas[k], 0) / keys.length) : 0;
+  }
+
+  // Arquetipo · los dos factores mas altos, en orden canonico
+  const ranked = FACTOR_ORDER.slice().sort((a, b) => factores[b] - factores[a]);
+  const spread = factores[ranked[0]] - factores[ranked[4]];
+  let arquetipo = 'EQUILIBRADO';
+  let arquetipoAlterno: string | null = null;
+  if (personalidadRespondidos >= 30 && spread >= 15 && factores[ranked[0]] >= 55) {
+    const canon = (a: FactorKey, b: FactorKey) =>
+      [a, b].sort((x, y) => FACTOR_ORDER.indexOf(x) - FACTOR_ORDER.indexOf(y)).join('+');
+    arquetipo = canon(ranked[0], ranked[1]);
+    // Si el segundo y el tercero estan pegados, el perfil esta entre dos arquetipos.
+    if (Math.abs(factores[ranked[1]] - factores[ranked[2]]) < 8) {
+      arquetipoAlterno = canon(ranked[0], ranked[2]);
+    }
+  }
+
+  // ══ PARTE 2 · DISC · tres graficas ═════════════════════════
+  const most: Record<Axis, number> = { D: 0, I: 0, S: 0, C: 0 };
+  const least: Record<Axis, number> = { D: 0, I: 0, S: 0, C: 0 };
+  let tetradas = 0;
+  for (const item of ITEMS) {
+    if (item.type !== 'tetrad') continue;
+    const a = byCode.get(item.code)?.answer;
+    if (!a?.most || !a?.least || a.most === a.least) continue;
+    tetradas += 1;
+    const axisOf = (k: string) => item.statements.find((s) => s.key === k)?.axis;
+    const mA = axisOf(a.most);
+    const lA = axisOf(a.least);
+    if (mA) most[mA] += 1;
+    if (lA) least[lA] += 1;
+  }
+
+  const mkDisc = (raw: Record<Axis, number>) => {
+    const total = AXES.reduce((s, k) => s + raw[k], 0) || 1;
+    const out: Record<string, { pct: number; seg: number }> = {};
+    for (const k of AXES) {
+      const pct = Math.round((raw[k] / total) * 1000) / 10;
+      out[k] = { pct, seg: toSegment(pct) };
+    }
+    return out;
+  };
+
+  // Grafica I · mascara social: lo que eligio como MAS, el yo que muestra.
+  const mascara = mkDisc(most);
+  // Grafica II · bajo presion: un eje que casi nunca rechaza es al que recurre.
+  const presionRaw: Record<Axis, number> = { D: 0, I: 0, S: 0, C: 0 };
+  for (const k of AXES) presionRaw[k] = Math.max(0, tetradas - least[k]);
+  const presion = mkDisc(presionRaw);
+  // Grafica III · natural: la sintesis de las dos, el perfil de trabajo.
+  const naturalRaw: Record<Axis, number> = { D: 0, I: 0, S: 0, C: 0 };
+  for (const k of AXES) naturalRaw[k] = most[k] * 2 + Math.max(0, tetradas - least[k]);
+  const natural = mkDisc(naturalRaw);
+
+  // Patron · ejes por encima de la linea media (segmento >= 5)
+  const altos = AXES.filter((k) => natural[k].seg >= 5);
+  let patron = 'EQ';
+  if (altos.length >= 1 && altos.length <= 3) patron = altos.join('');
+  else if (altos.length === 4) {
+    patron = AXES.slice().sort((a, b) => natural[b].pct - natural[a].pct).slice(0, 3)
+      .sort((a, b) => AXES.indexOf(a) - AXES.indexOf(b)).join('');
+  }
+  if (!DISC_PATRONES[patron]) patron = 'EQ';
+
+  const afinidades = CARGOS_TIPO.map((c) => {
+    const dist = AXES.reduce((s, k) => s + Math.abs(natural[k].seg - c.ref[k]), 0);
+    return { key: c.key, nombre: c.nombre, nota: c.nota, pct: Math.round(clamp(100 - (dist / 24) * 100, 0, 100)) };
+  }).sort((a, b) => b.pct - a.pct);
+
+  // ══ PARTE 3 · Motivadores ══════════════════════════════════
+  const motAcc: Record<string, { sum: number; n: number }> = {};
+  for (const item of ITEMS) {
+    if (item.block !== 'C' || item.type !== 'likert') continue;
+    const v = Number(byCode.get(item.code)?.answer?.value);
+    if (!Number.isFinite(v)) continue;
+    const acc = (motAcc[item.subdomain] ||= { sum: 0, n: 0 });
+    acc.sum += likertPct(v, item.scale, item.reverse);
+    acc.n += 1;
+  }
+  const motPct: Record<string, number> = {};
+  for (const [k, v] of Object.entries(motAcc)) motPct[k] = Math.round(v.sum / v.n);
+  const motOrden = Object.keys(motPct).sort((a, b) => motPct[b] - motPct[a]);
+
+  // ══ PARTE 4 · Razonamiento ═════════════════════════════════
+  const raz = { total: 0, correct: 0, of: 0, bySubdomain: {} as Record<string, { correct: number; of: number; pct: number }> };
+  for (const item of ITEMS) {
+    if (item.block !== 'D') continue;
     if (item.type !== 'mc' && item.type !== 'figure') continue;
-    const bucket = item.block === 'A' ? conocimiento : item.block === 'B' ? razonamiento : null;
-    if (!bucket) continue;
     const given = byCode.get(item.code)?.answer?.choice;
     const ok = given === item.answer;
-    bucket.of += 1;
-    if (ok) bucket.correct += 1;
-    const sd = (bucket.bySubdomain[item.subdomain] ||= { correct: 0, of: 0, pct: 0 });
+    raz.of += 1;
+    if (ok) raz.correct += 1;
+    const sd = (raz.bySubdomain[item.subdomain] ||= { correct: 0, of: 0, pct: 0 });
     sd.of += 1;
     if (ok) sd.correct += 1;
   }
-  for (const b of [conocimiento, razonamiento]) {
-    b.total = pct(b.correct, b.of);
-    for (const sd of Object.values(b.bySubdomain)) sd.pct = pct(sd.correct, sd.of);
-  }
+  raz.total = pctOf(raz.correct, raz.of);
+  for (const sd of Object.values(raz.bySubdomain)) sd.pct = pctOf(sd.correct, sd.of);
 
-  // ── Estilo · ipsativo ──────────────────────────────────────
-  const natural: Record<string, number> = { D: 0, I: 0, S: 0, C: 0 };
-  const adaptado: Record<string, number> = { D: 0, I: 0, S: 0, C: 0 };
-  const motivadores: Record<string, number> = {};
-  const procesamiento: Record<string, number> = {};
-
-  for (const item of ITEMS) {
-    if (item.type !== 'forced') continue;
-    const a = byCode.get(item.code)?.answer;
-    if (!a?.most && !a?.least) continue;
-    const axisOf = (k: string) => item.statements.find((s) => s.key === k)?.axis;
-    const target =
-      item.subdomain === '3.3' ? motivadores : item.subdomain === '3.4' ? procesamiento : item.facet === 'adaptado' ? adaptado : natural;
-    // +2 a la elegida como MÁS, −1 a la elegida como MENOS, base 3 por eje presente.
-    for (const s of item.statements) target[s.axis] = (target[s.axis] ?? 0) + 3;
-    const mostAxis = a.most ? axisOf(a.most) : null;
-    const leastAxis = a.least ? axisOf(a.least) : null;
-    if (mostAxis) target[mostAxis] += 2;
-    if (leastAxis) target[leastAxis] = Math.max(0, target[leastAxis] - 1);
-  }
-
-  const nat = normalizeIpsative(natural);
-  const ada = normalizeIpsative(adaptado);
-  const axes = ['D', 'I', 'S', 'C'];
-  const bothPresent = axes.some((k) => nat[k] > 0) && axes.some((k) => ada[k] > 0);
-  const tensionRol = bothPresent
-    ? Math.round((axes.reduce((acc, k) => acc + Math.abs((nat[k] ?? 0) - (ada[k] ?? 0)), 0) / 4) * 10) / 10
-    : null;
-
-  // ── Integridad ─────────────────────────────────────────────
+  // ══ PARTE 5 · Integridad ═══════════════════════════════════
   const dimAcc: Record<string, { sum: number; n: number }> = {};
   for (const item of ITEMS) {
-    if (item.block !== 'D') continue;
+    if (item.block !== 'E') continue;
     const raw = byCode.get(item.code)?.answer;
     if (item.type === 'likert') {
-      if (item.sd) continue; // los SD no puntúan integridad
+      if (item.sd) continue;
       const v = Number(raw?.value);
       if (!Number.isFinite(v)) continue;
-      // reverse: estar de acuerdo con la racionalización resta
-      const norm = item.reverse ? LIKERT_MAX + LIKERT_MIN - v : v;
-      const scaled = ((norm - LIKERT_MIN) / (LIKERT_MAX - LIKERT_MIN)) * 100;
       const d = (dimAcc[item.subdomain] ||= { sum: 0, n: 0 });
-      d.sum += scaled;
+      d.sum += likertPct(v, item.scale, item.reverse);
       d.n += 1;
     } else if (item.type === 'situational') {
       const chosen = raw?.choice;
       if (!chosen) continue;
       const eff = item.options.find((o) => o.key === chosen)?.effectiveness;
       if (eff == null) continue;
-      const scaled = (eff / 3) * 100;
       const d = (dimAcc[item.subdomain] ||= { sum: 0, n: 0 });
-      d.sum += scaled;
+      d.sum += (eff / 3) * 100;
       d.n += 1;
     }
   }
@@ -148,28 +225,7 @@ export function score(answers: RawAnswer[]): { scores: Scores; validity: Validit
   const dims = Object.values(byDimension);
   const permisividadGlobal = dims.length ? Math.round(dims.reduce((a, b) => a + b, 0) / dims.length) : null;
 
-  // ── Criterio situacional (parte 5) ─────────────────────────
-  let critSum = 0;
-  let critOf = 0;
-  for (const item of ITEMS) {
-    if (item.block !== 'E' || item.type !== 'situational') continue;
-    critOf += 1;
-    const chosen = byCode.get(item.code)?.answer?.choice;
-    const eff = item.options.find((o) => o.key === chosen)?.effectiveness;
-    if (eff != null) critSum += (eff / 3) * 100;
-  }
-
-  // ── Muestra abierta · queda pendiente de rúbrica humana ────
-  const muestraAbierta = ITEMS.filter((i) => i.type === 'open').map((i) => {
-    const t: string | null = byCode.get(i.code)?.answer?.text ?? null;
-    return {
-      palabras: t ? t.trim().split(/\s+/).filter(Boolean).length : 0,
-      texto: t,
-      pendienteRubrica: true as const,
-    };
-  });
-
-  // ── Validez ────────────────────────────────────────────────
+  // ══ VALIDEZ ════════════════════════════════════════════════
   const sdItems = ITEMS.filter((i) => i.type === 'likert' && i.sd);
   let extremas = 0;
   for (const i of sdItems) {
@@ -177,14 +233,14 @@ export function score(answers: RawAnswer[]): { scores: Scores; validity: Validit
     if (v >= 4) extremas += 1;
   }
 
-  const pairs = new Set<string>();
+  const seen = new Set<string>();
   let concordantes = 0;
   let paresContados = 0;
   for (const i of ITEMS) {
     if (i.type !== 'likert' || !i.pairWith) continue;
     const key = [i.code, i.pairWith].sort().join('|');
-    if (pairs.has(key)) continue;
-    pairs.add(key);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const a = Number(byCode.get(i.code)?.answer?.value);
     const b = Number(byCode.get(i.pairWith)?.answer?.value);
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
@@ -195,62 +251,51 @@ export function score(answers: RawAnswer[]): { scores: Scores; validity: Validit
   const rapidos: string[] = [];
   for (const a of answers) {
     const item = findItem(a.item_code);
-    if (!item) continue;
-    if (item.type !== 'mc' && item.type !== 'figure') continue;
+    if (!item || (item.type !== 'mc' && item.type !== 'figure')) continue;
     if (a.latency_ms != null && a.latency_ms < 1500) rapidos.push(a.item_code);
   }
 
-  const likertValues = ITEMS.filter((i) => i.type === 'likert')
+  // Patron plano · sin varianza en las escalas de 7 puntos no hay perfil que leer
+  const likert7 = ITEMS.filter((i) => i.type === 'likert' && i.scale === 7)
     .map((i) => Number(byCode.get(i.code)?.answer?.value))
     .filter((v) => Number.isFinite(v));
-  const distintos = new Set(likertValues).size;
-  const patronPlano = likertValues.length >= 5 && distintos <= 1;
+  const distintos = new Set(likert7).size;
+  const plano = likert7.length >= 20 && distintos <= 2;
 
   return {
     scores: {
-      conocimiento,
-      razonamiento,
-      estilo: { natural: nat, adaptado: ada, motivadores: normalizeIpsative(motivadores), procesamiento: normalizeIpsative(procesamiento), tensionRol },
+      personalidad: { factores, facetas, arquetipo, arquetipoAlterno, itemsRespondidos: personalidadRespondidos },
+      disc: { natural, mascara, presion, patron, tetradasRespondidas: tetradas, afinidades },
+      motivadores: { pct: motPct, orden: motOrden },
+      razonamiento: raz,
       integridad: { byDimension, permisividadGlobal },
-      criterio: { total: critOf ? Math.round(critSum / critOf) : null, of: critOf },
-      muestraAbierta,
     },
     validity: {
       deseabilidadSocial: { extremas, of: sdItems.length, alerta: extremas >= 4 },
       consistencia: { pares: paresContados, concordantes, alerta: paresContados > 0 && concordantes < paresContados },
       latencia: { rapidos: rapidos.length, itemCodes: rapidos, alerta: rapidos.length >= 5 },
-      patronPlano: { alerta: patronPlano, detalle: patronPlano ? 'Misma respuesta en todos los ítems de escala' : null },
+      patronPlano: { alerta: plano, detalle: plano ? 'Prácticamente la misma respuesta en todas las escalas' : null },
+      completitud: { respondidos: answers.length, total: ITEMS.length, alerta: answers.length < ITEMS.length * 0.9 },
       proctoring: { eventos: 0, capturas: 0, alerta: false },
       veredicto: 'sin_alertas',
     },
   };
 }
 
-/** Se llama después de score(), cuando ya se conocen eventos y capturas. */
+/** Se llama despues de score(), cuando ya se conocen eventos y capturas. */
 export function applyProctoring(v: Validity, eventos: number, capturas: number, minutos: number): Validity {
   const esperadas = Math.max(1, Math.floor((minutos * 60) / 45));
   const cobertura = capturas / esperadas;
   const alerta = eventos >= 3 || (capturas > 0 && cobertura < 0.5);
   const out: Validity = { ...v, proctoring: { eventos, capturas, alerta } };
 
-  const graves = (out.latencia.alerta ? 1 : 0) + (out.patronPlano.alerta ? 1 : 0) + (alerta && eventos >= 6 ? 1 : 0);
+  const graves =
+    (out.latencia.alerta ? 1 : 0) +
+    (out.patronPlano.alerta ? 1 : 0) +
+    (out.completitud.alerta ? 1 : 0) +
+    (alerta && eventos >= 6 ? 1 : 0);
   const leves = (out.deseabilidadSocial.alerta ? 1 : 0) + (out.consistencia.alerta ? 1 : 0) + (alerta ? 1 : 0);
 
-  out.veredicto = graves >= 2 ? 'no_interpretable' : graves >= 1 || leves >= 2 ? 'con_reservas' : leves >= 1 ? 'con_reservas' : 'sin_alertas';
+  out.veredicto = graves >= 2 ? 'no_interpretable' : graves >= 1 || leves >= 1 ? 'con_reservas' : 'sin_alertas';
   return out;
-}
-
-/** Desempeño D de la capa 2. Los pesos salen del análisis del cargo: aún provisionales. */
-export const PESOS_DESEMPENO = { conocimiento: 0.35, muestra: 0.3, razonamiento: 0.2, criterio: 0.15 };
-
-export function desempeno(s: Scores): { D: number | null; parcial: boolean } {
-  // La muestra abierta requiere rúbrica humana: hasta entonces D es parcial.
-  const partes = [
-    { v: s.conocimiento.total, w: PESOS_DESEMPENO.conocimiento },
-    { v: s.razonamiento.total, w: PESOS_DESEMPENO.razonamiento },
-    { v: s.criterio.total, w: PESOS_DESEMPENO.criterio },
-  ].filter((p) => p.v != null) as { v: number; w: number }[];
-  if (!partes.length) return { D: null, parcial: true };
-  const wSum = partes.reduce((a, p) => a + p.w, 0);
-  return { D: Math.round(partes.reduce((a, p) => a + p.v * p.w, 0) / wSum), parcial: true };
 }

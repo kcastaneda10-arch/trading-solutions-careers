@@ -2,19 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdminRequest } from '@/lib/bateria/auth';
 import { findItem, ITEMS } from '@/lib/bateria/items';
-import { desempeno } from '@/lib/bateria/scoring';
+import {
+  FACTORS, ARQUETIPOS, DISC_PATRONES, DISC_LABEL, MOTIVADORES,
+  INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, franja,
+} from '@/lib/bateria/interpretacion';
 
 export const dynamic = 'force-dynamic';
 
-/** Informe completo. Solo para el equipo de selección, nunca para el candidato. */
+/**
+ * Informe completo. Solo para el equipo de seleccion, nunca para el candidato.
+ * La capa de interpretacion se resuelve en el servidor y viaja ya armada:
+ * asi los textos y las claves no quedan en un chunk estatico del navegador.
+ */
 export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { data: session } = await supabaseAdmin
-    .from('ts_bat_sessions')
-    .select('*')
-    .eq('token', params.token)
-    .single();
+    .from('ts_bat_sessions').select('*').eq('token', params.token).single();
   if (!session) return NextResponse.json({ error: 'No encontrada' }, { status: 404 });
 
   const [{ data: answers }, { data: events }, { data: snaps }] = await Promise.all([
@@ -23,22 +27,19 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     supabaseAdmin.from('ts_bat_snapshots').select('*').eq('session_id', session.id).order('captured_at'),
   ]);
 
-  // URLs firmadas para las capturas: el bucket es privado.
-  let signed: { path: string; url: string | null; captured_at: string; block: string | null }[] = [];
+  // URLs firmadas: el bucket es privado.
+  let capturas: { path: string; url: string | null; captured_at: string; block: string | null }[] = [];
   if (snaps?.length) {
-    const paths = snaps.map((s: any) => s.storage_path);
     const { data: urls } = await supabaseAdmin.storage
       .from('proctoring-snapshots')
-      .createSignedUrls(paths, 60 * 60);
-    signed = snaps.map((s: any, idx: number) => ({
-      path: s.storage_path,
-      url: urls?.[idx]?.signedUrl ?? null,
-      captured_at: s.captured_at,
-      block: s.block,
+      .createSignedUrls(snaps.map((s: any) => s.storage_path), 60 * 60);
+    capturas = snaps.map((s: any, idx: number) => ({
+      path: s.storage_path, url: urls?.[idx]?.signedUrl ?? null,
+      captured_at: s.captured_at, block: s.block,
     }));
   }
 
-  // Revisión ítem por ítem: enunciado, lo que respondió, la clave y la fuente.
+  // Revision item por item: que midio, que respondio, la clave y el sustento.
   const revision = (answers ?? []).map((a: any) => {
     const item = findItem(a.item_code);
     let correcta: string | null = null;
@@ -47,29 +48,61 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       correcta = item.answer;
       acerto = a.answer?.choice === item.answer;
     }
+    let efectividad: number | null = null;
+    if (item?.type === 'situational' && a.answer?.choice) {
+      efectividad = item.options.find((o) => o.key === a.answer.choice)?.effectiveness ?? null;
+    }
     return {
-      item_code: a.item_code,
-      block: a.block,
-      subdomain: a.subdomain,
-      etiqueta: item?.hiddenLabel ?? null,
-      tipo: a.item_type,
-      respuesta: a.answer,
-      correcta,
-      acerto,
+      item_code: a.item_code, block: a.block, subdomain: a.subdomain,
+      etiqueta: item?.hiddenLabel ?? null, tipo: a.item_type,
+      enunciado: item && 'stem' in item ? item.stem : item && 'prompt' in item ? item.prompt : null,
+      respuesta: a.answer, correcta, acerto, efectividad,
       latency_ms: a.latency_ms,
-      fuente: item && 'source' in item ? item.source ?? null : null,
       sustento: item && 'rationale' in item ? item.rationale ?? null : null,
     };
   });
 
-  const D = session.scores ? desempeno(session.scores as any) : { D: null, parcial: true };
+  // ── Capa de interpretacion ya resuelta ────────────────────
+  const sc: any = session.scores ?? null;
+  let interpretacion: any = null;
+  if (sc) {
+    const arq = ARQUETIPOS[sc.personalidad?.arquetipo] ?? ARQUETIPOS.EQUILIBRADO;
+    const arqAlt = sc.personalidad?.arquetipoAlterno ? ARQUETIPOS[sc.personalidad.arquetipoAlterno] ?? null : null;
+    interpretacion = {
+      arquetipo: arq,
+      arquetipoAlterno: arqAlt,
+      factores: Object.entries(FACTORS).map(([key, f]) => {
+        const pct = sc.personalidad?.factores?.[key] ?? 0;
+        const fr = franja(pct);
+        return {
+          key, label: f.label, polos: f.polos, pct, franja: fr,
+          queSignifica: f.queSignifica,
+          lectura: fr === 'alto' ? f.alto : fr === 'bajo' ? f.bajo : f.medio,
+          facetas: f.facets.map((fa) => {
+            const fpct = sc.personalidad?.facetas?.[fa.key] ?? 0;
+            return {
+              key: fa.key, label: fa.label, pct: fpct, franja: franja(fpct),
+              lectura: franja(fpct) === 'bajo' ? fa.bajo : fa.alto,
+            };
+          }),
+        };
+      }),
+      discLabel: DISC_LABEL,
+      patron: DISC_PATRONES[sc.disc?.patron] ?? DISC_PATRONES.EQ,
+      motivadores: (sc.motivadores?.orden ?? []).map((k: string) => ({
+        key: k, pct: sc.motivadores?.pct?.[k] ?? 0, ...MOTIVADORES[k],
+      })),
+      integridad: Object.entries(sc.integridad?.byDimension ?? {}).map(([k, pct]) => ({
+        key: k, label: INTEGRIDAD_LABEL[k] ?? k, pct: pct as number, franja: franja(pct as number),
+      })),
+      razonamiento: Object.entries(sc.razonamiento?.bySubdomain ?? {}).map(([k, v]: any) => ({
+        key: k, label: RAZONAMIENTO_LABEL[k] ?? k, ...v,
+      })),
+    };
+  }
 
   return NextResponse.json({
-    session,
-    desempeno: D,
-    revision,
-    eventos: events ?? [],
-    capturas: signed,
-    total_items: ITEMS.length,
+    session, revision, interpretacion,
+    eventos: events ?? [], capturas, total_items: ITEMS.length,
   });
 }
