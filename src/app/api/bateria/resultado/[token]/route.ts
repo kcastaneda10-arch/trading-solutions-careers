@@ -101,8 +101,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     };
   }
 
-  return NextResponse.json({
-    session, revision, interpretacion,
-    eventos: events ?? [], capturas, total_items: ITEMS.length,
-  });
+  // Sin no-store el navegador reutiliza el informe anterior: se recalcula, se
+  // vuelve a pedir la misma URL y devuelve la version vieja sin puntajes.
+  return NextResponse.json(
+    { session, revision, interpretacion, eventos: events ?? [], capturas, total_items: ITEMS.length },
+    { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+  );
 }

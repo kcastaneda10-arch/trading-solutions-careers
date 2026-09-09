@@ -42,10 +42,11 @@ export default function BateriaAdmin() {
   const [abierto, setAbierto] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<any>(null);
   const [recalculando, setRecalculando] = useState<string | null>(null);
+  const [errorCalc, setErrorCalc] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const r = await fetch("/api/bateria/list");
+    const r = await fetch("/api/bateria/list", { cache: "no-store" });
     const j = await r.json();
     setSessions(j.sessions || []);
     setLoading(false);
@@ -70,7 +71,7 @@ export default function BateriaAdmin() {
     // La tabla se pinta al cargar la página; si la prueba se tomó en otra
     // pestaña, esos conteos ya están viejos. Se refrescan al abrir el informe.
     load();
-    const r = await fetch(`/api/bateria/resultado/${token}`);
+    const r = await fetch(`/api/bateria/resultado/${token}`, { cache: "no-store" });
     setDetalle(await r.json());
   }
 
@@ -78,19 +79,28 @@ export default function BateriaAdmin() {
    *  a medias o para volver a puntuar tras un cambio en el motor. */
   async function recalcular(token: string) {
     setRecalculando(token);
-    const r = await fetch("/api/bateria/recalcular", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    const j = await r.json();
-    setRecalculando(null);
-    await load();
-    if (abierto === token) {
-      setDetalle(null);
-      const rr = await fetch(`/api/bateria/resultado/${token}`);
-      setDetalle(await rr.json());
-    } else if (j.error) {
-      alert(j.error);
+    setErrorCalc(null);
+    try {
+      const r = await fetch("/api/bateria/recalcular", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { j = { error: `Respuesta no válida (${r.status}): ${txt.slice(0, 200)}` }; }
+      // El error se muestra siempre, esté el panel abierto o no. Antes se perdía
+      // justo en el caso en que se necesitaba: con el informe abierto.
+      if (!r.ok || j.error) setErrorCalc(j.error || `HTTP ${r.status}`);
+      await load();
+      if (abierto === token) {
+        setDetalle(null);
+        const rr = await fetch(`/api/bateria/resultado/${token}`, { cache: "no-store" });
+        setDetalle(await rr.json());
+      }
+    } catch (err: any) {
+      setErrorCalc(err?.message ?? String(err));
+    } finally {
+      setRecalculando(null);
     }
   }
 
@@ -177,6 +187,14 @@ export default function BateriaAdmin() {
             </table>
           </div>
         </div>
+
+        {errorCalc && (
+          <div style={{ ...box, background: "#FDF6F5", border: "1px solid #F3D6D2" }}>
+            <p style={{ fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase", color: RED, fontWeight: 700, margin: "0 0 8px" }}>No se pudo calcular el informe</p>
+            <p style={{ fontSize: 13.5, margin: 0, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>{errorCalc}</p>
+            <p style={{ fontSize: 12.5, color: GRAY, margin: "10px 0 0" }}>Las respuestas siguen guardadas. Pásame este mensaje tal cual y lo corrijo.</p>
+          </div>
+        )}
 
         {abierto && (
           <div style={box}>

@@ -8,59 +8,78 @@ import { score, applyProctoring } from './scoring';
  * terminar, automaticamente cuando responde el ultimo item (si cierra el
  * navegador ahi, el informe igual queda calculado), y desde el panel para
  * recalcular una sesion vieja o una que quedo a medias.
+ *
+ * Cada paso reporta su propio error. Un "no se pudo calcular" a secas obliga a
+ * adivinar; con el paso y el mensaje real se arregla de una.
  */
-export async function cerrarSesion(sessionId: string, opts?: { forzarEstado?: boolean }) {
-  const { data: session } = await supabaseAdmin
-    .from('ts_bat_sessions')
-    .select('id, started_at, finished_at, status')
-    .eq('id', sessionId)
-    .single();
-  if (!session) return { ok: false as const, error: 'Sesión no encontrada' };
+export async function cerrarSesion(sessionId: string) {
+  const paso = (etapa: string, detalle: string) =>
+    ({ ok: false as const, etapa, error: `[${etapa}] ${detalle}` });
 
-  const { data: answers } = await supabaseAdmin
-    .from('ts_bat_answers')
-    .select('item_code, answer, latency_ms, answered_at')
-    .eq('session_id', sessionId)
-    .order('answered_at');
+  try {
+    const { data: session, error: eSess } = await supabaseAdmin
+      .from('ts_bat_sessions')
+      .select('id, started_at, finished_at, status')
+      .eq('id', sessionId)
+      .single();
+    if (eSess) return paso('leer_sesion', eSess.message);
+    if (!session) return paso('leer_sesion', 'Sesión no encontrada');
 
-  if (!answers?.length) return { ok: false as const, error: 'La sesión no tiene respuestas' };
-
-  const [{ count: eventos }, { count: capturas }] = await Promise.all([
-    supabaseAdmin.from('ts_bat_events').select('id', { count: 'exact', head: true })
+    const { data: answers, error: eAns } = await supabaseAdmin
+      .from('ts_bat_answers')
+      .select('item_code, answer, latency_ms, answered_at')
       .eq('session_id', sessionId)
-      .in('kind', ['tab_blur', 'paste', 'copy', 'contextmenu', 'shortcut', 'cam_lost']),
-    supabaseAdmin.from('ts_bat_snapshots').select('id', { count: 'exact', head: true }).eq('session_id', sessionId),
-  ]);
+      .order('answered_at')
+      .limit(2000);
+    if (eAns) return paso('leer_respuestas', eAns.message);
+    if (!answers?.length) return paso('leer_respuestas', 'La sesión no tiene respuestas guardadas');
 
-  // El fin de la sesion es la ULTIMA respuesta, no el momento del calculo.
-  // Si no se toma asi, recalcular una sesion de ayer le mete horas de duracion
-  // inventadas y ademas dispara una falsa alerta de proctoring: el indice de
-  // cobertura divide las capturas entre los minutos, y con una duracion inflada
-  // toda sesion recalculada saldria "con reservas".
-  const ultima = answers[answers.length - 1]?.answered_at;
-  const finished = session.finished_at
-    ? new Date(session.finished_at)
-    : ultima
-    ? new Date(ultima)
-    : new Date();
-  const started = session.started_at ? new Date(session.started_at) : finished;
-  const durationSeconds = Math.max(0, Math.round((finished.getTime() - started.getTime()) / 1000));
+    const [ev, sn] = await Promise.all([
+      supabaseAdmin.from('ts_bat_events').select('id', { count: 'exact', head: true })
+        .eq('session_id', sessionId)
+        .in('kind', ['tab_blur', 'paste', 'copy', 'contextmenu', 'shortcut', 'cam_lost']),
+      supabaseAdmin.from('ts_bat_snapshots').select('id', { count: 'exact', head: true }).eq('session_id', sessionId),
+    ]);
+    const eventos = ev.count ?? 0;
+    const capturas = sn.count ?? 0;
 
-  const { scores, validity } = score(answers as any);
-  const finalValidity = applyProctoring(validity, eventos ?? 0, capturas ?? 0, durationSeconds / 60);
+    // El fin de la sesion es la ULTIMA RESPUESTA, no el momento del calculo.
+    // Si no se toma asi, recalcular una sesion de ayer le mete horas de duracion
+    // inventadas y ademas dispara una falsa alerta de proctoring: el indice de
+    // cobertura divide las capturas entre los minutos de sesion.
+    const ultima = answers[answers.length - 1]?.answered_at;
+    const finished = session.finished_at
+      ? new Date(session.finished_at)
+      : ultima
+      ? new Date(ultima)
+      : new Date();
+    const started = session.started_at ? new Date(session.started_at) : finished;
+    const durationSeconds = Math.max(0, Math.round((finished.getTime() - started.getTime()) / 1000));
 
-  const { error } = await supabaseAdmin
-    .from('ts_bat_sessions')
-    .update({
-      status: opts?.forzarEstado === false ? session.status : 'completed',
-      finished_at: session.finished_at ?? finished.toISOString(),
-      duration_seconds: durationSeconds,
-      scores,
-      validity: finalValidity,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', sessionId);
+    let scores, finalValidity;
+    try {
+      const r = score(answers as any);
+      scores = r.scores;
+      finalValidity = applyProctoring(r.validity, eventos, capturas, durationSeconds / 60);
+    } catch (err: any) {
+      return paso('puntuar', err?.message ?? String(err));
+    }
 
-  if (error) return { ok: false as const, error: error.message };
-  return { ok: true as const, respuestas: answers.length, capturas: capturas ?? 0, eventos: eventos ?? 0 };
+    const { error: eUpd } = await supabaseAdmin
+      .from('ts_bat_sessions')
+      .update({
+        status: 'completed',
+        finished_at: session.finished_at ?? finished.toISOString(),
+        duration_seconds: durationSeconds,
+        scores,
+        validity: finalValidity,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId);
+    if (eUpd) return paso('guardar', eUpd.message);
+
+    return { ok: true as const, respuestas: answers.length, capturas, eventos, duracionSeg: durationSeconds };
+  } catch (err: any) {
+    return paso('inesperado', err?.message ?? String(err));
+  }
 }
