@@ -30,13 +30,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!session.started_at) {
-      await supabaseAdmin
-        .from('ts_bat_sessions')
-        .update({ started_at: new Date().toISOString(), status: 'in_progress' })
-        .eq('id', session.id);
-    } else if (session.status !== 'in_progress') {
-      await supabaseAdmin.from('ts_bat_sessions').update({ status: 'in_progress' }).eq('id', session.id);
+    // Marcar el inicio no puede fallar en silencio: si esta escritura no llega,
+    // la sesion se queda en 'created' para siempre y nada mas se guarda en la fila.
+    if (!session.started_at || session.status !== 'in_progress') {
+      const patch: Record<string, unknown> = { status: 'in_progress', updated_at: new Date().toISOString() };
+      if (!session.started_at) patch.started_at = new Date().toISOString();
+      const { data: filas, error: eMark } = await supabaseAdmin
+        .from('ts_bat_sessions').update(patch).eq('id', session.id).select('id');
+      if (eMark || !filas?.length) {
+        console.error('bateria/answer · no se pudo marcar inicio', session.id, eMark?.message ?? 'cero filas');
+      }
     }
 
     const { error } = await supabaseAdmin.from('ts_bat_answers').upsert(

@@ -305,11 +305,25 @@ export default function PruebaPage() {
 
   async function acceptConsent() {
     const camOk = okCam ? await startCamera() : false;
-    await fetch("/api/bateria/consent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, camera: okCam && camOk, name }),
-    });
+    try {
+      const r = await fetch("/api/bateria/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, camera: okCam && camOk, name }),
+      });
+      const j = await r.json().catch(() => ({}));
+      // Si la autorizacion no queda registrada, la prueba NO empieza: sin ese
+      // registro no hay evidencia de habeas data y las capturas se rechazan.
+      if (!r.ok || j?.error) {
+        setErrorMsg(j?.detalle || "No pudimos registrar su autorización. Escríbanos y le enviamos un enlace nuevo.");
+        setPhase("error");
+        return;
+      }
+    } catch {
+      setErrorMsg("No pudimos conectar para registrar su autorización. Revise su internet e intente de nuevo.");
+      setPhase("error");
+      return;
+    }
     setPhase("intro");
   }
 
