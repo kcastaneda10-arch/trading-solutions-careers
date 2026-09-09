@@ -71,6 +71,7 @@ export default function PruebaPage() {
   const [okCam, setOkCam] = useState(false);
   const [name, setName] = useState("");
   const [camState, setCamState] = useState<"off" | "on" | "denied">("off");
+  const [fallaGuardado, setFallaGuardado] = useState<string | null>(null);
 
   const shownAt = useRef<number>(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -243,7 +244,22 @@ export default function PruebaPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, item_code: code, answer, latency_ms: Date.now() - shownAt.current }),
         keepalive: true,
-      }).catch(() => {});
+      })
+        .then(async (r) => {
+          if (r.ok) return;
+          // Un fallo al guardar NO se puede tragar: es exactamente como alguien
+          // termina las 172 preguntas y no queda ninguna registrada.
+          const j = await r.json().catch(() => ({}));
+          setFallaGuardado(
+            j?.detalle ||
+              (r.status === 409
+                ? "Este enlace ya fue presentado. Sus respuestas no se están guardando."
+                : "No pudimos guardar su respuesta. No siga: sus respuestas no se están registrando.")
+          );
+        })
+        .catch(() => {
+          setFallaGuardado("Se perdió la conexión y su última respuesta no se guardó. Revise su internet antes de continuar.");
+        });
     },
     [token]
   );
@@ -407,6 +423,19 @@ export default function PruebaPage() {
         <h1 style={h1}>{block.items.length} preguntas</h1>
         <p style={{ ...sub, marginBottom: 24 }}>{block.intro}</p>
         <button style={btn} onClick={() => { shownAt.current = Date.now(); setPhase("test"); logEvent("block_start", block.key); }}>Continuar</button>
+      </div></div>
+    );
+  }
+
+  if (fallaGuardado && phase === "test") {
+    return (
+      <div style={shell}><div style={{ ...card, borderColor: "#F3D6D2", background: "#FDF6F5" }}>
+        <h1 style={h1}>Sus respuestas no se están guardando</h1>
+        <p style={sub}>{fallaGuardado}</p>
+        <p style={{ ...sub, marginBottom: 0 }}>
+          Por favor <b>no continúe</b>. Responda el correo con el que recibió este enlace y le enviamos uno nuevo.
+          Nada de lo que responda a partir de aquí quedaría registrado.
+        </p>
       </div></div>
     );
   }

@@ -20,7 +20,15 @@ export async function POST(req: NextRequest) {
       .eq('token', token)
       .single();
     if (!session) return NextResponse.json({ error: 'Enlace no válido' }, { status: 404 });
-    if (session.status === 'completed') return NextResponse.json({ error: 'Prueba cerrada' }, { status: 403 });
+    // Un enlace ya presentado no vuelve a aceptar respuestas. Se responde 409 y
+    // el cliente DEBE frenar: antes seguia adelante y el candidato contestaba la
+    // prueba completa contra el vacio, viendo 'Listo, recibimos su prueba'.
+    if (session.status === 'completed') {
+      return NextResponse.json(
+        { error: 'enlace_ya_presentado', detalle: 'Este enlace ya fue presentado por otra persona. Sus respuestas no se están guardando.' },
+        { status: 409 }
+      );
+    }
 
     if (!session.started_at) {
       await supabaseAdmin

@@ -120,7 +120,11 @@ export default function BateriaAdmin() {
         </p>
 
         <div style={box}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Nuevo enlace</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>Nuevo enlace</h2>
+          <p style={{ fontSize: 13, color: GRAY, margin: "0 0 12px", lineHeight: 1.55 }}>
+            <b>Un enlace por persona.</b> Cada enlace es una sesión: si se reenvía uno ya presentado, la prueba se
+            detiene y avisa, porque las respuestas no se podrían guardar.
+          </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre de quien la va a presentar"
               style={{ flex: "1 1 260px", padding: "10px 12px", border: `1px solid ${BORDER}`, borderRadius: 7, fontSize: 14 }} />
