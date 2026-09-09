@@ -18,7 +18,7 @@ type Sess = {
   id: string; token: string; purpose: string; candidate_name: string | null;
   vacancy_title: string | null; status: string; battery_version: string;
   started_at: string | null; finished_at: string | null; duration_seconds: number | null;
-  scores: any; validity: any; created_at: string; consent_cam_at: string | null;
+  scores: any; validity: any; created_at: string; consent_cam_at: string | null; calculada?: boolean;
   respuestas?: number; capturas?: number; alertas?: number;
 };
 
@@ -153,19 +153,22 @@ export default function BateriaAdmin() {
                     <td style={td}>{s.capturas ?? 0}</td>
                     <td style={{ ...td, color: (s.alertas ?? 0) > 0 ? AMBER : GRAY, fontWeight: (s.alertas ?? 0) > 0 ? 700 : 400 }}>{s.alertas ?? 0}</td>
                     <td style={td}>{s.duration_seconds ? Math.round(s.duration_seconds / 60) : "—"}</td>
-                    <td style={{ ...td, fontSize: 12, color: GRAY }}>{s.battery_version}</td>
+                    <td style={{ ...td, fontSize: 12, color: GRAY }}>
+                      {s.battery_version}
+                      {!s.calculada && (s.respuestas ?? 0) > 0 && (
+                        <span style={{ display: "block", color: AMBER, fontWeight: 600 }}>sin calcular</span>
+                      )}
+                    </td>
                     <td style={td}>
                       <div style={{ display: "flex", gap: 9 }}>
                         <a href={`/prueba/${s.token}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: BLUE }}>Abrir</a>
                         <button onClick={() => ver(s.token)} style={{ background: "none", border: "none", color: BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
                           {abierto === s.token ? "Cerrar" : "Ver informe"}
                         </button>
-                        {(s.respuestas ?? 0) > 0 && (
-                          <button onClick={() => recalcular(s.token)} disabled={recalculando === s.token}
-                            style={{ background: "none", border: "none", color: recalculando === s.token ? GRAY : BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
-                            {recalculando === s.token ? "Calculando…" : "Recalcular"}
-                          </button>
-                        )}
+                        <button onClick={() => recalcular(s.token)} disabled={recalculando === s.token}
+                          style={{ background: "none", border: "none", color: recalculando === s.token ? GRAY : BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
+                          {recalculando === s.token ? "Calculando…" : "Recalcular"}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -179,7 +182,7 @@ export default function BateriaAdmin() {
           <div style={box}>
             {!detalle && <p style={{ color: GRAY, margin: 0 }}>Cargando informe…</p>}
             {detalle?.error && <p style={{ color: RED, margin: 0 }}>{detalle.error}</p>}
-            {detalle?.session && <Informe d={detalle} />}
+            {detalle?.session && <Informe d={detalle} onRecalcular={() => recalcular(abierto)} recalculandoAqui={recalculando === abierto} />}
           </div>
         )}
       </div>
@@ -261,7 +264,7 @@ function DiscChart({ natural, mascara, presion }: { natural: any; mascara: any; 
   );
 }
 
-function Informe({ d }: { d: any }) {
+function Informe({ d, onRecalcular, recalculandoAqui }: { d: any; onRecalcular: () => void; recalculandoAqui: boolean }) {
   const s = d.session;
   const sc = s.scores;
   const v = s.validity;
@@ -281,10 +284,16 @@ function Informe({ d }: { d: any }) {
             : `Esta sesión tiene ${d.revision?.length ?? 0} respuestas de ${d.total_items} y todavía no tiene puntajes calculados.`}
         </p>
         {!sc && (d.revision?.length ?? 0) > 0 && (
-          <p style={{ ...P, marginBottom: 0 }}>
-            Las respuestas están guardadas. Use <b>Recalcular</b> en la fila de arriba para generar el informe
-            {(d.revision?.length ?? 0) < d.total_items ? " con lo que alcanzó a responder" : ""}.
-          </p>
+          <>
+            <p style={P}>
+              Las respuestas están guardadas con sus tiempos: no se perdió nada. Genere el informe
+              {(d.revision?.length ?? 0) < d.total_items ? " con lo que alcanzó a responder" : ""}.
+            </p>
+            <button onClick={onRecalcular} disabled={recalculandoAqui}
+              style={{ background: BLACK, color: "#fff", border: "none", borderRadius: 7, padding: "11px 20px", fontSize: 13.5, fontWeight: 600, cursor: recalculandoAqui ? "wait" : "pointer" }}>
+              {recalculandoAqui ? "Calculando…" : "Calcular el informe"}
+            </button>
+          </>
         )}
       </div>
     );

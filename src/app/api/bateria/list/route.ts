@@ -4,6 +4,18 @@ import { isAdminRequest } from '@/lib/bateria/auth';
 
 export const dynamic = 'force-dynamic';
 
+const ALERTA_KINDS = ['tab_blur', 'paste', 'copy', 'contextmenu', 'shortcut', 'cam_lost'];
+
+/** Conteo exacto por sesion. Antes se traian todas las filas y se tallaban en
+ *  memoria; con eso una sesion aparecia en cero mientras el informe si encontraba
+ *  sus respuestas. Contar en la base elimina el problema de raiz. */
+async function contar(table: string, sessionId: string, kinds?: string[]) {
+  let q = supabaseAdmin.from(table).select('id', { count: 'exact', head: true }).eq('session_id', sessionId);
+  if (kinds) q = q.in('kind', kinds);
+  const { count } = await q;
+  return count ?? 0;
+}
+
 export async function GET(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
@@ -15,23 +27,16 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const ids = (data ?? []).map((s: any) => s.id);
-  const counts: Record<string, { respuestas: number; capturas: number; alertas: number }> = {};
-  if (ids.length) {
-    const [{ data: ans }, { data: snap }, { data: ev }] = await Promise.all([
-      supabaseAdmin.from('ts_bat_answers').select('session_id').in('session_id', ids),
-      supabaseAdmin.from('ts_bat_snapshots').select('session_id').in('session_id', ids),
-      supabaseAdmin
-        .from('ts_bat_events')
-        .select('session_id')
-        .in('session_id', ids)
-        .in('kind', ['tab_blur', 'paste', 'copy', 'contextmenu', 'shortcut', 'cam_lost']),
-    ]);
-    for (const id of ids) counts[id] = { respuestas: 0, capturas: 0, alertas: 0 };
-    for (const r of ans ?? []) counts[(r as any).session_id].respuestas++;
-    for (const r of snap ?? []) counts[(r as any).session_id].capturas++;
-    for (const r of ev ?? []) counts[(r as any).session_id].alertas++;
-  }
+  const sessions = await Promise.all(
+    (data ?? []).map(async (s: any) => {
+      const [respuestas, capturas, alertas] = await Promise.all([
+        contar('ts_bat_answers', s.id),
+        contar('ts_bat_snapshots', s.id),
+        contar('ts_bat_events', s.id, ALERTA_KINDS),
+      ]);
+      return { ...s, respuestas, capturas, alertas, calculada: !!s.scores };
+    })
+  );
 
-  return NextResponse.json({ sessions: (data ?? []).map((s: any) => ({ ...s, ...counts[s.id] })) });
+  return NextResponse.json({ sessions });
 }

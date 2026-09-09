@@ -19,8 +19,9 @@ export async function cerrarSesion(sessionId: string, opts?: { forzarEstado?: bo
 
   const { data: answers } = await supabaseAdmin
     .from('ts_bat_answers')
-    .select('item_code, answer, latency_ms')
-    .eq('session_id', sessionId);
+    .select('item_code, answer, latency_ms, answered_at')
+    .eq('session_id', sessionId)
+    .order('answered_at');
 
   if (!answers?.length) return { ok: false as const, error: 'La sesión no tiene respuestas' };
 
@@ -31,7 +32,17 @@ export async function cerrarSesion(sessionId: string, opts?: { forzarEstado?: bo
     supabaseAdmin.from('ts_bat_snapshots').select('id', { count: 'exact', head: true }).eq('session_id', sessionId),
   ]);
 
-  const finished = session.finished_at ? new Date(session.finished_at) : new Date();
+  // El fin de la sesion es la ULTIMA respuesta, no el momento del calculo.
+  // Si no se toma asi, recalcular una sesion de ayer le mete horas de duracion
+  // inventadas y ademas dispara una falsa alerta de proctoring: el indice de
+  // cobertura divide las capturas entre los minutos, y con una duracion inflada
+  // toda sesion recalculada saldria "con reservas".
+  const ultima = answers[answers.length - 1]?.answered_at;
+  const finished = session.finished_at
+    ? new Date(session.finished_at)
+    : ultima
+    ? new Date(ultima)
+    : new Date();
   const started = session.started_at ? new Date(session.started_at) : finished;
   const durationSeconds = Math.max(0, Math.round((finished.getTime() - started.getTime()) / 1000));
 
