@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { CONSENT_TEXT_VERSION } from '@/lib/bateria/items';
 
 export const dynamic = 'force-dynamic';
-
-export const CONSENT_TEXT_VERSION = 'hd-2026-09-08';
 
 export async function POST(req: NextRequest) {
   try {

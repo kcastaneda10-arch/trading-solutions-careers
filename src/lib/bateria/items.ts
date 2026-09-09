@@ -13,6 +13,10 @@
 
 export const BATTERY_VERSION = '1.1-piloto';
 
+/** Version del texto de habeas data. Se guarda con cada consentimiento: en una
+ *  auditoria hay que poder demostrar QUE acepto el candidato, no solo que acepto. */
+export const CONSENT_TEXT_VERSION = 'hd-2026-09-08';
+
 export type Block = 'A' | 'B' | 'C' | 'D' | 'E';
 
 type Base = {
