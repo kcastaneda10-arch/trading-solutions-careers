@@ -18,7 +18,7 @@ type Sess = {
   id: string; token: string; purpose: string; candidate_name: string | null;
   vacancy_title: string | null; status: string; battery_version: string;
   started_at: string | null; finished_at: string | null; duration_seconds: number | null;
-  scores: any; validity: any; created_at: string;
+  scores: any; validity: any; created_at: string; consent_cam_at: string | null;
   respuestas?: number; capturas?: number; alertas?: number;
 };
 
@@ -41,6 +41,7 @@ export default function BateriaAdmin() {
   const [nuevo, setNuevo] = useState<string | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<any>(null);
+  const [recalculando, setRecalculando] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,8 +67,31 @@ export default function BateriaAdmin() {
   async function ver(token: string) {
     if (abierto === token) { setAbierto(null); setDetalle(null); return; }
     setAbierto(token); setDetalle(null);
+    // La tabla se pinta al cargar la página; si la prueba se tomó en otra
+    // pestaña, esos conteos ya están viejos. Se refrescan al abrir el informe.
+    load();
     const r = await fetch(`/api/bateria/resultado/${token}`);
     setDetalle(await r.json());
+  }
+
+  /** Recalcula desde las respuestas guardadas. Sirve para una sesión que quedó
+   *  a medias o para volver a puntuar tras un cambio en el motor. */
+  async function recalcular(token: string) {
+    setRecalculando(token);
+    const r = await fetch("/api/bateria/recalcular", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const j = await r.json();
+    setRecalculando(null);
+    await load();
+    if (abierto === token) {
+      setDetalle(null);
+      const rr = await fetch(`/api/bateria/resultado/${token}`);
+      setDetalle(await rr.json());
+    } else if (j.error) {
+      alert(j.error);
+    }
   }
 
   const box: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 22, marginBottom: 18 };
@@ -112,17 +136,20 @@ export default function BateriaAdmin() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>
                 <th style={th}>Persona</th><th style={th}>Estado</th><th style={th}>Resp.</th>
-                <th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
+                <th style={th}>Cámara</th><th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
                 <th style={th}>Versión</th><th style={th}></th>
               </tr></thead>
               <tbody>
-                {loading && <tr><td style={td} colSpan={8}>Cargando…</td></tr>}
-                {!loading && !sessions.length && <tr><td style={td} colSpan={8}>Todavía no hay sesiones.</td></tr>}
+                {loading && <tr><td style={td} colSpan={9}>Cargando…</td></tr>}
+                {!loading && !sessions.length && <tr><td style={td} colSpan={9}>Todavía no hay sesiones.</td></tr>}
                 {sessions.map((s) => (
                   <tr key={s.id}>
                     <td style={td}><b>{s.candidate_name || "(sin nombre)"}</b><br /><span style={{ color: GRAY, fontSize: 12 }}>{s.purpose}</span></td>
                     <td style={td}>{STATUS_LABEL[s.status] || s.status}</td>
                     <td style={td}>{s.respuestas ?? 0}</td>
+                    <td style={{ ...td, color: s.consent_cam_at ? GREEN : AMBER, fontWeight: 600, fontSize: 12.5 }}>
+                      {s.consent_cam_at ? "autorizada" : "no autorizada"}
+                    </td>
                     <td style={td}>{s.capturas ?? 0}</td>
                     <td style={{ ...td, color: (s.alertas ?? 0) > 0 ? AMBER : GRAY, fontWeight: (s.alertas ?? 0) > 0 ? 700 : 400 }}>{s.alertas ?? 0}</td>
                     <td style={td}>{s.duration_seconds ? Math.round(s.duration_seconds / 60) : "—"}</td>
@@ -133,6 +160,12 @@ export default function BateriaAdmin() {
                         <button onClick={() => ver(s.token)} style={{ background: "none", border: "none", color: BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
                           {abierto === s.token ? "Cerrar" : "Ver informe"}
                         </button>
+                        {(s.respuestas ?? 0) > 0 && (
+                          <button onClick={() => recalcular(s.token)} disabled={recalculando === s.token}
+                            style={{ background: "none", border: "none", color: recalculando === s.token ? GRAY : BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
+                            {recalculando === s.token ? "Calculando…" : "Recalcular"}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -245,10 +278,13 @@ function Informe({ d }: { d: any }) {
         <p style={P}>
           {sc
             ? `Esta sesión se presentó con la batería ${s.battery_version}, una versión anterior con otra estructura. Sus resultados no se muestran en este informe ni se comparan con los de la versión actual.`
-            : `Esta sesión todavía no está terminada, así que no hay puntajes calculados. Lleva ${d.revision?.length ?? 0} respuestas de ${d.total_items}.`}
+            : `Esta sesión tiene ${d.revision?.length ?? 0} respuestas de ${d.total_items} y todavía no tiene puntajes calculados.`}
         </p>
-        {d.revision?.length > 0 && (
-          <p style={{ fontSize: 12.5, color: GRAY }}>Las respuestas quedan archivadas para auditoría de todos modos.</p>
+        {!sc && (d.revision?.length ?? 0) > 0 && (
+          <p style={{ ...P, marginBottom: 0 }}>
+            Las respuestas están guardadas. Use <b>Recalcular</b> en la fila de arriba para generar el informe
+            {(d.revision?.length ?? 0) < d.total_items ? " con lo que alcanzó a responder" : ""}.
+          </p>
         )}
       </div>
     );

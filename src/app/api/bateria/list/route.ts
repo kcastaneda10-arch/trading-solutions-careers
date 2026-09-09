@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from('ts_bat_sessions')
-    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at')
+    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at, consent_cam_at')
     .order('created_at', { ascending: false })
     .limit(50);
 

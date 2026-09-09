@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { findItem } from '@/lib/bateria/items';
+import { findItem, ITEMS } from '@/lib/bateria/items';
+import { cerrarSesion } from '@/lib/bateria/cerrar';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +46,24 @@ export async function POST(req: NextRequest) {
     );
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ saved: true });
-  } catch {
+
+    // Cierre automatico al responder el ultimo item.
+    // Si el candidato cierra el navegador justo ahi —que es lo que pasa— el
+    // informe queda calculado igual. Pulsar "terminar" deja de ser obligatorio.
+    const { count } = await supabaseAdmin
+      .from('ts_bat_answers')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', session.id);
+
+    if ((count ?? 0) >= ITEMS.length) {
+      const res = await cerrarSesion(session.id);
+      if (!res.ok) console.error('cierre automático', res.error);
+      return NextResponse.json({ saved: true, autoCompletada: res.ok });
+    }
+
+    return NextResponse.json({ saved: true, faltan: ITEMS.length - (count ?? 0) });
+  } catch (err) {
+    console.error('bateria/answer', err);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
