@@ -3,8 +3,12 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { isAdminRequest } from '@/lib/bateria/auth';
 import { ITEMS, BATTERY_VERSION } from '@/lib/bateria/items';
 import { score, applyProctoring } from '@/lib/bateria/scoring';
+import { calcularMatch } from '@/lib/bateria/match';
+import { perfilDe, perfilPorTitulo } from '@/lib/bateria/perfiles-cargo';
+import { getAnthropic } from '@/lib/anthropic';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 /**
  * Diagnostico. Abrir en el navegador con la sesion de hr-admin iniciada:
@@ -15,7 +19,15 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado · entre primero a /hr-admin' }, { status: 401 });
 
-  const out: Record<string, unknown> = { bateria: BATTERY_VERSION, items: ITEMS.length };
+  const out: Record<string, unknown> = {
+    bateria: BATTERY_VERSION,
+    items: ITEMS.length,
+    // Lo primero que hay que descartar cuando el agente "no hace nada".
+    entorno: {
+      anthropicConfigurada: !!process.env.ANTHROPIC_API_KEY,
+      largoLlave: process.env.ANTHROPIC_API_KEY?.length ?? 0,
+    },
+  };
 
   const { data: sesion, error: eSes } = await supabaseAdmin
     .from('ts_bat_sessions').select('*').eq('token', params.token).single();
@@ -73,6 +85,38 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     filasDevueltas: escrito?.length ?? 0,
     scoresTrasEscribir: escrito?.[0]?.scores ? Object.keys(escrito[0].scores) : null,
   };
+
+  // ── ¿Las columnas nuevas existen? Si falta el SQL, guardar el informe falla.
+  out.columnas = {
+    perfil_cargo: 'perfil_cargo' in sesion,
+    match_data: 'match_data' in sesion,
+    informe_ia: 'informe_ia' in sesion,
+    faltaCorrerSQL: !('informe_ia' in sesion),
+  };
+
+  const perfilKey = (sesion as any).perfil_cargo ?? perfilPorTitulo(sesion.vacancy_title);
+  const perfil = perfilDe(perfilKey);
+  const match = calcularMatch(scores, perfilKey);
+  out.match = perfil
+    ? { perfil: perfil.nombre, version: perfil.version, global: match?.global ?? null, alertas: match?.alertas?.length ?? 0 }
+    : { perfil: null, nota: 'La vacante no coincide con ningún perfil de cargo definido.' };
+
+  // ── ¿El agente responde? Llamada corta, solo para probar el canal.
+  if (req.nextUrl.searchParams.get('ia') === '1') {
+    const t0 = Date.now();
+    try {
+      const client = getAnthropic();
+      const r: any = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: 'Responde exactamente: OK' }],
+      });
+      const txt = (r.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+      out.agente = { ok: true, respuesta: txt.trim().slice(0, 40), ms: Date.now() - t0 };
+    } catch (err: any) {
+      out.agente = { ok: false, error: err?.message ?? String(err), status: err?.status ?? null, ms: Date.now() - t0 };
+    }
+  }
 
   const { data: relectura } = await supabaseAdmin
     .from('ts_bat_sessions').select('status, updated_at, scores').eq('id', sesion.id).single();
