@@ -43,6 +43,10 @@ export default function BateriaAdmin() {
   const [detalle, setDetalle] = useState<any>(null);
   const [recalculando, setRecalculando] = useState<string | null>(null);
   const [errorCalc, setErrorCalc] = useState<string | null>(null);
+  const [cands, setCands] = useState<any[] | null>(null);
+  const [cargandoCands, setCargandoCands] = useState(false);
+  const [lote, setLote] = useState<any[] | null>(null);
+  const [creandoLote, setCreandoLote] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +57,37 @@ export default function BateriaAdmin() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function cargarCandidatos() {
+    setCargandoCands(true);
+    setLote(null);
+    const r = await fetch("/api/bateria/candidatos?etapa=prefiltro_revision", { cache: "no-store" });
+    const j = await r.json();
+    setCands(j.candidatos || []);
+    setCargandoCands(false);
+  }
+
+  async function crearLote() {
+    if (!cands?.length) return;
+    setCreandoLote(true);
+    const r = await fetch("/api/bateria/crear-lote", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidatos: cands.map((c) => ({ id: c.id, nombre: c.nombre, email: c.email, vacante: c.vacante })) }),
+    });
+    const j = await r.json();
+    setCreandoLote(false);
+    setLote(j.resultado || []);
+    load();
+    cargarCandidatos();
+  }
+
+  function copiarLote() {
+    const txt = (lote || [])
+      .filter((x) => x.url)
+      .map((x) => `${x.nombre}\t${x.email}\t${x.url}`)
+      .join("\n");
+    navigator.clipboard?.writeText(txt);
+  }
 
   async function crear() {
     setCreating(true);
@@ -140,6 +175,75 @@ export default function BateriaAdmin() {
                 <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}`, padding: "7px 13px", fontSize: 12.5 }}
                   onClick={() => navigator.clipboard?.writeText(nuevo)}>Copiar</button>
               </div>
+            </div>
+          )}
+        </div>
+
+        <div style={box}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>Enviar a los que están en revisión de prefiltro</h2>
+          <p style={{ fontSize: 13, color: GRAY, margin: "0 0 12px", lineHeight: 1.55 }}>
+            Crea un enlace propio para cada candidato en esa etapa y lo deja amarrado a su ficha, para que el informe
+            aparezca después en el funnel. A quien ya tenga enlace no se le crea otro.
+          </p>
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}` }}
+              disabled={cargandoCands} onClick={cargarCandidatos}>
+              {cargandoCands ? "Buscando…" : cands ? "Actualizar lista" : "Ver quiénes están"}
+            </button>
+            {!!cands?.length && (
+              <button style={{ ...btn, opacity: creandoLote ? 0.5 : 1 }} disabled={creandoLote} onClick={crearLote}>
+                {creandoLote ? "Creando…" : `Crear enlaces para los ${cands.length}`}
+              </button>
+            )}
+          </div>
+
+          {cands && !cands.length && (
+            <p style={{ fontSize: 13.5, color: GRAY, marginTop: 12 }}>No hay candidatos en revisión de prefiltro.</p>
+          )}
+
+          {!!cands?.length && (
+            <div style={{ overflowX: "auto", marginTop: 14, border: `1px solid ${BORDER}`, borderRadius: 8 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+                <thead><tr>
+                  {["Candidato", "Correo", "Vacante", "Enlace"].map((h, i) => (
+                    <th key={i} style={th}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {cands.map((c) => (
+                    <tr key={c.id}>
+                      <td style={td}><b>{c.nombre}</b></td>
+                      <td style={{ ...td, color: GRAY }}>{c.email}</td>
+                      <td style={{ ...td, color: GRAY, fontSize: 12.5 }}>{c.vacante ?? "—"}</td>
+                      <td style={td}>
+                        {c.sesion
+                          ? <a href={c.sesion.url} target="_blank" rel="noreferrer" style={{ color: BLUE, fontSize: 12.5 }}>ya tiene</a>
+                          : <span style={{ color: AMBER, fontSize: 12.5, fontWeight: 600 }}>falta</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!!lote?.length && (
+            <div style={{ marginTop: 16, padding: 14, background: "#EEF3FE", border: "1px solid #C7D9FB", borderRadius: 8 }}>
+              <p style={{ margin: "0 0 8px", fontSize: 12.5, fontWeight: 700, color: BLUE, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                {lote.filter((x) => x.url && !x.reusada).length} enlaces nuevos · {lote.filter((x) => x.reusada).length} ya existían
+              </p>
+              <textarea readOnly rows={Math.min(10, lote.length + 1)}
+                value={lote.filter((x) => x.url).map((x) => `${x.nombre}\t${x.email}\t${x.url}`).join("\n")}
+                style={{ width: "100%", fontSize: 12, fontFamily: "ui-monospace, monospace", padding: 10, border: `1px solid ${BORDER}`, borderRadius: 6, resize: "vertical" }} />
+              <div style={{ marginTop: 9 }}>
+                <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}`, padding: "7px 13px", fontSize: 12.5 }}
+                  onClick={copiarLote}>Copiar nombre · correo · enlace</button>
+              </div>
+              {lote.some((x) => x.error) && (
+                <p style={{ color: RED, fontSize: 12.5, marginTop: 10 }}>
+                  No se pudo crear para: {lote.filter((x) => x.error).map((x) => x.nombre).join(", ")}
+                </p>
+              )}
             </div>
           )}
         </div>
