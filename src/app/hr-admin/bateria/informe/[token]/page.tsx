@@ -34,6 +34,7 @@ export default function InformeImprimible() {
   const [generando, setGenerando] = useState(false);
   const [seg, setSeg] = useState(0);
   const [perfilSel, setPerfilSel] = useState<string>("");
+  const [calculando, setCalculando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -49,6 +50,25 @@ export default function InformeImprimible() {
 
   useEffect(() => { if (token) cargar(); }, [token, cargar]);
   useEffect(() => { if (d?.session?.perfil_cargo) setPerfilSel(d.session.perfil_cargo); }, [d]);
+
+  async function calcular() {
+    setCalculando(true); setErr(null);
+    try {
+      const r = await fetch("/api/bateria/recalcular", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({ token }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}`); }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      await cargar();
+    } catch (e: any) {
+      setErr(e?.message ?? "No se pudieron calcular los puntajes.");
+    } finally {
+      setCalculando(false);
+    }
+  }
 
   async function generarIA() {
     setGenerando(true); setErr(null); setSeg(0);
@@ -102,7 +122,37 @@ export default function InformeImprimible() {
   const ver = VER[s.validity?.veredicto] ?? VER.sin_alertas;
 
   if (!sc?.personalidad) {
-    return <Marco><p style={{ color: GRAY }}>Esta sesión todavía no tiene puntajes calculados.</p></Marco>;
+    // Callejon sin salida antes: decia "no tiene puntajes" y ya. Ahora dice de
+    // QUIEN es la sesion (para descubrir que se abrio la equivocada) y deja
+    // calcularlos aqui mismo.
+    const respondidas = d.revision?.length ?? 0;
+    return (
+      <Marco>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>{s.candidate_name || "(sin nombre)"}</h1>
+        <p style={{ fontSize: 13.5, color: GRAY, margin: "0 0 18px" }}>
+          {s.vacancy_title ?? "Sin vacante"} · {respondidas} de {d.total_items} respuestas · estado: {s.status}
+        </p>
+        <p style={{ fontSize: 14.5, lineHeight: 1.6, margin: "0 0 18px", maxWidth: "60ch" }}>
+          Esta sesión todavía no tiene puntajes calculados, así que no hay informe que mostrar.
+          {respondidas > 0
+            ? " Las respuestas sí están guardadas: se pueden calcular ahora."
+            : " Y no hay respuestas guardadas, así que no hay nada que calcular todavía."}
+        </p>
+        {respondidas > 0 && (
+          <button onClick={calcular} disabled={calculando} style={{ ...btnN, opacity: calculando ? 0.5 : 1 }}>
+            {calculando ? "Calculando…" : "Calcular los puntajes"}
+          </button>
+        )}
+        {err && (
+          <div style={{ marginTop: 16, padding: "14px 16px", background: "#FDF6F5", border: "1px solid #F3D6D2", borderRadius: 8 }}>
+            <p style={{ fontSize: 13.5, margin: 0, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>{err}</p>
+          </div>
+        )}
+        <p style={{ marginTop: 22 }}>
+          <a href="/hr-admin/bateria" style={{ fontSize: 13, color: BLUE }}>← Volver a la lista de sesiones</a>
+        </p>
+      </Marco>
+    );
   }
 
   return (
