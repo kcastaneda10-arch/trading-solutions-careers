@@ -33,22 +33,43 @@ export default function InformeImprimible() {
   const [generando, setGenerando] = useState(false);
 
   const cargar = useCallback(async () => {
-    const r = await fetch(`/api/bateria/resultado/${token}`, { cache: "no-store" });
-    const j = await r.json();
-    if (j.error) setErr(j.error); else setD(j);
+    try {
+      const r = await fetch(`/api/bateria/resultado/${token}`, { cache: "no-store" });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`Respuesta no válida (${r.status})`); }
+      if (j.error) setErr(j.error); else setD(j);
+    } catch (e: any) {
+      setErr(e?.message ?? "No pudimos cargar el informe.");
+    }
   }, [token]);
 
   useEffect(() => { if (token) cargar(); }, [token, cargar]);
 
   async function generarIA() {
     setGenerando(true); setErr(null);
-    const r = await fetch(`/api/bateria/informe-ia/${token}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
-    });
-    const j = await r.json();
-    setGenerando(false);
-    if (j.error) { setErr(j.error); return; }
-    await cargar();
+    try {
+      const r = await fetch(`/api/bateria/informe-ia/${token}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      // Un timeout de la función devuelve HTML, no JSON. Sin este manejo el
+      // botón se quedaba pensando para siempre y no aparecía ningún error.
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch {
+        throw new Error(
+          r.status === 504
+            ? "El análisis tardó más de lo permitido y se cortó. Vuelva a intentarlo."
+            : `El servidor respondió ${r.status}. ${txt.slice(0, 160)}`
+        );
+      }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      await cargar();
+    } catch (e: any) {
+      setErr(e?.message ?? "No pudimos generar el análisis.");
+    } finally {
+      setGenerando(false);
+    }
   }
 
   if (err && !d) return <Marco><p style={{ color: RED }}>{err}</p></Marco>;
@@ -80,11 +101,17 @@ export default function InformeImprimible() {
       <div className="no-print" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 20, alignItems: "center" }}>
         <button onClick={() => window.print()} style={btnN}>Descargar PDF</button>
         <button onClick={generarIA} disabled={generando} style={{ ...btnN, background: "#fff", color: BLACK, border: `1px solid ${BORDER}` }}>
-          {generando ? "El psicólogo está redactando…" : ia ? "Regenerar análisis" : "Generar análisis del psicólogo"}
+          {generando ? "El psicólogo está redactando… (30-60 s)" : ia ? "Regenerar análisis" : "Generar análisis del psicólogo"}
         </button>
         <a href="/hr-admin/bateria" style={{ fontSize: 13, color: BLUE, marginLeft: 4 }}>← Volver</a>
-        {err && <span style={{ color: RED, fontSize: 13 }}>{err}</span>}
       </div>
+
+      {err && (
+        <div className="no-print" style={{ padding: "14px 16px", background: "#FDF6F5", border: "1px solid #F3D6D2", borderRadius: 8, marginBottom: 20 }}>
+          <p style={{ fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase", color: RED, fontWeight: 700, margin: "0 0 6px" }}>No se pudo generar el análisis</p>
+          <p style={{ fontSize: 13.5, margin: 0, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>{err}</p>
+        </div>
+      )}
 
       {/* ── Portada ── */}
       <header style={{ borderBottom: `2px solid ${BLACK}`, paddingBottom: 18, marginBottom: 26 }}>

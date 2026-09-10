@@ -8,6 +8,10 @@ import { FACTORS, MOTIVADORES, INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, DISC_PATRON
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+/** Sonnet redactando un informe completo tarda 30-90 s. Sin esto la funcion
+ *  corre con el limite por defecto (~15 s), se corta a mitad y el boton se
+ *  queda pensando sin decir nada. Mismo valor que usan los otros agentes. */
+export const maxDuration = 300;
 
 const MODEL = 'claude-sonnet-4-5';
 
