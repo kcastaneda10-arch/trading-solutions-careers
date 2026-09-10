@@ -258,6 +258,8 @@ export default function PipelineFunnel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
+  /** Estado de la bateria por candidato · ht_candidate_id -> estado. */
+  const [bateria, setBateria] = useState<Record<string, BatEstado>>({});
 
   useEffect(() => { void load(); }, []);
 
@@ -302,9 +304,21 @@ export default function PipelineFunnel() {
       const real = (cJ.candidates || []).filter((c: Cand) => !/@tradingsolutions\.com$/i.test(c.email || ""));
       setCandidates(real);
       setVacancies(vJ.vacancies || []);
+      // La bateria va aparte y es tolerante a fallo: si no carga, el funnel
+      // sigue sirviendo, solo que sin los chips de la prueba.
+      void cargarBateria();
     } finally {
       setLoading(false);
     }
+  }
+
+  async function cargarBateria() {
+    try {
+      const r = await fetch("/api/bateria/estado", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      setBateria(j.estados || {});
+    } catch { /* el funnel no depende de esto */ }
   }
 
   const filtered = useMemo(
@@ -505,6 +519,7 @@ export default function PipelineFunnel() {
                                 {c.ht_vacancies?.title || "—"}
                               </div>
                             </button>
+                            <ChipBateria est={bateria[c.id]} />
                           </div>
                         );
                       })}
@@ -536,6 +551,7 @@ export default function PipelineFunnel() {
           {selectedIds.size > 0 && (
             <BulkActionBar
               selectedCands={candidates.filter(c => selectedIds.has(c.id))}
+              bateria={bateria}
               onClear={clearSelection}
               onActionComplete={() => { clearSelection(); load(); }}
               running={bulkRunning}
@@ -727,12 +743,55 @@ function RejectedSection({
   );
 }
 
+// ─── Bateria psicometrica en la tarjeta ───────────────────────────
+export type BatEstado = {
+  token: string;
+  status: string;
+  invitada: boolean;
+  match: number | null;
+  conInforme: boolean;
+};
+
+/** Una linea por tarjeta: en que va la prueba de esta persona. Si ya hay
+ *  resultado, el chip es el link directo al informe imprimible. */
+function ChipBateria({ est }: { est?: BatEstado }) {
+  if (!est) return null;
+
+  if (est.status === "completed" && est.match != null) {
+    const color = est.match >= 75 ? "text-emerald-700 border-emerald-300 bg-emerald-50"
+      : est.match >= 55 ? "text-blue-700 border-blue-300 bg-blue-50"
+      : "text-amber-700 border-amber-300 bg-amber-50";
+    return (
+      <a href={`/hr-admin/bateria/informe/${est.token}`} target="_blank" rel="noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className={`mt-2 flex items-center justify-between gap-1 border px-1.5 py-1 text-[10px] font-bold ${color}`}
+        title="Abrir el informe · match con el perfil del cargo">
+        <span>Batería {est.match}%</span>
+        <span className="opacity-70 font-normal">{est.conInforme ? "informe ↗" : "sin IA ↗"}</span>
+      </a>
+    );
+  }
+
+  const txt = est.status === "completed" ? "Batería terminada · falta calcular"
+    : est.status === "in_progress" ? "Batería en curso"
+    : est.status === "consented" ? "Batería abierta"
+    : est.invitada ? "Batería enviada · sin abrir"
+    : "Batería con enlace · sin enviar";
+
+  return (
+    <div className="mt-2 border border-[var(--ts-gray-20)] px-1.5 py-1 text-[10px] text-[var(--ts-gray-60)]" title={txt}>
+      {txt}
+    </div>
+  );
+}
+
 // ─── Floating bulk action bar ─────────────────────────────────────
 function BulkActionBar({
-  selectedCands, onClear, onActionComplete,
+  selectedCands, bateria, onClear, onActionComplete,
   running, setRunning, progress, setProgress,
 }: {
   selectedCands: Cand[];
+  bateria: Record<string, BatEstado>;
   onClear: () => void;
   onActionComplete: () => void;
   running: boolean;
@@ -740,6 +799,10 @@ function BulkActionBar({
   progress: { done: number; total: number; ok: number; fail: number } | null;
   setProgress: (p: { done: number; total: number; ok: number; fail: number } | null) => void;
 }) {
+  // Los hooks van antes de cualquier return: si no, React se desincroniza
+  // al pasar de "hay seleccion" a "no hay seleccion".
+  const [batMsg, setBatMsg] = useState<string | null>(null);
+
   const n = selectedCands.length;
   if (n === 0) return null;
 
@@ -773,6 +836,44 @@ function BulkActionBar({
   const stageAction = allSameStage
     ? (accionesEspeciales[normalizeStage(dominantStage)] ?? avanceDerivado)
     : null;
+
+  /**
+   * Bateria: una sola llamada con toda la lista, no una por candidato.
+   * El backend reusa el enlace de quien ya tenga uno, asi que volver a
+   * seleccionar a alguien no le borra el avance.
+   */
+  const yaInvitados = selectedCands.filter(c => bateria[c.id]?.invitada).length;
+
+  async function enviarBateria() {
+    if (running) return;
+    const aviso = yaInvitados
+      ? `\n\n${yaInvitados} de ellos ya tenían la batería enviada: se les vuelve a mandar EL MISMO enlace, no uno nuevo.`
+      : "";
+    if (!confirm(`Se van a crear ${n} borradores de la batería en tu Gmail.${aviso}\n\nNo se envía nada todavía: quedan en Borradores para que los revises.`)) return;
+    setRunning(true);
+    setBatMsg(null);
+    try {
+      const r = await fetch("/api/bateria/enviar", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({
+          modo: "borrador",
+          candidatos: selectedCands.map(c => ({
+            id: c.id, nombre: c.name, email: c.email, vacante: c.ht_vacancies?.title ?? null,
+          })),
+        }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}`); }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      setBatMsg(j.nota ?? `Listos ${j.ok} borradores.`);
+      onActionComplete();
+    } catch (e: any) {
+      setBatMsg(`No se pudo: ${e?.message ?? "error"}`);
+    } finally {
+      setRunning(false);
+    }
+  }
 
   async function runBulk(action: "stage_action" | "advance" | "reject") {
     if (running) return;
@@ -830,6 +931,10 @@ function BulkActionBar({
         )}
       </div>
 
+      {batMsg && (
+        <div className="text-[11px] px-3 py-1 bg-white/10 rounded-full max-w-xs leading-snug">{batMsg}</div>
+      )}
+
       {progress && (
         <div className="text-xs flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full">
           <span>{progress.done}/{progress.total}</span>
@@ -850,6 +955,14 @@ function BulkActionBar({
               <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
             </button>
           )}
+          <button
+            onClick={enviarBateria}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-violet-600 hover:bg-violet-700 inline-flex items-center gap-1.5"
+            title="Crea un borrador en Gmail por candidato, cada uno con su propio enlace"
+          >
+            <span>Enviar batería</span>
+            <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
+          </button>
           <button
             onClick={() => runBulk("advance")}
             className="text-xs font-bold px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700"
