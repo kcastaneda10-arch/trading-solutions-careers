@@ -121,6 +121,21 @@ export default function InformeImprimible() {
   const ia = d.informeIA;
   const ver = VER[s.validity?.veredicto] ?? VER.sin_alertas;
 
+  // Cobertura real: un match calculado sobre media bateria no es un match.
+  // Se cuenta por bloque porque no es lo mismo que falten 5 items de rasgos
+  // que que falte entero el bloque de razonamiento, que pesa 30%.
+  const ESPERADO: Record<string, { n: number; label: string }> = {
+    A: { n: 60, label: "Rasgos" }, B: { n: 24, label: "Estilo DISC" }, C: { n: 30, label: "Motivadores" },
+    D: { n: 28, label: "Razonamiento" }, E: { n: 30, label: "Integridad" },
+  };
+  const porBloque: Record<string, number> = {};
+  (d.revision ?? []).forEach((r: any) => { porBloque[r.block] = (porBloque[r.block] ?? 0) + 1; });
+  const respondidas = d.revision?.length ?? 0;
+  const incompleta = respondidas < (d.total_items ?? 172);
+  const bloquesFaltantes = Object.entries(ESPERADO)
+    .map(([k, v]) => ({ k, ...v, tiene: porBloque[k] ?? 0 }))
+    .filter((b) => b.tiene < b.n);
+
   if (!sc?.personalidad) {
     // Callejon sin salida antes: decia "no tiene puntajes" y ya. Ahora dice de
     // QUIEN es la sesion (para descubrir que se abrio la equivocada) y deja
@@ -192,6 +207,26 @@ export default function InformeImprimible() {
         <div className="no-print" style={{ padding: "14px 16px", background: "#FDF6F5", border: "1px solid #F3D6D2", borderRadius: 8, marginBottom: 20 }}>
           <p style={{ fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase", color: RED, fontWeight: 700, margin: "0 0 6px" }}>No se pudo generar el análisis</p>
           <p style={{ fontSize: 13.5, margin: 0, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>{err}</p>
+        </div>
+      )}
+
+      {incompleta && (
+        <div style={{ padding: "16px 18px", background: "#FEF6EC", border: `2px solid ${AMBER}`, borderRadius: 8, marginBottom: 22 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase", color: AMBER, fontWeight: 700 }}>
+            Batería incompleta · el match no es comparable
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 14, lineHeight: 1.6, color: "#374151", maxWidth: "62ch" }}>
+            Solo se guardaron <b>{respondidas} de {d.total_items}</b> respuestas. Los puntajes se calcularon con lo que hay,
+            y las escalas incompletas no miden lo mismo que las completas. No use este porcentaje para comparar contra
+            otro candidato que sí terminó.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
+            {bloquesFaltantes.map((b) => (
+              <li key={b.k}>
+                <b>{b.label}</b>: {b.tiene} de {b.n}{b.tiene === 0 ? " · sin ninguna respuesta" : ""}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
