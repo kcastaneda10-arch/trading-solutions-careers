@@ -1,0 +1,166 @@
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { supabaseAdmin } from '@/lib/supabase';
+import { isAdminRequest } from '@/lib/bateria/auth';
+import { BATTERY_VERSION } from '@/lib/bateria/items';
+import { asuntoBateria, htmlBateria, textoBateria } from '@/lib/bateria/correo';
+import { createDraftViaGmail, isGmailConnected } from '@/lib/gmail';
+import { getResend, EMAIL_FROM } from '@/lib/resend';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
+/** Las respuestas van a la cuenta de reclutamiento, no al remitente tecnico. */
+const RESPONDER_A = 'jointheteam@tradingsolutions.com';
+
+type Modo = 'previsualizar' | 'borrador' | 'enviar';
+type Cand = { id?: string; nombre?: string; email?: string; vacante?: string };
+
+/**
+ * Un enlace por persona. Si el candidato ya tiene sesion se reusa la suya:
+ * crear una segunda le borraria el avance de la primera y dejaria dos filas
+ * compitiendo por el mismo informe.
+ */
+async function sesionDe(c: Cand, perfil: string | null, origin: string) {
+  const { data: ya } = await supabaseAdmin
+    .from('ts_bat_sessions')
+    .select('id, token, status, invite_count')
+    .eq('ht_candidate_id', c.id)
+    .limit(1);
+
+  if (ya?.length) {
+    if (perfil) await supabaseAdmin.from('ts_bat_sessions').update({ perfil_cargo: perfil }).eq('id', ya[0].id);
+    return { id: ya[0].id, token: ya[0].token, url: `${origin}/prueba/${ya[0].token}`, reusada: true, invite_count: ya[0].invite_count ?? 0 };
+  }
+
+  const token = crypto.randomBytes(24).toString('base64url');
+  const { data, error } = await supabaseAdmin
+    .from('ts_bat_sessions')
+    .insert({
+      token,
+      battery_version: BATTERY_VERSION,
+      purpose: 'candidato',
+      candidate_name: c.nombre ?? null,
+      candidate_email: c.email ?? null,
+      ht_candidate_id: c.id ?? null,
+      vacancy_title: c.vacante ?? 'Prueba de selección',
+      perfil_cargo: perfil,
+      status: 'created',
+    })
+    .select('id, token')
+    .single();
+
+  if (error || !data) throw new Error(error?.message ?? 'no se pudo crear la sesión');
+  return { id: data.id, token: data.token, url: `${origin}/prueba/${data.token}`, reusada: false, invite_count: 0 };
+}
+
+export async function POST(req: NextRequest) {
+  if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const modo: Modo = body?.modo ?? 'previsualizar';
+    const perfil: string | null = body?.perfil || null;
+    const candidatos: Cand[] = Array.isArray(body?.candidatos) ? body.candidatos : [];
+    const origin = req.nextUrl.origin;
+
+    // ── Vista previa ─────────────────────────────────────────────────────
+    // No crea sesiones ni toca la base. Es exactamente el mismo HTML que
+    // despues sale en el borrador, con un enlace de ejemplo.
+    if (modo === 'previsualizar') {
+      const c = candidatos[0] ?? {};
+      const datos = {
+        nombre: c.nombre ?? 'María Fernanda Gómez',
+        vacante: c.vacante ?? 'Especialista SIG-SST',
+        url: `${origin}/prueba/ASI-SE-VE-EL-ENLACE`,
+      };
+      return NextResponse.json(
+        { modo, asunto: asuntoBateria(datos.vacante), html: htmlBateria(datos), texto: textoBateria(datos), para: c.email ?? 'candidato@ejemplo.com' },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    if (!candidatos.length) return NextResponse.json({ error: 'Sin candidatos' }, { status: 400 });
+
+    // Gmail primero: el borrador sale de la cuenta de reclutamiento, con su
+    // firma y su historial. Resend es la salida de emergencia.
+    const gmail = modo === 'borrador' ? await isGmailConnected() : { connected: false as boolean, email: undefined as string | undefined };
+    if (modo === 'borrador' && !gmail.connected) {
+      return NextResponse.json(
+        { error: 'Gmail no está conectado, así que no puedo dejar los borradores en su bandeja. Conéctelo en Ajustes o use "Enviar ahora".' },
+        { status: 409 }
+      );
+    }
+
+    const resultado: any[] = [];
+
+    for (const c of candidatos.slice(0, 100)) {
+      let ses;
+      try {
+        ses = await sesionDe(c, perfil, origin);
+      } catch (e: any) {
+        resultado.push({ id: c.id, nombre: c.nombre, email: c.email, error: e?.message ?? 'no se creó la sesión' });
+        continue;
+      }
+
+      if (!c.email) {
+        resultado.push({ ...c, url: ses.url, reusada: ses.reusada, error: 'sin correo en la ficha' });
+        continue;
+      }
+
+      const datos = { nombre: c.nombre ?? null, vacante: c.vacante ?? null, url: ses.url };
+      const asunto = asuntoBateria(c.vacante ?? null);
+      const html = htmlBateria(datos);
+
+      let canal: string;
+      let fallo: string | null = null;
+
+      if (modo === 'borrador') {
+        const r = await createDraftViaGmail({ to: c.email, subject: asunto, html, fromName: 'Kelly Castañeda' });
+        canal = 'gmail-borrador';
+        if (!r.ok) fallo = r.error ?? 'Gmail rechazó el borrador';
+      } else {
+        const resend = getResend();
+        const { error: eMail } = await resend.emails.send({
+          from: EMAIL_FROM,
+          to: c.email,
+          replyTo: RESPONDER_A,
+          subject: asunto,
+          html,
+          text: textoBateria(datos),
+        });
+        canal = 'resend';
+        if (eMail) fallo = eMail.message;
+      }
+
+      if (!fallo) {
+        await supabaseAdmin
+          .from('ts_bat_sessions')
+          .update({ invited_at: new Date().toISOString(), invite_channel: canal, invite_count: ses.invite_count + 1, updated_at: new Date().toISOString() })
+          .eq('id', ses.id);
+      }
+
+      resultado.push({ id: c.id, nombre: c.nombre, email: c.email, url: ses.url, reusada: ses.reusada, canal, error: fallo });
+    }
+
+    const ok = resultado.filter((r) => r.url && !r.error).length;
+    return NextResponse.json(
+      {
+        modo,
+        ok,
+        fallaron: resultado.filter((r) => r.error).length,
+        cuenta: gmail.email ?? null,
+        resultado,
+        nota:
+          modo === 'borrador'
+            ? `Quedaron ${ok} borradores en la bandeja de ${gmail.email ?? 'Gmail'}. Revíselos y déles Enviar.`
+            : `Salieron ${ok} correos. Las respuestas llegan a ${RESPONDER_A}.`,
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (err: any) {
+    console.error('bateria/enviar', err);
+    return NextResponse.json({ error: err?.message ?? 'Error interno' }, { status: 500 });
+  }
+}

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from('ts_bat_sessions')
-    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at, consent_cam_at, perfil_cargo, match_data, informe_ia')
+    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at, consent_cam_at, perfil_cargo, match_data, informe_ia, invited_at, invite_channel')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         calculada: !!s.scores,
         match: (s.match_data as any)?.global ?? null,
         conInforme: !!s.informe_ia,
+        invited_at: s.invited_at ?? null,
         alertasMatch: ((s.match_data as any)?.alertas ?? []).length,
       };
     })

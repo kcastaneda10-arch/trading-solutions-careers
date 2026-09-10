@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   try {
-    const { candidatos } = await req.json();
+    const { candidatos, perfil } = await req.json();
     if (!Array.isArray(candidatos) || !candidatos.length) {
       return NextResponse.json({ error: 'Sin candidatos' }, { status: 400 });
     }
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
           candidate_email: c.email ?? null,
           ht_candidate_id: c.id,
           vacancy_title: c.vacante ?? 'Prueba de selección',
+          perfil_cargo: perfil || null,
           status: 'created',
         })
         .select('token')

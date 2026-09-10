@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { LISTA_PERFILES } from "@/lib/bateria/perfiles-cargo";
 
 const BLACK = "#0A0A0A";
 const BLUE = "#2C64ED";
@@ -19,7 +20,7 @@ type Sess = {
   vacancy_title: string | null; status: string; battery_version: string;
   started_at: string | null; finished_at: string | null; duration_seconds: number | null;
   scores: any; validity: any; created_at: string; consent_cam_at: string | null; calculada?: boolean; match?: number | null; conInforme?: boolean; alertasMatch?: number; perfil_cargo?: string | null;
-  respuestas?: number; capturas?: number; alertas?: number;
+  respuestas?: number; capturas?: number; alertas?: number; invited_at?: string | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,6 +48,11 @@ export default function BateriaAdmin() {
   const [cargandoCands, setCargandoCands] = useState(false);
   const [lote, setLote] = useState<any[] | null>(null);
   const [creandoLote, setCreandoLote] = useState(false);
+  const [perfilLote, setPerfilLote] = useState<string>(LISTA_PERFILES[0]?.key ?? "");
+  const [previa, setPrevia] = useState<any>(null);
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [envio, setEnvio] = useState<any>(null);
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,13 +78,51 @@ export default function BateriaAdmin() {
     setCreandoLote(true);
     const r = await fetch("/api/bateria/crear-lote", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidatos: cands.map((c) => ({ id: c.id, nombre: c.nombre, email: c.email, vacante: c.vacante })) }),
+      body: JSON.stringify({ perfil: perfilLote || null, candidatos: cands.map((c) => ({ id: c.id, nombre: c.nombre, email: c.email, vacante: c.vacante })) }),
     });
     const j = await r.json();
     setCreandoLote(false);
     setLote(j.resultado || []);
     load();
     cargarCandidatos();
+  }
+
+  async function verCorreo() {
+    setErrorEnvio(null);
+    const c = cands?.[0];
+    const r = await fetch("/api/bateria/enviar", {
+      method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+      body: JSON.stringify({ modo: "previsualizar", candidatos: c ? [c] : [] }),
+    });
+    const j = await r.json();
+    if (j.error) { setErrorEnvio(j.error); return; }
+    setPrevia(j);
+  }
+
+  /** modo: 'borrador' deja los correos en Gmail sin mandarlos · 'enviar' los manda. */
+  async function mandar(modo: "borrador" | "enviar") {
+    if (!cands?.length) return;
+    if (modo === "enviar" && !confirm(`Se van a enviar ${cands.length} correos ahora mismo. ¿Seguro?`)) return;
+    setEnviando(modo); setErrorEnvio(null); setEnvio(null);
+    try {
+      const r = await fetch("/api/bateria/enviar", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({
+          modo, perfil: perfilLote || null,
+          candidatos: cands.map((c) => ({ id: c.id, nombre: c.nombre, email: c.email, vacante: c.vacante })),
+        }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}. ${txt.slice(0, 160)}`); }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      setEnvio(j);
+      load(); cargarCandidatos();
+    } catch (e: any) {
+      setErrorEnvio(e?.message ?? "No se pudo enviar.");
+    } finally {
+      setEnviando(null);
+    }
   }
 
   function copiarLote() {
@@ -235,20 +279,72 @@ export default function BateriaAdmin() {
         <div style={box}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>Enviar a los que están en revisión de prefiltro</h2>
           <p style={{ fontSize: 13, color: GRAY, margin: "0 0 12px", lineHeight: 1.55 }}>
-            Crea un enlace propio para cada candidato en esa etapa y lo deja amarrado a su ficha, para que el informe
-            aparezca después en el funnel. A quien ya tenga enlace no se le crea otro.
+            Crea un enlace propio para cada candidato en esa etapa, lo deja amarrado a su ficha y le manda el correo.
+            A quien ya tenga enlace no se le crea otro: se le reenvía el suyo. <b>Crear borradores</b> los deja en su bandeja
+            de Gmail sin mandarlos, para que usted los revise y les dé Enviar; <b>Enviar ahora</b> sale de una.
           </p>
-          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
             <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}` }}
               disabled={cargandoCands} onClick={cargarCandidatos}>
               {cargandoCands ? "Buscando…" : cands ? "Actualizar lista" : "Ver quiénes están"}
             </button>
+            <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}` }} onClick={verCorreo}>
+              Ver el correo
+            </button>
             {!!cands?.length && (
-              <button style={{ ...btn, opacity: creandoLote ? 0.5 : 1 }} disabled={creandoLote} onClick={crearLote}>
-                {creandoLote ? "Creando…" : `Crear enlaces para los ${cands.length}`}
-              </button>
+              <>
+                <select value={perfilLote} onChange={(e) => setPerfilLote(e.target.value)}
+                  style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}`, cursor: "pointer" }}
+                  title="Perfil contra el que se va a calcular el match de este lote">
+                  <option value="">Sin perfil (no calcula match)</option>
+                  {LISTA_PERFILES.map((p) => <option key={p.key} value={p.key}>{p.nombre}</option>)}
+                </select>
+                <button style={{ ...btn, opacity: enviando ? 0.5 : 1 }} disabled={!!enviando} onClick={() => mandar("borrador")}>
+                  {enviando === "borrador" ? "Creando borradores…" : `Crear ${cands.length} borradores en Gmail`}
+                </button>
+                <button style={{ ...btn, background: "#fff", color: BLACK, border: `1px solid ${BORDER}`, opacity: enviando ? 0.5 : 1 }}
+                  disabled={!!enviando} onClick={() => mandar("enviar")}>
+                  {enviando === "enviar" ? "Enviando…" : "Enviar ahora"}
+                </button>
+                <button style={{ ...btn, background: "#fff", color: GRAY, border: `1px solid ${BORDER}`, opacity: creandoLote ? 0.5 : 1 }}
+                  disabled={creandoLote} onClick={crearLote}>
+                  {creandoLote ? "Creando…" : "Solo crear enlaces"}
+                </button>
+              </>
             )}
           </div>
+
+          {previa && (
+            <div style={{ marginTop: 16, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ padding: "11px 14px", background: SOFT, borderBottom: `1px solid ${BORDER}` }}>
+                <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase", color: GRAY, fontWeight: 700 }}>
+                  Así queda el borrador
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 13 }}><b>Para:</b> {previa.para}</p>
+                <p style={{ margin: "3px 0 0", fontSize: 13 }}><b>Asunto:</b> {previa.asunto}</p>
+                <button onClick={() => setPrevia(null)}
+                  style={{ background: "none", border: "none", color: BLUE, fontSize: 12.5, cursor: "pointer", padding: "8px 0 0" }}>Cerrar</button>
+              </div>
+              <iframe title="Borrador del correo" srcDoc={previa.html} style={{ width: "100%", height: 640, border: "none", background: "#F3F4F6" }} />
+            </div>
+          )}
+
+          {envio && (
+            <div style={{ marginTop: 16, padding: 14, background: envio.fallaron ? "#FEF6EC" : "#EDF7F0", border: `1px solid ${envio.fallaron ? "#F5D9B0" : "#C6E4D2"}`, borderRadius: 8 }}>
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600 }}>{envio.nota}</p>
+              {!!envio.fallaron && (
+                <p style={{ margin: "8px 0 0", fontSize: 12.5, color: RED }}>
+                  No salió para: {envio.resultado.filter((x: any) => x.error).map((x: any) => `${x.nombre} (${x.error})`).join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {errorEnvio && (
+            <div style={{ marginTop: 16, padding: 14, background: "#FDF6F5", border: "1px solid #F3D6D2", borderRadius: 8 }}>
+              <p style={{ margin: 0, fontSize: 13.5, fontFamily: "ui-monospace, monospace", wordBreak: "break-word" }}>{errorEnvio}</p>
+            </div>
+          )}
 
           {cands && !cands.length && (
             <p style={{ fontSize: 13.5, color: GRAY, marginTop: 12 }}>No hay candidatos en revisión de prefiltro.</p>
@@ -307,12 +403,12 @@ export default function BateriaAdmin() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>
                 <th style={th}>Persona</th><th style={th}>Estado</th><th style={th}>Resp.</th>
-                <th style={th}>Match</th><th style={th}>Cámara</th><th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
+                <th style={th}>Match</th><th style={th}>Invitado</th><th style={th}>Cámara</th><th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
                 <th style={th}>Versión</th><th style={th}></th>
               </tr></thead>
               <tbody>
-                {loading && <tr><td style={td} colSpan={10}>Cargando…</td></tr>}
-                {!loading && !sessions.length && <tr><td style={td} colSpan={10}>Todavía no hay sesiones.</td></tr>}
+                {loading && <tr><td style={td} colSpan={11}>Cargando…</td></tr>}
+                {!loading && !sessions.length && <tr><td style={td} colSpan={11}>Todavía no hay sesiones.</td></tr>}
                 {sessions.map((s) => (
                   <tr key={s.id}>
                     <td style={td}><b>{s.candidate_name || "(sin nombre)"}</b><br /><span style={{ color: GRAY, fontSize: 12 }}>{s.purpose}</span></td>
@@ -323,6 +419,11 @@ export default function BateriaAdmin() {
                         ? <b style={{ fontSize: 15, color: s.match >= 75 ? GREEN : s.match >= 55 ? BLUE : AMBER }}>{s.match}%</b>
                         : <span style={{ color: GRAY }}>—</span>}
                       {!!s.alertasMatch && <span style={{ display: "block", fontSize: 11, color: RED, fontWeight: 600 }}>{s.alertasMatch} alerta{s.alertasMatch > 1 ? "s" : ""}</span>}
+                    </td>
+                    <td style={{ ...td, fontSize: 12.5, color: s.invited_at ? BLACK : GRAY }}>
+                      {s.invited_at
+                        ? new Date(s.invited_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })
+                        : "—"}
                     </td>
                     <td style={{ ...td, color: s.consent_cam_at ? GREEN : AMBER, fontWeight: 600, fontSize: 12.5 }}>
                       {s.consent_cam_at ? "autorizada" : "no autorizada"}
