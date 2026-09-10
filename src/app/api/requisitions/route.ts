@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
         // lo traduce.
         lead_responsibilities: body.lead_responsibilities || null,
         lead_must_haves: body.lead_must_haves || null,
+        // Insumo ampliado del líder (jefe, ubicación, modalidad, herramientas,
+        // inglés, formación, experiencia, salario…). Igual que arriba: es crudo,
+        // Wellness lo formaliza. Se guarda como JSON para no ensanchar la tabla.
+        lead_profile: body.lead_profile || null,
         status: "pedida",
       })
       .select("id, status, created_at")

@@ -36,6 +36,19 @@ type Requisicion = {
   needed_by: string | null;
   lead_responsibilities: string | null;
   lead_must_haves: string | null;
+  lead_profile: {
+    reporta_a?: string | null;
+    posiciones?: number | null;
+    ubicacion?: string | null;
+    modalidad?: string | null;
+    herramientas?: string | null;
+    ingles_nivel?: string | null;
+    ingles_para?: string | null;
+    formacion?: string | null;
+    experiencia?: string | null;
+    competencias?: string | null;
+    salario_tope?: string | null;
+  } | null;
   responsibilities: string | null;
   nice_to_have: string | null;
   location: string | null;
@@ -372,7 +385,7 @@ function Tarjeta({
           {/* Lo que aportó el líder, al lado de los campos que hay que llenar.
               No se copia solo: se ofrece como base para que Wellness lo
               traduzca en vez de publicar el lenguaje interno del área. */}
-          {editable && (req.lead_responsibilities || req.lead_must_haves) && (
+          {editable && (req.lead_responsibilities || req.lead_must_haves || req.lead_profile) && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-900">
@@ -399,6 +412,23 @@ function Tarjeta({
                 <div>
                   <p className="text-[11px] font-semibold text-blue-900/70 uppercase tracking-wide">Qué no puede faltar</p>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap mt-0.5">{req.lead_must_haves}</p>
+                </div>
+              )}
+              {req.lead_profile && (
+                <div>
+                  <p className="text-[11px] font-semibold text-blue-900/70 uppercase tracking-wide">Contexto del cargo</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-0.5 text-sm text-gray-800">
+                    {req.lead_profile.reporta_a && <p><span className="text-gray-500">Reporta a:</span> {req.lead_profile.reporta_a}</p>}
+                    {req.lead_profile.posiciones != null && <p><span className="text-gray-500">Posiciones:</span> {req.lead_profile.posiciones}</p>}
+                    {req.lead_profile.ubicacion && <p><span className="text-gray-500">Ubicación:</span> {req.lead_profile.ubicacion}</p>}
+                    {req.lead_profile.modalidad && <p><span className="text-gray-500">Modalidad:</span> {req.lead_profile.modalidad}</p>}
+                    {req.lead_profile.herramientas && <p className="col-span-2"><span className="text-gray-500">Herramientas:</span> {req.lead_profile.herramientas}</p>}
+                    {req.lead_profile.ingles_nivel && <p><span className="text-gray-500">Inglés:</span> {req.lead_profile.ingles_nivel}{req.lead_profile.ingles_para ? ` · ${req.lead_profile.ingles_para}` : ""}</p>}
+                    {req.lead_profile.formacion && <p><span className="text-gray-500">Formación:</span> {req.lead_profile.formacion}</p>}
+                    {req.lead_profile.experiencia && <p><span className="text-gray-500">Experiencia:</span> {req.lead_profile.experiencia}</p>}
+                    {req.lead_profile.competencias && <p className="col-span-2"><span className="text-gray-500">Competencias:</span> {req.lead_profile.competencias}</p>}
+                    {req.lead_profile.salario_tope && <p><span className="text-gray-500">Tope salarial:</span> {req.lead_profile.salario_tope}</p>}
+                  </div>
                 </div>
               )}
               <p className="text-[11px] text-blue-900/60 leading-relaxed">
