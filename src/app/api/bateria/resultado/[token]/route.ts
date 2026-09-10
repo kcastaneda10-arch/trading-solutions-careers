@@ -6,6 +6,8 @@ import {
   FACTORS, ARQUETIPOS, DISC_PATRONES, DISC_LABEL, MOTIVADORES,
   INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, franja,
 } from '@/lib/bateria/interpretacion';
+import { calcularMatch } from '@/lib/bateria/match';
+import { perfilDe, perfilPorTitulo } from '@/lib/bateria/perfiles-cargo';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,8 +105,12 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
 
   // Sin no-store el navegador reutiliza el informe anterior: se recalcula, se
   // vuelve a pedir la misma URL y devuelve la version vieja sin puntajes.
+  const perfil = perfilDe(session.perfil_cargo ?? perfilPorTitulo(session.vacancy_title));
+  const match = session.match_data ?? (sc ? calcularMatch(sc, perfil?.key ?? null) : null);
+
   return NextResponse.json(
-    { session, revision, interpretacion, eventos: events ?? [], capturas, total_items: ITEMS.length },
+    { session, revision, interpretacion, perfil, match, informeIA: session.informe_ia ?? null,
+      eventos: events ?? [], capturas, total_items: ITEMS.length },
     { headers: { 'Cache-Control': 'no-store, max-age=0' } }
   );
 }

@@ -18,7 +18,7 @@ type Sess = {
   id: string; token: string; purpose: string; candidate_name: string | null;
   vacancy_title: string | null; status: string; battery_version: string;
   started_at: string | null; finished_at: string | null; duration_seconds: number | null;
-  scores: any; validity: any; created_at: string; consent_cam_at: string | null; calculada?: boolean;
+  scores: any; validity: any; created_at: string; consent_cam_at: string | null; calculada?: boolean; match?: number | null; conInforme?: boolean; alertasMatch?: number; perfil_cargo?: string | null;
   respuestas?: number; capturas?: number; alertas?: number;
 };
 
@@ -179,6 +179,59 @@ export default function BateriaAdmin() {
           )}
         </div>
 
+        {(() => {
+          const rank = sessions.filter((x) => x.match != null && x.status === "completed");
+          if (!rank.length) return null;
+          const orden = rank.slice().sort((a, b) => (b.match ?? 0) - (a.match ?? 0));
+          // Banda de indiferencia ±5: dentro de eso van empatados, porque el
+          // error de medición no permite decir que uno es mejor que el otro.
+          const grupos: Sess[][] = [];
+          for (const f of orden) {
+            const u = grupos[grupos.length - 1];
+            if (u && Math.abs((u[0].match ?? 0) - (f.match ?? 0)) <= 5) u.push(f);
+            else grupos.push([f]);
+          }
+          return (
+            <div style={{ ...box, padding: 0, overflow: "hidden" }}>
+              <div style={{ padding: "18px 22px 6px" }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>Ranking por match con el cargo</h2>
+                <p style={{ fontSize: 13, color: GRAY, margin: 0, lineHeight: 1.55 }}>
+                  Los que quedan a menos de 5 puntos van <b>en el mismo grupo</b>: el error de medición no permite
+                  decir que uno es mejor que el otro. Presentarlos como 1º y 2º sería inventar una precisión que no existe.
+                </p>
+              </div>
+              <div style={{ overflowX: "auto", marginTop: 12 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+                  <thead><tr>
+                    {["#", "Candidato", "Match", "Validez", "Alertas", ""].map((h, i) => <th key={i} style={th}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {grupos.map((g, gi) => (
+                      <>
+                        <tr key={`g${gi}`}><td colSpan={6} style={{ padding: "7px 12px", background: SOFT, fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, color: GRAY }}>
+                          Grupo {gi + 1} · {g.length > 1 ? `${Math.min(...g.map((x) => x.match ?? 0))}–${Math.max(...g.map((x) => x.match ?? 0))}%` : `${g[0].match}%`}
+                        </td></tr>
+                        {g.map((c) => (
+                          <tr key={c.id}>
+                            <td style={{ ...td, color: GRAY }}>{gi + 1}</td>
+                            <td style={td}><b>{c.candidate_name || "(sin nombre)"}</b></td>
+                            <td style={td}><b style={{ fontSize: 15, color: (c.match ?? 0) >= 75 ? GREEN : (c.match ?? 0) >= 55 ? BLUE : AMBER }}>{c.match}%</b></td>
+                            <td style={{ ...td, fontSize: 12.5, color: c.validity?.veredicto === "sin_alertas" ? GREEN : c.validity?.veredicto === "no_interpretable" ? RED : AMBER }}>
+                              {c.validity?.veredicto === "sin_alertas" ? "limpia" : c.validity?.veredicto === "no_interpretable" ? "no interpretable" : "con reservas"}
+                            </td>
+                            <td style={{ ...td, color: c.alertasMatch ? RED : GRAY, fontWeight: c.alertasMatch ? 700 : 400 }}>{c.alertasMatch ?? 0}</td>
+                            <td style={td}><a href={`/hr-admin/bateria/informe/${c.token}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: BLUE }}>Ver informe</a></td>
+                          </tr>
+                        ))}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
         <div style={box}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>Enviar a los que están en revisión de prefiltro</h2>
           <p style={{ fontSize: 13, color: GRAY, margin: "0 0 12px", lineHeight: 1.55 }}>
@@ -254,17 +307,23 @@ export default function BateriaAdmin() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>
                 <th style={th}>Persona</th><th style={th}>Estado</th><th style={th}>Resp.</th>
-                <th style={th}>Cámara</th><th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
+                <th style={th}>Match</th><th style={th}>Cámara</th><th style={th}>Capturas</th><th style={th}>Alertas</th><th style={th}>Min</th>
                 <th style={th}>Versión</th><th style={th}></th>
               </tr></thead>
               <tbody>
-                {loading && <tr><td style={td} colSpan={9}>Cargando…</td></tr>}
-                {!loading && !sessions.length && <tr><td style={td} colSpan={9}>Todavía no hay sesiones.</td></tr>}
+                {loading && <tr><td style={td} colSpan={10}>Cargando…</td></tr>}
+                {!loading && !sessions.length && <tr><td style={td} colSpan={10}>Todavía no hay sesiones.</td></tr>}
                 {sessions.map((s) => (
                   <tr key={s.id}>
                     <td style={td}><b>{s.candidate_name || "(sin nombre)"}</b><br /><span style={{ color: GRAY, fontSize: 12 }}>{s.purpose}</span></td>
                     <td style={td}>{STATUS_LABEL[s.status] || s.status}</td>
                     <td style={td}>{s.respuestas ?? 0}</td>
+                    <td style={td}>
+                      {s.match != null
+                        ? <b style={{ fontSize: 15, color: s.match >= 75 ? GREEN : s.match >= 55 ? BLUE : AMBER }}>{s.match}%</b>
+                        : <span style={{ color: GRAY }}>—</span>}
+                      {!!s.alertasMatch && <span style={{ display: "block", fontSize: 11, color: RED, fontWeight: 600 }}>{s.alertasMatch} alerta{s.alertasMatch > 1 ? "s" : ""}</span>}
+                    </td>
                     <td style={{ ...td, color: s.consent_cam_at ? GREEN : AMBER, fontWeight: 600, fontSize: 12.5 }}>
                       {s.consent_cam_at ? "autorizada" : "no autorizada"}
                     </td>
@@ -280,6 +339,11 @@ export default function BateriaAdmin() {
                     <td style={td}>
                       <div style={{ display: "flex", gap: 9 }}>
                         <a href={`/prueba/${s.token}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: BLUE }}>Abrir</a>
+                        {s.calculada && (
+                          <a href={`/hr-admin/bateria/informe/${s.token}`} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: BLUE, fontWeight: 700 }}>
+                            Informe{s.conInforme ? "" : " (sin IA)"}
+                          </a>
+                        )}
                         <button onClick={() => ver(s.token)} style={{ background: "none", border: "none", color: BLUE, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
                           {abierto === s.token ? "Cerrar" : "Ver informe"}
                         </button>

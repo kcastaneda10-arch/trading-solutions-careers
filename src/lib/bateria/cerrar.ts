@@ -1,5 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { score, applyProctoring } from './scoring';
+import { calcularMatch } from './match';
+import { perfilPorTitulo } from './perfiles-cargo';
 
 /**
  * Calcula y guarda los puntajes de una sesion a partir de sus respuestas.
@@ -19,7 +21,7 @@ export async function cerrarSesion(sessionId: string) {
   try {
     const { data: session, error: eSess } = await supabaseAdmin
       .from('ts_bat_sessions')
-      .select('id, started_at, finished_at, status')
+      .select('id, started_at, finished_at, status, vacancy_title, perfil_cargo')
       .eq('id', sessionId)
       .single();
     if (eSess) return paso('leer_sesion', eSess.message);
@@ -65,9 +67,15 @@ export async function cerrarSesion(sessionId: string) {
       return paso('puntuar', err?.message ?? String(err));
     }
 
+    // El match se calcula al cerrar: asi el ranking existe sin pedir nada mas.
+    const perfilKey = session.perfil_cargo ?? perfilPorTitulo(session.vacancy_title);
+    const match = calcularMatch(scores, perfilKey);
+
     const { error: eUpd } = await supabaseAdmin
       .from('ts_bat_sessions')
       .update({
+        perfil_cargo: perfilKey ?? null,
+        match_data: match,
         status: 'completed',
         finished_at: session.finished_at ?? finished.toISOString(),
         duration_seconds: durationSeconds,
@@ -78,7 +86,7 @@ export async function cerrarSesion(sessionId: string) {
       .eq('id', sessionId);
     if (eUpd) return paso('guardar', eUpd.message);
 
-    return { ok: true as const, respuestas: answers.length, capturas, eventos, duracionSeg: durationSeconds };
+    return { ok: true as const, respuestas: answers.length, capturas, eventos, duracionSeg: durationSeconds, match: match?.global ?? null };
   } catch (err: any) {
     return paso('inesperado', err?.message ?? String(err));
   }

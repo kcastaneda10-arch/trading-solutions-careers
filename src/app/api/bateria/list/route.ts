@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from('ts_bat_sessions')
-    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at, consent_cam_at')
+    .select('id, token, purpose, candidate_name, vacancy_title, status, battery_version, started_at, finished_at, duration_seconds, scores, validity, created_at, consent_cam_at, perfil_cargo, match_data, informe_ia')
     .order('created_at', { ascending: false })
     .limit(50);
 
@@ -34,7 +34,13 @@ export async function GET(req: NextRequest) {
         contar('ts_bat_snapshots', s.id),
         contar('ts_bat_events', s.id, ALERTA_KINDS),
       ]);
-      return { ...s, respuestas, capturas, alertas, calculada: !!s.scores };
+      return {
+        ...s, respuestas, capturas, alertas,
+        calculada: !!s.scores,
+        match: (s.match_data as any)?.global ?? null,
+        conInforme: !!s.informe_ia,
+        alertasMatch: ((s.match_data as any)?.alertas ?? []).length,
+      };
     })
   );
 
