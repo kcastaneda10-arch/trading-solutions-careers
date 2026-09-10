@@ -105,6 +105,11 @@ export const PERFILES: Record<string, PerfilCargo> = {
   },
 };
 
+/** Para el selector del panel: no hay que adivinar el cargo cuando la sesion
+ *  se creo suelta y el titulo no coincide con ningun perfil. */
+export const LISTA_PERFILES: { key: string; nombre: string }[] =
+  Object.values(PERFILES).map((p) => ({ key: p.key, nombre: p.nombre }));
+
 export function perfilDe(key: string | null | undefined): PerfilCargo | null {
   if (!key) return null;
   return PERFILES[key] ?? null;

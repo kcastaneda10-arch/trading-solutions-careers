@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { LISTA_PERFILES } from "@/lib/bateria/perfiles-cargo";
 
 const BLACK = "#0A0A0A";
 const BLUE = "#2C64ED";
@@ -31,6 +32,8 @@ export default function InformeImprimible() {
   const [d, setD] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
+  const [seg, setSeg] = useState(0);
+  const [perfilSel, setPerfilSel] = useState<string>("");
 
   const cargar = useCallback(async () => {
     try {
@@ -45,12 +48,22 @@ export default function InformeImprimible() {
   }, [token]);
 
   useEffect(() => { if (token) cargar(); }, [token, cargar]);
+  useEffect(() => { if (d?.session?.perfil_cargo) setPerfilSel(d.session.perfil_cargo); }, [d]);
 
   async function generarIA() {
-    setGenerando(true); setErr(null);
+    setGenerando(true); setErr(null); setSeg(0);
+    // Corte duro del lado del navegador. Sin esto, si la funcion no responde
+    // nunca, el boton se queda pensando para siempre y no dice por que.
+    const ctrl = new AbortController();
+    const corte = setTimeout(() => ctrl.abort(), 150_000);
+    const reloj = setInterval(() => setSeg((n) => n + 1), 1000);
     try {
       const r = await fetch(`/api/bateria/informe-ia/${token}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(perfilSel ? { perfil: perfilSel } : {}),
+        signal: ctrl.signal,
+        cache: "no-store",
       });
       // Un timeout de la función devuelve HTML, no JSON. Sin este manejo el
       // botón se quedaba pensando para siempre y no aparecía ningún error.
@@ -65,9 +78,15 @@ export default function InformeImprimible() {
       }
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
       await cargar();
+      if (j.aviso) setErr(j.aviso);
     } catch (e: any) {
-      setErr(e?.message ?? "No pudimos generar el análisis.");
+      setErr(
+        e?.name === "AbortError"
+          ? "El servidor no respondió en 2 minutos y medio. La función se quedó colgada: revise el log del deployment en Vercel para esta ruta."
+          : e?.message ?? "No pudimos generar el análisis."
+      );
     } finally {
+      clearTimeout(corte); clearInterval(reloj);
       setGenerando(false);
     }
   }
@@ -100,8 +119,21 @@ export default function InformeImprimible() {
 
       <div className="no-print" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 20, alignItems: "center" }}>
         <button onClick={() => window.print()} style={btnN}>Descargar PDF</button>
+        <select
+          value={perfilSel}
+          onChange={(e) => setPerfilSel(e.target.value)}
+          style={{ ...btnN, background: "#fff", color: BLACK, border: `1px solid ${BORDER}`, cursor: "pointer" }}
+          title="Contra qué perfil de cargo se compara este candidato"
+        >
+          <option value="">Sin perfil de cargo (no calcula match)</option>
+          {LISTA_PERFILES.map((p) => (
+            <option key={p.key} value={p.key}>{p.nombre}</option>
+          ))}
+        </select>
         <button onClick={generarIA} disabled={generando} style={{ ...btnN, background: "#fff", color: BLACK, border: `1px solid ${BORDER}` }}>
-          {generando ? "El psicólogo está redactando… (30-60 s)" : ia ? "Regenerar análisis" : "Generar análisis del psicólogo"}
+          {generando
+            ? `El psicólogo está redactando… ${seg} s`
+            : ia ? "Regenerar análisis" : "Generar análisis del psicólogo"}
         </button>
         <a href="/hr-admin/bateria" style={{ fontSize: 13, color: BLUE, marginLeft: 4 }}>← Volver</a>
       </div>

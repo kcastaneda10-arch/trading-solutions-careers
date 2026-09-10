@@ -8,25 +8,18 @@ import { FACTORS, MOTIVADORES, INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, DISC_PATRON
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-/** Sonnet redactando un informe completo tarda 30-90 s. Sin esto la funcion
- *  corre con el limite por defecto (~15 s), se corta a mitad y el boton se
- *  queda pensando sin decir nada. Mismo valor que usan los otros agentes. */
 export const maxDuration = 300;
 
 const MODEL = 'claude-sonnet-4-5';
 
-/**
- * Agente psicologo: redacta el informe narrativo a partir de puntajes YA
- * calculados. No puntua, no infiere numeros y no diagnostica.
- *
- * El prompt lleva tres candados que no son adorno:
- *  1. Recibe los puntajes hechos. Si inventa un numero, el informe deja de ser
- *     auditable, que es lo unico que lo hace defendible.
- *  2. Si la validez de la sesion es dudosa, no caracteriza a la persona.
- *     Un perfil de alguien que respondio sin leer no es un perfil.
- *  3. Nada de lenguaje clinico. Es una bateria laboral, no un diagnostico.
- */
-const SISTEMA = `Eres psicólogo organizacional con tarjeta profesional, redactando el informe de una batería de selección propia de Trading Solutions (freight forwarder, Barranquilla).
+/** El informe completo en una sola llamada pedia ~4.000 tokens de salida:
+ *  entre 90 y 150 s, y si la API reintentaba se iba mucho mas alla. El boton
+ *  se quedaba pensando sin devolver nada. Ahora son dos llamadas en paralelo
+ *  (la mitad de salida cada una) y con timeout propio: pase lo que pase la
+ *  ruta responde antes de 2 minutos, con exito o con la causa exacta. */
+const TIMEOUT_MODELO_MS = 105_000;
+
+const REGLAS = `Eres psicólogo organizacional con tarjeta profesional, redactando el informe de una batería de selección propia de Trading Solutions (freight forwarder, Barranquilla).
 
 REGLAS QUE NO PUEDES ROMPER:
 
@@ -38,26 +31,71 @@ REGLAS QUE NO PUEDES ROMPER:
 6. Cada afirmación se apoya en un dato que recibiste. Si no tienes evidencia para algo, no lo digas.
 7. Nunca menciones características protegidas: edad, sexo, origen, religión, salud, situación familiar.
 
-Responde ÚNICAMENTE con JSON válido, sin texto antes ni después, con esta forma exacta:
+Responde ÚNICAMENTE con JSON válido, sin texto antes ni después.`;
+
+/** Parte 1 · quién es y cómo trabaja. */
+const SISTEMA_PERFIL = `${REGLAS}
+
+Forma exacta del JSON:
 {
   "resumen": "2 o 3 párrafos sobre cómo trabaja esta persona",
   "fortalezas": [{"titulo":"","detalle":"","evidencia":""}],
   "oportunidades": [{"titulo":"","detalle":"","evidencia":""}],
+  "loQueNoAfirma": ""
+}
+3 a 5 fortalezas, 2 a 4 oportunidades. En "loQueNoAfirma" declara los límites del instrumento: qué NO mide esta batería y qué queda por verificar en assessment presencial y referencias.`;
+
+/** Parte 2 · qué hacer con esta persona en este cargo. */
+const SISTEMA_DECISION = `${REGLAS}
+
+Forma exacta del JSON:
+{
   "compatibilidad": {"lectura":"", "aFavor":[""], "riesgos":[""]},
   "preguntasEntrevista": [{"pregunta":"","porque":"","queEscuchar":""}],
   "planEntrada": [{"periodo":"","foco":"","porque":""}],
-  "conclusion": {"recomendacion":"avanzar|entrevistar_con_reservas|no_avanzar","texto":""},
-  "loQueNoAfirma": ""
+  "conclusion": {"recomendacion":"avanzar|entrevistar_con_reservas|no_avanzar","texto":""}
 }
-3 a 5 fortalezas, 2 a 4 oportunidades, 4 a 6 preguntas, 3 o 4 periodos de plan.`;
+4 a 6 preguntas de entrevista conductual (STAR), cada una dirigida a verificar un punto dudoso del perfil. 3 o 4 periodos de plan de entrada (por ejemplo 0-30, 30-60, 60-90 días) pensados para que el jefe los use desde el onboarding.`;
+
+type Parte = { ok: true; datos: any } | { ok: false; error: string; crudo?: string };
+
+async function redactar(sistema: string, insumo: unknown, maxTokens: number): Promise<Parte> {
+  try {
+    const client = getAnthropic();
+    const r = await client.messages
+      .stream(
+        {
+          model: MODEL,
+          max_tokens: maxTokens,
+          system: sistema,
+          messages: [{ role: 'user', content: `Redacta tu parte del informe con estos datos:\n\n${JSON.stringify(insumo, null, 2)}` }],
+        },
+        { timeout: TIMEOUT_MODELO_MS, maxRetries: 1 }
+      )
+      .finalMessage();
+
+    const texto = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    const limpio = texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    if (r.stop_reason === 'max_tokens') return { ok: false, error: 'El modelo se quedó sin espacio antes de cerrar el JSON.' };
+    try {
+      return { ok: true, datos: JSON.parse(limpio) };
+    } catch {
+      return { ok: false, error: 'El agente no devolvió JSON válido', crudo: limpio.slice(0, 400) };
+    }
+  } catch (e: any) {
+    const status = e?.status ? ` (HTTP ${e.status})` : '';
+    return { ok: false, error: `${e?.name === 'APIConnectionTimeoutError' ? 'El modelo no respondió en 105 s' : e?.message ?? 'fallo al llamar al modelo'}${status}` };
+  }
+}
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  const t0 = Date.now();
 
   try {
     const { data: sesion, error } = await supabaseAdmin
       .from('ts_bat_sessions').select('*').eq('token', params.token).single();
-    if (error || !sesion) return NextResponse.json({ error: 'Sesión no encontrada' }, { status: 404 });
+    if (error || !sesion) return NextResponse.json({ error: `Sesión no encontrada: ${error?.message ?? 'sin fila'}` }, { status: 404 });
 
     const sc: any = sesion.scores;
     if (!sc?.personalidad) {
@@ -114,23 +152,24 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       match,
     };
 
-    const client = getAnthropic();
-    const r = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
-      system: SISTEMA,
-      messages: [{ role: 'user', content: `Redacta el informe con estos datos:\n\n${JSON.stringify(insumo, null, 2)}` }],
-    });
+    // Las dos mitades salen al tiempo. Antes era una sola llamada larga.
+    const [pPerfil, pDecision] = await Promise.all([
+      redactar(SISTEMA_PERFIL, insumo, 2600),
+      redactar(SISTEMA_DECISION, insumo, 2600),
+    ]);
 
-    const texto = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    const limpio = texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-
-    let informe: any;
-    try {
-      informe = JSON.parse(limpio);
-    } catch {
-      return NextResponse.json({ error: 'El agente no devolvió JSON válido', crudo: limpio.slice(0, 600) }, { status: 502 });
+    if (!pPerfil.ok || !pDecision.ok) {
+      const fallas = [
+        !pPerfil.ok ? `perfil: ${pPerfil.error}` : null,
+        !pDecision.ok ? `decisión: ${pDecision.error}` : null,
+      ].filter(Boolean).join(' · ');
+      return NextResponse.json(
+        { error: `El psicólogo no pudo terminar (${Math.round((Date.now() - t0) / 1000)} s). ${fallas}` },
+        { status: 502 }
+      );
     }
+
+    const informe = { ...pPerfil.datos, ...pDecision.datos };
 
     const guardar = {
       informe_ia: { ...informe, modelo: MODEL, generado_at: new Date().toISOString() },
@@ -141,12 +180,20 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const { data: filas, error: eUpd } = await supabaseAdmin
       .from('ts_bat_sessions').update(guardar).eq('id', sesion.id).select('id');
     if (eUpd || !filas?.length) {
-      return NextResponse.json({ error: `No se pudo guardar el informe: ${eUpd?.message ?? 'cero filas'}` }, { status: 500 });
+      // El informe existe; lo devolvemos aunque no se haya podido guardar,
+      // para que el trabajo del modelo no se pierda por un problema de tabla.
+      return NextResponse.json(
+        { informe: guardar.informe_ia, match, aviso: `Se generó pero NO se guardó: ${eUpd?.message ?? 'cero filas actualizadas'}. Falta correr el SQL del 10-sep.` },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
     }
 
-    return NextResponse.json({ informe: guardar.informe_ia, match }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(
+      { informe: guardar.informe_ia, match, ms: Date.now() - t0 },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (err: any) {
     console.error('bateria/informe-ia', err);
-    return NextResponse.json({ error: err?.message ?? 'Error interno' }, { status: 500 });
+    return NextResponse.json({ error: `${err?.message ?? 'Error interno'} · ${Math.round((Date.now() - t0) / 1000)} s` }, { status: 500 });
   }
 }
