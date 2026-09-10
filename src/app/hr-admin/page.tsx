@@ -1,6 +1,7 @@
 "use client";
 
 import FunnelTiming from "@/components/FunnelTiming";
+import BateriaDashboard from "@/components/BateriaDashboard";
 import { LOGO_TS_SIMBOLO } from "@/lib/brand";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -1238,6 +1239,12 @@ function Dashboard({ setTab }: { setTab: (t: Tab) => void }) {
         hint="Click en cualquier etapa para ver quiénes están ahí"
       />
       <FunnelTiming vacancyFilter={selectedVacancy} country={country} />
+
+      <SectionTitle
+        title="Batería psicométrica · en qué va"
+        hint="Quién la tiene pendiente y quiénes van mejor contra el perfil del cargo"
+      />
+      <BateriaDashboard />
 
       <SectionTitle
         title="Vacantes abiertas · estudio de mercado IA"

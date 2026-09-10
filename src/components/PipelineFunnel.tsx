@@ -875,6 +875,31 @@ function BulkActionBar({
     }
   }
 
+  /** Recordatorio del prefiltro. Solo tiene sentido para quien ya lo recibio
+   *  y no lo ha llenado, por eso el boton aparece solo en esa etapa. */
+  async function recordarPrefiltro() {
+    if (running) return;
+    if (!confirm(`Se van a crear ${n} borradores de recordatorio del prefiltro en tu Gmail.\n\nA quien tenga el enlace vigente se le manda EL MISMO, para no borrarle lo que ya llevaba respondido.\n\nNo se envía nada todavía.`)) return;
+    setRunning(true);
+    setBatMsg(null);
+    try {
+      const r = await fetch("/api/headhunting/candidates/recordatorio-prefiltro", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({ modo: "borrador", ids: selectedCands.map(c => c.id) }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}`); }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      setBatMsg(j.nota ?? `Listos ${j.ok} borradores.`);
+      onActionComplete();
+    } catch (e: any) {
+      setBatMsg(`No se pudo: ${e?.message ?? "error"}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function runBulk(action: "stage_action" | "advance" | "reject") {
     if (running) return;
     if (!confirm(`Aplicar acción a ${n} candidatos seleccionados? Se crearán drafts en tu Gmail (revisar antes de enviar).`)) return;
@@ -952,6 +977,16 @@ function BulkActionBar({
               title={`${stageAction.label} a los ${n} seleccionados`}
             >
               <span>{stageAction.label}</span>
+              <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
+            </button>
+          )}
+          {allSameStage && normalizeStage(dominantStage) === "prefiltro_enviado" && (
+            <button
+              onClick={recordarPrefiltro}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 inline-flex items-center gap-1.5"
+              title="Borrador de recordatorio para quienes no han llenado el prefiltro"
+            >
+              <span>Recordar prefiltro</span>
               <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
             </button>
           )}
