@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdminRequest } from '@/lib/bateria/auth';
 import { BATTERY_VERSION } from '@/lib/bateria/items';
-import { asuntoBateria, htmlBateria, textoBateria } from '@/lib/bateria/correo';
+import { asuntoBateria, htmlBateria, textoBateria, FIRMA } from '@/lib/bateria/correo';
 import { createDraftViaGmail, isGmailConnected } from '@/lib/gmail';
 import { getResend, EMAIL_FROM } from '@/lib/resend';
 
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       let fallo: string | null = null;
 
       if (modo === 'borrador') {
-        const r = await createDraftViaGmail({ to: c.email, subject: asunto, html, fromName: 'Kelly Castañeda' });
+        const r = await createDraftViaGmail({ to: c.email, subject: asunto, html, fromName: `${FIRMA} · Trading Solutions` });
         canal = 'gmail-borrador';
         if (!r.ok) fallo = r.error ?? 'Gmail rechazó el borrador';
       } else {

@@ -21,6 +21,10 @@ export type DatosCorreo = {
   firma?: string;
 };
 
+/** El correo lo firma el equipo, no una persona: quien responda el hilo puede
+ *  ser cualquiera de reclutamiento, y el candidato no queda esperando a Kelly. */
+export const FIRMA = 'Talent Acquisition Team';
+
 const AZUL = '#2C64ED';
 
 /** Primer nombre: "Buenos días, María Fernanda Gómez" suena a base de datos. */
@@ -46,24 +50,24 @@ export function textoBateria(d: DatosCorreo): string {
       ? `Avanzaste a la siguiente etapa del proceso para ${d.vacante} en Trading Solutions.`
       : 'Avanzaste a la siguiente etapa del proceso de selección en Trading Solutions.',
     '',
-    'El siguiente paso es una prueba que nos ayuda a entender cómo trabajas: cómo decides, qué te sostiene en un trabajo y cómo razonas con información incompleta. No es un examen y no hay respuestas correctas.',
+    'El siguiente paso es una prueba que nos ayuda a conocerte mejor.',
     '',
     `Tu enlace personal: ${d.url}`,
     '',
     'Antes de empezar, ten en cuenta:',
     '· Toma alrededor de 90 minutos y se responde en una sola sesión. No se puede pausar y retomar después.',
     '· Necesitas computador con internet estable. Desde el celular no se ve bien.',
-    '· En modalidad remota la cámara debe estar activa durante toda la prueba. Si prefieres no habilitarla, respóndeme este correo y te agendamos para presentarla presencial en nuestras oficinas.',
+    '· En modalidad remota la cámara debe estar activa durante toda la prueba. Si prefieres no habilitarla, responde este correo y te agendamos para presentarla presencial en nuestras oficinas.',
     '· Busca un espacio tranquilo y sin interrupciones antes de abrir el enlace.',
     '· El enlace es personal e intransferible, y sirve una sola vez.',
     '· Responde con tu primera reacción. Las respuestas se guardan solas.',
     '',
     'Al abrir el enlace vas a ver primero la autorización de tratamiento de datos (Ley 1581 de 2012). Léela con calma: sin esa autorización la prueba no inicia.',
     '',
-    'Cualquier duda, respóndeme este mismo correo.',
+    'Cualquier duda, responde este mismo correo.',
     '',
-    d.firma ?? 'Kelly Castañeda',
-    'Talento Humano · Trading Solutions',
+    d.firma ?? FIRMA,
+    'Trading Solutions',
   ].join('\n');
 }
 
@@ -91,9 +95,7 @@ export function htmlBateria(d: DatosCorreo): string {
       <p style="margin:0 0 14px;font-size:15px;line-height:1.6">${hola}</p>
       <p style="margin:0 0 14px;font-size:15px;line-height:1.6">${intro}</p>
       <p style="margin:0 0 20px;font-size:15px;line-height:1.6">
-        El siguiente paso es una prueba que nos ayuda a entender <strong>cómo trabajas</strong>:
-        cómo decides, qué te sostiene en un trabajo y cómo razonas con información incompleta.
-        No es un examen y no hay respuestas correctas.
+        El siguiente paso es una prueba que nos ayuda a <strong>conocerte mejor</strong>.
       </p>
 
       <p style="margin:0 0 24px;text-align:center">
@@ -105,7 +107,7 @@ export function htmlBateria(d: DatosCorreo): string {
         <ul style="margin:0;padding-left:18px;font-size:14px;color:#374151">
           ${punto('Toma alrededor de <strong>90 minutos</strong> y se responde en <strong>una sola sesión</strong>. No se puede pausar y retomar después.')}
           ${punto('Necesitas <strong>computador</strong> con internet estable. Desde el celular no se ve bien.')}
-          ${punto('En modalidad remota <strong>la cámara debe estar activa</strong> durante toda la prueba. Si prefieres no habilitarla, respóndeme este correo y te agendamos para presentarla <strong>presencial</strong> en nuestras oficinas.')}
+          ${punto('En modalidad remota <strong>la cámara debe estar activa</strong> durante toda la prueba. Si prefieres no habilitarla, responde este correo y te agendamos para presentarla <strong>presencial</strong> en nuestras oficinas.')}
           ${punto('Busca un espacio tranquilo y sin interrupciones <em>antes</em> de abrir el enlace.')}
           ${punto('El enlace es <strong>personal e intransferible</strong> y sirve una sola vez.')}
           ${punto('Responde con tu primera reacción. Las respuestas se guardan solas.')}
@@ -117,12 +119,12 @@ export function htmlBateria(d: DatosCorreo): string {
         (Ley 1581 de 2012). Léela con calma: sin esa autorización la prueba no inicia.
       </p>
       <p style="margin:0 0 22px;font-size:14px;line-height:1.6;color:#374151">
-        Cualquier duda, respóndeme este mismo correo.
+        Cualquier duda, responde este mismo correo.
       </p>
 
       <p style="margin:0;font-size:15px;line-height:1.6">
-        ${d.firma ?? 'Kelly Castañeda'}<br>
-        <span style="color:#6B7280;font-size:13.5px">Talento Humano · Trading Solutions</span>
+        ${d.firma ?? FIRMA}<br>
+        <span style="color:#6B7280;font-size:13.5px">Trading Solutions</span>
       </p>
     </div>
 
