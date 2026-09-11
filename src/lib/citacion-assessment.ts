@@ -17,15 +17,56 @@
 export type DatosCitacion = {
   nombre: string | null;
   vacante: string | null;
-  /** Como se le muestra al candidato: "jueves 18 de septiembre". */
+  /** Como se le muestra al candidato: "martes 15 de septiembre". */
   fecha: string;
   horaLlegada: string;
   horaFin: string;
   direccion: string;
   /** Opcional: como llegar, parqueadero, piso. */
   referencia?: string | null;
+  /** Boton "Agregar a mi calendario". Opcional: sin el, el correo sirve igual. */
+  calendarUrl?: string | null;
   firma?: string;
 };
+
+/**
+ * Colombia no tiene horario de verano: siempre UTC-5. Por eso la hora se puede
+ * fijar con el offset literal en vez de arrastrar una libreria de zonas.
+ *
+ * La fecha y la hora que ve el candidato y las que van al calendario salen de
+ * los MISMOS datos. Escribir la fecha a mano en un campo y el evento en otro es
+ * como se manda gente el dia equivocado.
+ */
+export function inicioEnBogota(fechaISO: string, hora24: string): Date {
+  return new Date(`${fechaISO}T${hora24}:00-05:00`);
+}
+
+/** "2026-09-15" -> "martes 15 de septiembre" */
+export function fechaLegible(fechaISO: string): string {
+  const d = inicioEnBogota(fechaISO, '12:00');
+  const partes = new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota',
+  }).formatToParts(d);
+  const get = (t: string) => partes.find((p) => p.type === t)?.value ?? '';
+  return `${get('weekday')} ${get('day')} de ${get('month')}`;
+}
+
+/** "08:00" -> "8:00 a. m." */
+export function horaLegible(hora24: string): string {
+  const d = inicioEnBogota('2026-01-01', hora24);
+  return new Intl.DateTimeFormat('es-CO', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Bogota',
+  }).format(d);
+}
+
+/** Minutos entre dos horas del mismo dia. */
+export function duracionMinutos(hIni: string, hFin: string): number {
+  const [a, b] = [hIni, hFin].map((h) => {
+    const [hh, mm] = h.split(':').map(Number);
+    return hh * 60 + (mm || 0);
+  });
+  return Math.max(30, b - a);
+}
 
 const AZUL = '#2C64ED';
 export const FIRMA_CITACION = 'Talent Acquisition Team';
@@ -111,6 +152,10 @@ export function htmlCitacion(d: DatosCitacion): string {
           <strong>${d.direccion}</strong>${d.referencia ? `<br><span style="color:#6B7280;font-size:13.5px">${d.referencia}</span>` : ''}
         </p>
       </div>
+
+      ${d.calendarUrl ? `<p style="margin:0 0 22px;text-align:center">
+        <a href="${d.calendarUrl}" style="display:inline-block;background:#ffffff;color:${AZUL};text-decoration:none;padding:11px 26px;border-radius:8px;font-weight:600;font-size:14.5px;border:1px solid #C7D9FB">Agregar a mi calendario</a>
+      </p>` : ''}
 
       <p style="margin:0 0 10px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${AZUL};font-weight:700">Qué va a pasar</p>
       <ul style="margin:0 0 20px;padding-left:18px;font-size:14.5px;color:#374151">

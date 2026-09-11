@@ -822,7 +822,7 @@ function BulkActionBar({
   // al pasar de "hay seleccion" a "no hay seleccion".
   const [batMsg, setBatMsg] = useState<string | null>(null);
   const [citando, setCitando] = useState(false);
-  const [cita, setCita] = useState({ fecha: "", horaLlegada: "8:00 a. m.", horaFin: "12:00 m.", direccion: "", referencia: "" });
+  const [cita, setCita] = useState({ fechaISO: "", horaLlegada: "08:00", horaFin: "12:00", direccion: "", referencia: "" });
   const [previaCita, setPreviaCita] = useState<any>(null);
 
   const n = selectedCands.length;
@@ -1024,15 +1024,16 @@ function BulkActionBar({
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-5 text-black my-8">
           <h3 className="text-[17px] font-bold m-0">Citar a {n} candidato{n > 1 ? "s" : ""} al assessment</h3>
           <p className="text-[12.5px] text-neutral-500 mt-1 mb-4">
-            Estos datos van dentro del correo. Sin fecha, hora y dirección la citación no sirve de nada,
-            así que son obligatorios.
+            Estos datos van dentro del correo y también arman el botón «Agregar a mi calendario».
+            Salen de la misma fuente, así que no pueden decir cosas distintas. Sin fecha, hora y
+            dirección la citación no sirve de nada.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-[12px] font-semibold text-neutral-600">
-              Fecha, como la va a leer el candidato
-              <input className={campo} placeholder="jueves 18 de septiembre"
-                value={cita.fecha} onChange={(e) => setCita({ ...cita, fecha: e.target.value })} />
+              Fecha del assessment
+              <input className={campo} type="date"
+                value={cita.fechaISO} onChange={(e) => setCita({ ...cita, fechaISO: e.target.value })} />
             </label>
             <label className="text-[12px] font-semibold text-neutral-600">
               Dirección
@@ -1041,13 +1042,13 @@ function BulkActionBar({
             </label>
             <label className="text-[12px] font-semibold text-neutral-600">
               Hora de llegada
-              <input className={campo} value={cita.horaLlegada}
-                onChange={(e) => setCita({ ...cita, horaLlegada: e.target.value })} />
+              <input className={campo} type="time"
+                value={cita.horaLlegada} onChange={(e) => setCita({ ...cita, horaLlegada: e.target.value })} />
             </label>
             <label className="text-[12px] font-semibold text-neutral-600">
               Hora de fin aproximada
-              <input className={campo} value={cita.horaFin}
-                onChange={(e) => setCita({ ...cita, horaFin: e.target.value })} />
+              <input className={campo} type="time"
+                value={cita.horaFin} onChange={(e) => setCita({ ...cita, horaFin: e.target.value })} />
             </label>
             <label className="text-[12px] font-semibold text-neutral-600 sm:col-span-2">
               Cómo llegar · parqueadero (opcional)

@@ -8,7 +8,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createDraftViaGmail, isGmailConnected } from '@/lib/gmail';
-import { asuntoCitacion, htmlCitacion, textoCitacion, FIRMA_CITACION, type DatosCitacion } from '@/lib/citacion-assessment';
+import {
+  asuntoCitacion, htmlCitacion, textoCitacion, FIRMA_CITACION,
+  fechaLegible, horaLegible, inicioEnBogota, duracionMinutos, type DatosCitacion,
+} from '@/lib/citacion-assessment';
+import { buildGoogleCalendarUrl } from '@/lib/ics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +22,7 @@ type Modo = 'previsualizar' | 'borrador';
 
 function faltantes(b: any): string[] {
   const req: [string, string][] = [
-    ['fecha', 'la fecha'],
+    ['fechaISO', 'la fecha'],
     ['horaLlegada', 'la hora de llegada'],
     ['horaFin', 'la hora de fin'],
     ['direccion', 'la dirección'],
@@ -40,12 +44,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Falta ${falta.join(', ')}. Sin eso la citación no sirve.` }, { status: 400 });
     }
 
+    // La fecha y hora entran en formato de maquina (2026-09-15 · 08:00) y de
+    // ahi salen TANTO el texto que lee el candidato COMO el evento de
+    // calendario. Una sola fuente: no hay forma de que digan cosas distintas.
+    const fechaISO = String(body.fechaISO).trim();
+    const h1 = String(body.horaLlegada).trim();
+    const h2 = String(body.horaFin).trim();
+    const direccion = String(body.direccion).trim();
+    const referencia = body.referencia ? String(body.referencia).trim() : null;
+
+    const calendarUrl = buildGoogleCalendarUrl({
+      uid: `assessment-${fechaISO}`,
+      title: 'Trading Solutions · Assessment presencial',
+      description: 'Assessment presencial del proceso de selección. Llegar con documento de identidad y lapicero. No hay que preparar nada.',
+      start: inicioEnBogota(fechaISO, h1),
+      durationMinutes: duracionMinutos(h1, h2),
+      location: referencia ? `${direccion} · ${referencia}` : direccion,
+      organizer: { name: 'Trading Solutions', email: 'jointheteam@tradingsolutions.com' },
+      attendees: [],
+    });
+
     const base = {
-      fecha: String(body.fecha).trim(),
-      horaLlegada: String(body.horaLlegada).trim(),
-      horaFin: String(body.horaFin).trim(),
-      direccion: String(body.direccion).trim(),
-      referencia: body.referencia ? String(body.referencia).trim() : null,
+      fecha: fechaLegible(fechaISO),
+      horaLlegada: horaLegible(h1),
+      horaFin: horaLegible(h2),
+      direccion,
+      referencia,
+      calendarUrl,
     };
 
     // ── Vista previa: no toca la base ni Gmail ──
