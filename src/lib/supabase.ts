@@ -5,6 +5,23 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 let _admin: SupabaseClient | null = null;
 let _anon: SupabaseClient | null = null;
 
+/**
+ * Next.js parchea el fetch global y, en el App Router, cachea por defecto las
+ * peticiones GET que salen del servidor. supabase-js consulta PostgREST con
+ * GET, asi que Next se quedaba con la PRIMERA respuesta de cada consulta y la
+ * devolvia despues indefinidamente.
+ *
+ * Eso es lo que hacia que una sesion apareciera como 'created' y sin puntajes
+ * horas despues de haberse cerrado: la base estaba bien, la escritura entraba
+ * (los POST no se cachean), pero toda lectura posterior devolvia la foto vieja.
+ * Un dato de seleccion desactualizado y sin aviso es peor que no tener dato.
+ *
+ * Con no-store cada consulta va a la base. Es lo correcto aqui: no hay una
+ * sola lectura en esta app que pueda servirse de una copia de hace horas.
+ */
+const fetchSinCache: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: 'no-store' });
+
 function getAdminClient(): SupabaseClient {
   if (_admin) return _admin;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,7 +31,10 @@ function getAdminClient(): SupabaseClient {
       'Supabase admin client not configured: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set'
     );
   }
-  _admin = createClient(url, key);
+  _admin = createClient(url, key, {
+    auth: { persistSession: false },
+    global: { fetch: fetchSinCache },
+  });
   return _admin;
 }
 
@@ -27,7 +47,7 @@ function getAnonClient(): SupabaseClient {
       'Supabase client not configured: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set'
     );
   }
-  _anon = createClient(url, key);
+  _anon = createClient(url, key, { global: { fetch: fetchSinCache } });
   return _anon;
 }
 
