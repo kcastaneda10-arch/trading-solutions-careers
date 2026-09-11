@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Inbox, ClipboardList, ClipboardCheck, AlertTriangle, Mail, Hourglass, Target,
   Video, ListChecks, MessageSquare, UserCheck, Building2, Trophy, Send,
@@ -326,6 +326,24 @@ export default function PipelineFunnel() {
     [candidates, vacFilter]
   );
 
+  /** Dentro de cada columna, quien ya tiene resultado de bateria va primero y
+   *  de mayor a menor match. El orden ES el ranking: no hace falta abrir otra
+   *  pantalla para saber por quien empezar. Los que no la han presentado
+   *  conservan su orden y quedan debajo. */
+  const ordenarPorBateria = useCallback((lista: Cand[]) => {
+    const m = (c: Cand) => {
+      const e = bateria[c.id];
+      return e && e.status === "completed" && e.match != null ? e.match : null;
+    };
+    return [...lista].sort((a, b) => {
+      const ma = m(a), mb = m(b);
+      if (ma == null && mb == null) return 0;
+      if (ma == null) return 1;
+      if (mb == null) return -1;
+      return mb - ma;
+    });
+  }, [bateria]);
+
   const byStage = useMemo(() => {
     const m: Record<string, Cand[]> = {};
     [...STAGES, REJECTED_STAGE].forEach(s => { m[s.id] = []; });
@@ -336,8 +354,9 @@ export default function PipelineFunnel() {
       if (!m[stage]) m[stage] = [];
       m[stage].push(c);
     });
+    for (const k of Object.keys(m)) m[k] = ordenarPorBateria(m[k]);
     return m;
-  }, [filtered]);
+  }, [filtered, ordenarPorBateria]);
 
   const totals = filtered.length;
 
@@ -766,7 +785,7 @@ function ChipBateria({ est }: { est?: BatEstado }) {
         onClick={(e) => e.stopPropagation()}
         className={`mt-2 flex items-center justify-between gap-1 border px-1.5 py-1 text-[10px] font-bold ${color}`}
         title="Abrir el informe · match con el perfil del cargo">
-        <span>Batería {est.match}%</span>
+        <span>Batería completa · {est.match}%</span>
         <span className="opacity-70 font-normal">{est.conInforme ? "informe ↗" : "sin IA ↗"}</span>
       </a>
     );
@@ -900,6 +919,30 @@ function BulkActionBar({
     }
   }
 
+  /** Mover el lote a una etapa concreta, saltando el flujo lineal. Cuando la
+   *  bateria decide a quien se pasa al assessment presencial, la etapa
+   *  siguiente no es la que toca por orden: es la que uno elige. */
+  async function moverA(destino: string) {
+    if (running || !destino) return;
+    const etiqueta = CANON_STAGES.find((e) => e.id === destino)?.label ?? destino;
+    if (!confirm(`Mover ${n} candidato${n > 1 ? "s" : ""} a "${etiqueta}"?`)) return;
+    setRunning(true);
+    setProgress({ done: 0, total: n, ok: 0, fail: 0 });
+    let ok = 0, fail = 0;
+    for (let i = 0; i < selectedCands.length; i++) {
+      try {
+        const r = await fetch(`/api/headhunting/candidates/${selectedCands[i].id}/stage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: destino }),
+        });
+        if (r.ok) ok++; else fail++;
+      } catch { fail++; }
+      setProgress({ done: i + 1, total: n, ok, fail });
+    }
+    setRunning(false);
+    setTimeout(() => { setProgress(null); onActionComplete(); }, 1800);
+  }
+
   async function runBulk(action: "stage_action" | "advance" | "reject") {
     if (running) return;
     if (!confirm(`Aplicar acción a ${n} candidatos seleccionados? Se crearán drafts en tu Gmail (revisar antes de enviar).`)) return;
@@ -998,6 +1041,17 @@ function BulkActionBar({
             <span>Enviar batería</span>
             <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
           </button>
+          <select
+            defaultValue=""
+            onChange={(e) => { const v = e.target.value; e.target.value = ""; void moverA(v); }}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-neutral-800 text-white border border-neutral-600 cursor-pointer"
+            title="Mover los seleccionados a una etapa concreta"
+          >
+            <option value="">Mover a…</option>
+            {CANON_STAGES.filter((e) => e.id !== "contratado").map((e) => (
+              <option key={e.id} value={e.id}>{e.label}</option>
+            ))}
+          </select>
           <button
             onClick={() => runBulk("advance")}
             className="text-xs font-bold px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700"
