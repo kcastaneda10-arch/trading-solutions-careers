@@ -194,7 +194,7 @@ const OWNER_BY_STAGE: Record<string, StageOwner> = {
   prefiltro_enviado: "candidate",
   prefiltro_pasado: "recruiter",
   prefiltro_revision: "recruiter",
-  pruebas: "shared",
+  pruebas: "candidate",
   recruiter_interview: "recruiter",
   prueba_tecnica: "shared",
   terna: "recruiter",
@@ -821,6 +821,9 @@ function BulkActionBar({
   // Los hooks van antes de cualquier return: si no, React se desincroniza
   // al pasar de "hay seleccion" a "no hay seleccion".
   const [batMsg, setBatMsg] = useState<string | null>(null);
+  const [citando, setCitando] = useState(false);
+  const [cita, setCita] = useState({ fecha: "", horaLlegada: "8:00 a. m.", horaFin: "12:00 m.", direccion: "", referencia: "" });
+  const [previaCita, setPreviaCita] = useState<any>(null);
 
   const n = selectedCands.length;
   if (n === 0) return null;
@@ -943,6 +946,28 @@ function BulkActionBar({
     setTimeout(() => { setProgress(null); onActionComplete(); }, 1800);
   }
 
+  async function pedirCita(modo: "previsualizar" | "borrador") {
+    if (running) return;
+    if (modo === "borrador" && !confirm(`Se van a crear ${n} borradores de citación en tu Gmail.\n\nNo se envía nada todavía.`)) return;
+    setRunning(true); setBatMsg(null);
+    try {
+      const r = await fetch("/api/headhunting/candidates/citar-assessment", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({ modo, ...cita, ids: selectedCands.map((c) => c.id) }),
+      });
+      const txt = await r.text();
+      let j: any = {};
+      try { j = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}`); }
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      if (modo === "previsualizar") { setPreviaCita(j); }
+      else { setBatMsg(j.nota ?? `Listos ${j.ok} borradores.`); setCitando(false); setPreviaCita(null); onActionComplete(); }
+    } catch (e: any) {
+      setBatMsg(`No se pudo: ${e?.message ?? "error"}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function runBulk(action: "stage_action" | "advance" | "reject") {
     if (running) return;
     if (!confirm(`Aplicar acción a ${n} candidatos seleccionados? Se crearán drafts en tu Gmail (revisar antes de enviar).`)) return;
@@ -989,7 +1014,77 @@ function BulkActionBar({
     }, 2500);
   }
 
+  const campo = "w-full border border-neutral-300 rounded-md px-2.5 py-1.5 text-[13px] text-black";
+
   return (
+    <>
+    {citando && (
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto p-6"
+        onClick={(e) => { if (e.target === e.currentTarget) setCitando(false); }}>
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-5 text-black my-8">
+          <h3 className="text-[17px] font-bold m-0">Citar a {n} candidato{n > 1 ? "s" : ""} al assessment</h3>
+          <p className="text-[12.5px] text-neutral-500 mt-1 mb-4">
+            Estos datos van dentro del correo. Sin fecha, hora y dirección la citación no sirve de nada,
+            así que son obligatorios.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="text-[12px] font-semibold text-neutral-600">
+              Fecha, como la va a leer el candidato
+              <input className={campo} placeholder="jueves 18 de septiembre"
+                value={cita.fecha} onChange={(e) => setCita({ ...cita, fecha: e.target.value })} />
+            </label>
+            <label className="text-[12px] font-semibold text-neutral-600">
+              Dirección
+              <input className={campo} placeholder="Calle 77B #57-141, piso 8"
+                value={cita.direccion} onChange={(e) => setCita({ ...cita, direccion: e.target.value })} />
+            </label>
+            <label className="text-[12px] font-semibold text-neutral-600">
+              Hora de llegada
+              <input className={campo} value={cita.horaLlegada}
+                onChange={(e) => setCita({ ...cita, horaLlegada: e.target.value })} />
+            </label>
+            <label className="text-[12px] font-semibold text-neutral-600">
+              Hora de fin aproximada
+              <input className={campo} value={cita.horaFin}
+                onChange={(e) => setCita({ ...cita, horaFin: e.target.value })} />
+            </label>
+            <label className="text-[12px] font-semibold text-neutral-600 sm:col-span-2">
+              Cómo llegar · parqueadero (opcional)
+              <input className={campo} placeholder="Edificio Green Tower, parqueadero de visitantes en el sótano"
+                value={cita.referencia} onChange={(e) => setCita({ ...cita, referencia: e.target.value })} />
+            </label>
+          </div>
+
+          <div className="flex gap-2 flex-wrap mt-4">
+            <button onClick={() => pedirCita("previsualizar")} disabled={running}
+              className="text-xs font-semibold px-3 py-2 rounded-full border border-neutral-300 hover:bg-neutral-50">
+              Ver el correo
+            </button>
+            <button onClick={() => pedirCita("borrador")} disabled={running}
+              className="text-xs font-bold px-3 py-2 rounded-full bg-emerald-700 text-white hover:bg-emerald-800">
+              {running ? "Creando…" : `Crear ${n} borradores en Gmail`}
+            </button>
+            <button onClick={() => { setCitando(false); setPreviaCita(null); }}
+              className="text-xs px-3 py-2 text-neutral-500 hover:text-black">Cerrar</button>
+          </div>
+
+          {batMsg && <p className="text-[12.5px] text-red-700 mt-3 font-mono break-words">{batMsg}</p>}
+
+          {previaCita && (
+            <div className="mt-4 border border-neutral-200 rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-neutral-50 border-b border-neutral-200">
+                <p className="text-[12px] m-0"><b>Para:</b> {previaCita.para}</p>
+                <p className="text-[12px] m-0"><b>Asunto:</b> {previaCita.asunto}</p>
+              </div>
+              <iframe title="Borrador de la citación" srcDoc={previaCita.html}
+                className="w-full h-[520px] border-0 bg-neutral-100" />
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-black text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 max-w-3xl">
       <div className="flex items-center gap-2">
         <span className="bg-purple-600 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center">{n}</span>
@@ -1020,6 +1115,16 @@ function BulkActionBar({
               title={`${stageAction.label} a los ${n} seleccionados`}
             >
               <span>{stageAction.label}</span>
+              <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
+            </button>
+          )}
+          {allSameStage && normalizeStage(dominantStage) === "prueba_tecnica" && (
+            <button
+              onClick={() => setCitando(true)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-700 hover:bg-emerald-800 inline-flex items-center gap-1.5"
+              title="Borrador de citación al assessment presencial"
+            >
+              <span>Citar al assessment</span>
               <span className="text-[10px] opacity-80 tabular-nums">({n})</span>
             </button>
           )}
@@ -1074,6 +1179,7 @@ function BulkActionBar({
         </>
       )}
     </div>
+    </>
   );
 }
 

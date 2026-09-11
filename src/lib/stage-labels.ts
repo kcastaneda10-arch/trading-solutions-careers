@@ -85,24 +85,29 @@ export const STAGES: StageDef[] = [
     action: 'Revisar respuestas y decidir avance',
   },
   {
-    id: 'recruiter_interview', order: 5, phase: 'seleccion',
+    // ORDEN CORREGIDO 11-sep-2026. Antes la bateria y el assessment iban
+    // DESPUES de la entrevista, con el argumento de que cada prueba cuesta
+    // plata y tiempo por persona y no vale gastarla en quien la entrevista
+    // habria descartado igual. Ese argumento sigue siendo valido para pruebas
+    // individuales, pero no para este proceso: la bateria se manda sola por
+    // correo y el assessment es una sola manana para ocho personas. Aqui sale
+    // mas barato filtrar antes de entrevistar.
+    id: 'pruebas', order: 5, phase: 'seleccion',
+    label: 'Batería', labelLong: 'Batería de selección en línea',
+    owner: 'Espera candidato', sla: 4,
+    action: 'Revisar quién no ha presentado la batería y recordárselo',
+  },
+  {
+    id: 'prueba_tecnica', order: 6, phase: 'seleccion',
+    label: 'Assessment presencial', labelLong: 'Assessment presencial y prueba técnica',
+    owner: 'Compartido', sla: 5,
+    action: 'Citar a la sesión y consolidar las calificaciones de los evaluadores',
+  },
+  {
+    id: 'recruiter_interview', order: 7, phase: 'seleccion',
     label: 'Entrevista reclutador', labelLong: 'Entrevista con el reclutador',
     owner: 'Recruiter', sla: 5,
     action: 'Completar scorecard y decidir avance',
-  },
-  {
-    // Van DESPUÉS de la entrevista: aplicarlas antes gasta cupo de pruebas y
-    // tiempo del candidato en gente que la entrevista habría descartado igual.
-    id: 'pruebas', order: 6, phase: 'seleccion',
-    label: 'Pruebas psicométricas', labelLong: 'Batería de pruebas psicométricas',
-    owner: 'Espera candidato', sla: 4,
-    action: 'Revisar qué prueba está frenando al candidato',
-  },
-  {
-    id: 'prueba_tecnica', order: 7, phase: 'seleccion',
-    label: 'Prueba técnica / Assessment', labelLong: 'Prueba técnica del cargo y assessment',
-    owner: 'Líder de área', sla: 5,
-    action: 'Pedir el resultado al líder de área',
   },
   {
     id: 'terna', order: 8, phase: 'seleccion',
