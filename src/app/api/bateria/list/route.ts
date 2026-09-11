@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdminRequest } from '@/lib/bateria/auth';
+import { cerrarPendientes } from '@/lib/bateria/cerrar';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 120;
 
 const ALERTA_KINDS = ['tab_blur', 'paste', 'copy', 'contextmenu', 'shortcut', 'cam_lost'];
 
@@ -18,6 +21,9 @@ async function contar(table: string, sessionId: string, kinds?: string[]) {
 
 export async function GET(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
+  // Cierra lo que respondio completo y se quedo sin puntuar, antes de listar.
+  const reparadas = await cerrarPendientes();
 
   const { data, error } = await supabaseAdmin
     .from('ts_bat_sessions')
@@ -45,5 +51,5 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({ sessions }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+  return NextResponse.json({ sessions, reparadas }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }

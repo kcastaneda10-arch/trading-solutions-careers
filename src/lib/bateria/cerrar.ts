@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { score, applyProctoring } from './scoring';
 import { calcularMatch } from './match';
 import { perfilPorTitulo } from './perfiles-cargo';
+import { ITEMS } from './items';
 
 /**
  * Calcula y guarda los puntajes de una sesion a partir de sus respuestas.
@@ -90,4 +91,44 @@ export async function cerrarSesion(sessionId: string) {
   } catch (err: any) {
     return paso('inesperado', err?.message ?? String(err));
   }
+}
+
+
+/**
+ * Repara las sesiones que respondieron todo pero se quedaron sin puntuar.
+ *
+ * Paso: una sesion puede terminar con sus 172 respuestas guardadas y la fila
+ * de la sesion intacta en 'created' —sin started_at, sin scores—, porque las
+ * respuestas se guardan en su propia tabla y el cierre es una escritura
+ * aparte que puede no llegar. El candidato hizo todo bien y aun asi
+ * desaparece del ranking.
+ *
+ * En vez de depender de que alguien note el hueco y pulse Recalcular, el
+ * panel y el funnel llaman esto al cargar: si hay respuestas completas y no
+ * hay puntajes, se cierra sola. Es idempotente y no toca las que ya estan.
+ */
+export async function cerrarPendientes(maximo = 40) {
+  const { data: pendientes, error } = await supabaseAdmin
+    .from('ts_bat_sessions')
+    .select('id')
+    .is('scores', null)
+    .limit(maximo);
+  if (error || !pendientes?.length) return { revisadas: 0, cerradas: 0, fallos: [] as string[] };
+
+  let cerradas = 0;
+  const fallos: string[] = [];
+
+  for (const s of pendientes) {
+    const { count } = await supabaseAdmin
+      .from('ts_bat_answers')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', s.id);
+    if ((count ?? 0) < ITEMS.length) continue;   // todavia no termina: se deja quieta
+
+    const r = await cerrarSesion(s.id);
+    if (r.ok) cerradas++;
+    else fallos.push(`${s.id}: ${r.error}`);
+  }
+
+  return { revisadas: pendientes.length, cerradas, fallos };
 }

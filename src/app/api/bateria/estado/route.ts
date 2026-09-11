@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdminRequest } from '@/lib/bateria/auth';
+import { cerrarPendientes } from '@/lib/bateria/cerrar';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 /**
  * Estado de la bateria por candidato, para pintarlo en el funnel.
@@ -14,6 +16,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+
+  // Antes de responder, cerrar lo que quedo a medio camino: si alguien
+  // respondio los 172 items y la fila se quedo sin puntuar, el funnel lo
+  // mostraria como 'sin abrir' aunque ya termino.
+  const reparadas = await cerrarPendientes();
 
   const { data, error } = await supabaseAdmin
     .from('ts_bat_sessions')
@@ -36,5 +43,5 @@ export async function GET(req: NextRequest) {
     };
   }
 
-  return NextResponse.json({ estados }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ estados, reparadas }, { headers: { 'Cache-Control': 'no-store' } });
 }
