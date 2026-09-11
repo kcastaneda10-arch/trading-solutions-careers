@@ -6,6 +6,8 @@ import { BATTERY_VERSION } from '@/lib/bateria/items';
 import { asuntoBateria, htmlBateria, textoBateria, FIRMA } from '@/lib/bateria/correo';
 import { createDraftViaGmail, isGmailConnected } from '@/lib/gmail';
 import { getResend, EMAIL_FROM } from '@/lib/resend';
+import { recordStageEvent } from '@/lib/stage-events';
+import { normalizeStage, STAGE_RANK } from '@/lib/stage-labels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +15,44 @@ export const maxDuration = 120;
 
 /** Las respuestas van a la cuenta de reclutamiento, no al remitente tecnico. */
 const RESPONDER_A = 'jointheteam@tradingsolutions.com';
+
+/** La etapa en la que queda quien ya recibio la bateria. */
+const ETAPA_BATERIA = 'pruebas';
+
+/**
+ * Mandar la bateria ES lo que pone al candidato en esa etapa. Dejarlo como dos
+ * acciones separadas garantiza que tarde o temprano se haga la primera y se
+ * olvide la segunda, y entonces el funnel deja de decir la verdad sobre donde
+ * esta cada quien — que es justo para lo que sirve.
+ *
+ * Solo mueve hacia adelante: a quien ya va mas avanzado no se le retrocede por
+ * reenviarle su enlace.
+ */
+async function moverABateria(candidatoId: string) {
+  const { data: c } = await supabaseAdmin
+    .from('ht_candidates').select('id, stage, vacancy_id').eq('id', candidatoId).single();
+  if (!c) return;
+
+  const actual = normalizeStage(c.stage);
+  const rankActual = STAGE_RANK[actual] ?? 0;
+  const rankBateria = STAGE_RANK[ETAPA_BATERIA] ?? 0;
+  if (rankActual >= rankBateria) return;
+
+  const { error } = await supabaseAdmin
+    .from('ht_candidates')
+    .update({ stage: ETAPA_BATERIA, updated_at: new Date().toISOString() })
+    .eq('id', candidatoId);
+  if (error) { console.error('bateria/enviar · no se pudo mover de etapa', candidatoId, error.message); return; }
+
+  await recordStageEvent({
+    candidateId: candidatoId,
+    fromStage: c.stage ?? null,
+    toStage: ETAPA_BATERIA,
+    vacancyId: c.vacancy_id ?? null,
+    source: 'system',
+    note: 'Batería enviada desde el ATS',
+  });
+}
 
 type Modo = 'previsualizar' | 'borrador' | 'enviar';
 type Cand = { id?: string; nombre?: string; email?: string; vacante?: string };
@@ -139,6 +179,7 @@ export async function POST(req: NextRequest) {
           .from('ts_bat_sessions')
           .update({ invited_at: new Date().toISOString(), invite_channel: canal, invite_count: ses.invite_count + 1, updated_at: new Date().toISOString() })
           .eq('id', ses.id);
+        if (c.id && body?.moverEtapa !== false) await moverABateria(c.id);
       }
 
       resultado.push({ id: c.id, nombre: c.nombre, email: c.email, url: ses.url, reusada: ses.reusada, canal, error: fallo });
@@ -154,8 +195,8 @@ export async function POST(req: NextRequest) {
         resultado,
         nota:
           modo === 'borrador'
-            ? `Quedaron ${ok} borradores en la bandeja de ${gmail.email ?? 'Gmail'}. Revíselos y déles Enviar.`
-            : `Salieron ${ok} correos. Las respuestas llegan a ${RESPONDER_A}.`,
+            ? `Quedaron ${ok} borradores en la bandeja de ${gmail.email ?? 'Gmail'}. Revíselos y déles Enviar. Ya quedaron en la etapa Batería.`
+            : `Salieron ${ok} correos y quedaron en la etapa Batería. Las respuestas llegan a ${RESPONDER_A}.`,
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );

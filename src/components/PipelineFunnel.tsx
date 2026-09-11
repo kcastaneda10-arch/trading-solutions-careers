@@ -1086,7 +1086,7 @@ function BulkActionBar({
       </div>
     )}
 
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-black text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 max-w-3xl">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-black text-white rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-2 flex-wrap justify-center max-w-[min(94vw,56rem)]">
       <div className="flex items-center gap-2">
         <span className="bg-purple-600 text-white text-xs font-bold rounded-full w-7 h-7 flex items-center justify-center">{n}</span>
         <span className="text-xs font-semibold">seleccionado{n > 1 ? "s" : ""}</span>
