@@ -75,7 +75,7 @@ export default function InformeImprimible() {
     // Corte duro del lado del navegador. Sin esto, si la funcion no responde
     // nunca, el boton se queda pensando para siempre y no dice por que.
     const ctrl = new AbortController();
-    const corte = setTimeout(() => ctrl.abort(), 150_000);
+    const corte = setTimeout(() => ctrl.abort(), 220_000);
     const reloj = setInterval(() => setSeg((n) => n + 1), 1000);
     try {
       const r = await fetch(`/api/bateria/informe-ia/${token}`, {
@@ -102,7 +102,7 @@ export default function InformeImprimible() {
     } catch (e: any) {
       setErr(
         e?.name === "AbortError"
-          ? "El servidor no respondió en 2 minutos y medio. La función se quedó colgada: revise el log del deployment en Vercel para esta ruta."
+          ? "El servidor no respondió en 3 minutos y medio. La función se quedó colgada: revise el log del deployment en Vercel para esta ruta."
           : e?.message ?? "No pudimos generar el análisis."
       );
     } finally {

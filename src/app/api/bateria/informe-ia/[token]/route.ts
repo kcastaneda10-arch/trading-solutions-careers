@@ -15,9 +15,14 @@ const MODEL = 'claude-sonnet-4-5';
 /** El informe completo en una sola llamada pedia ~4.000 tokens de salida:
  *  entre 90 y 150 s, y si la API reintentaba se iba mucho mas alla. El boton
  *  se quedaba pensando sin devolver nada. Ahora son dos llamadas en paralelo
- *  (la mitad de salida cada una) y con timeout propio: pase lo que pase la
- *  ruta responde antes de 2 minutos, con exito o con la causa exacta. */
-const TIMEOUT_MODELO_MS = 105_000;
+ *  con timeout propio: pase lo que pase la ruta responde, con exito o con la
+ *  causa exacta.
+ *
+ *  El cupo de salida NO se reparte por igual. La primera version daba 2.600 a
+ *  cada mitad y la de decision se quedaba sin espacio antes de cerrar el JSON:
+ *  cinco preguntas de entrevista con su porque y su que-escuchar, mas el plan
+ *  de entrada, ocupan bastante mas que el resumen y las fortalezas. */
+const TIMEOUT_MODELO_MS = 170_000;
 
 const REGLAS = `Eres psicólogo organizacional con tarjeta profesional, redactando el informe de una batería de selección propia de Trading Solutions (freight forwarder, Barranquilla).
 
@@ -55,7 +60,7 @@ Forma exacta del JSON:
   "planEntrada": [{"periodo":"","foco":"","porque":""}],
   "conclusion": {"recomendacion":"avanzar|entrevistar_con_reservas|no_avanzar","texto":""}
 }
-4 a 6 preguntas de entrevista conductual (STAR), cada una dirigida a verificar un punto dudoso del perfil. 3 o 4 periodos de plan de entrada (por ejemplo 0-30, 30-60, 60-90 días) pensados para que el jefe los use desde el onboarding.`;
+4 preguntas de entrevista conductual (STAR), cada una dirigida a verificar un punto dudoso del perfil. 3 periodos de plan de entrada (0-30, 30-60, 60-90 días) pensados para que el jefe los use desde el onboarding. Sé concreto y breve en cada campo: dos o tres frases, no párrafos.`;
 
 type Parte = { ok: true; datos: any } | { ok: false; error: string; crudo?: string };
 
@@ -76,7 +81,7 @@ async function redactar(sistema: string, insumo: unknown, maxTokens: number): Pr
 
     const texto = r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
     const limpio = texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-    if (r.stop_reason === 'max_tokens') return { ok: false, error: 'El modelo se quedó sin espacio antes de cerrar el JSON.' };
+    if (r.stop_reason === 'max_tokens') return { ok: false, error: `El modelo se quedó sin espacio antes de cerrar el JSON (tope ${maxTokens} tokens).` };
     try {
       return { ok: true, datos: JSON.parse(limpio) };
     } catch {
@@ -84,7 +89,7 @@ async function redactar(sistema: string, insumo: unknown, maxTokens: number): Pr
     }
   } catch (e: any) {
     const status = e?.status ? ` (HTTP ${e.status})` : '';
-    return { ok: false, error: `${e?.name === 'APIConnectionTimeoutError' ? 'El modelo no respondió en 105 s' : e?.message ?? 'fallo al llamar al modelo'}${status}` };
+    return { ok: false, error: `${e?.name === 'APIConnectionTimeoutError' ? 'El modelo no respondió en 170 s' : e?.message ?? 'fallo al llamar al modelo'}${status}` };
   }
 }
 
@@ -154,8 +159,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     // Las dos mitades salen al tiempo. Antes era una sola llamada larga.
     const [pPerfil, pDecision] = await Promise.all([
-      redactar(SISTEMA_PERFIL, insumo, 2600),
-      redactar(SISTEMA_DECISION, insumo, 2600),
+      redactar(SISTEMA_PERFIL, insumo, 3200),
+      redactar(SISTEMA_DECISION, insumo, 6000),
     ]);
 
     if (!pPerfil.ok || !pDecision.ok) {
