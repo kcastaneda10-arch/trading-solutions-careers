@@ -56,6 +56,41 @@ function bloque(etiqueta: string, valor: string | null | undefined): string {
   return v ? `${etiqueta}:\n${v}\n` : "";
 }
 
+/**
+ * El líder aporta contexto del cargo en `lead_profile` (a quién reporta,
+ * herramientas, nivel de inglés y para qué, formación, experiencia, tope
+ * salarial). Es justo lo que el aviso necesita para no salir con corchetes.
+ * Se pasa en crudo y rotulado: el agente lo formaliza, no lo copia.
+ *
+ * El tope salarial se deja por fuera a propósito: es información interna de
+ * negociación y no tiene por qué terminar en un aviso público.
+ */
+const ETIQUETAS_PERFIL: [string, string][] = [
+  ["reporta_a", "Reporta a"],
+  ["posiciones", "Posiciones a cubrir"],
+  ["ubicacion", "Ubicación"],
+  ["modalidad", "Modalidad"],
+  ["herramientas", "Herramientas y sistemas"],
+  ["ingles_nivel", "Nivel de inglés"],
+  ["ingles_para", "Para qué usa el inglés"],
+  ["formacion", "Formación"],
+  ["experiencia", "Experiencia"],
+  ["competencias", "Competencias"],
+];
+
+function perfilDelLider(perfil: unknown): string {
+  if (!perfil || typeof perfil !== "object") return "";
+  const p = perfil as Record<string, unknown>;
+  const lineas = ETIQUETAS_PERFIL
+    .map(([k, etiqueta]) => {
+      const v = p[k];
+      if (v === null || v === undefined || String(v).trim() === "") return null;
+      return `- ${etiqueta}: ${String(v).trim()}`;
+    })
+    .filter(Boolean);
+  return lineas.length ? lineas.join("\n") : "";
+}
+
 export async function POST(req: NextRequest) {
   const authError = requireAdmin(req);
   if (authError) return authError;
@@ -67,10 +102,11 @@ export async function POST(req: NextRequest) {
 
     if (body.requisition_id) {
       const { data, error } = await supabaseAdmin
-        .from("ts_requisitions")
+        .from("ht_requisitions")
         .select(
           "title, area, job_description, responsibilities, requirements, nice_to_have, " +
-            "lead_responsibilities, lead_must_haves, location, work_mode, salary_public, english_required",
+            "lead_responsibilities, lead_must_haves, lead_profile, " +
+            "location, work_mode, salary_public, english_required",
         )
         .eq("id", String(body.requisition_id))
         .maybeSingle<Record<string, unknown>>();
@@ -95,8 +131,14 @@ export async function POST(req: NextRequest) {
         work_mode: (data.work_mode as string | null) || null,
         salary_public: (data.salary_public as string | null) || null,
         english_required: (data.english_required as boolean | null) ?? null,
-        extras: [(data.job_description as string | null) || "", String(body.extras || "").trim()]
-          .filter(Boolean).join("\n\n") || null,
+        // El orden importa: primero el contexto que dio el líder, después la
+        // descripción guardada y de último lo que Wellness acaba de escribir
+        // en el panel, que es lo más reciente y lo que debe mandar.
+        extras: [
+          perfilDelLider(data.lead_profile),
+          (data.job_description as string | null) || "",
+          String(body.extras || "").trim(),
+        ].filter(Boolean).join("\n\n") || null,
       };
     } else {
       insumo = {
