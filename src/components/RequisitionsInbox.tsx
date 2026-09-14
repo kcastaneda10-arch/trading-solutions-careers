@@ -24,7 +24,7 @@ import {
 } from "@/lib/requisitions";
 import { PREFILTER_TEMPLATES } from "@/lib/prefilter-templates";
 import PublishPanel from "@/components/PublishPanel";
-import AvisoMultiIdioma from "@/components/AvisoMultiIdioma";
+import AvisoMultiIdioma, { type CamposGenerados } from "@/components/AvisoMultiIdioma";
 
 type Requisicion = {
   id: string;
@@ -717,6 +717,22 @@ function Tarjeta({
             <AvisoMultiIdioma
               requisitionId={req.id}
               titulo={req.title}
+              onUsar={(c: CamposGenerados) => {
+                // Solo pisa lo que el agente trajo: si un campo ya estaba
+                // escrito a mano y el agente no lo devolvió, se conserva.
+                setPerfil((p) => ({
+                  ...p,
+                  responsibilities: c.responsibilities ?? p.responsibilities,
+                  requirements: c.requirements ?? p.requirements,
+                  nice_to_have: c.nice_to_have ?? p.nice_to_have,
+                  title_en: c.title_en ?? p.title_en,
+                  hook_en: c.hook_en ?? p.hook_en,
+                  description_en: c.description_en ?? p.description_en,
+                  responsibilities_en: c.responsibilities_en ?? p.responsibilities_en,
+                  requirements_en: c.requirements_en ?? p.requirements_en,
+                  nice_to_have_en: c.nice_to_have_en ?? p.nice_to_have_en,
+                }));
+              }}
               onCerrar={() => setRedactando(false)}
             />
           )}

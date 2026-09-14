@@ -29,7 +29,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getAnthropic } from "@/lib/anthropic";
-import { TS_BRAND, TS_POST_FORMAT, INSTRUCCION_IDIOMA } from "@/lib/job-post-format";
+import {
+  TS_BRAND, TS_POST_FORMAT, INSTRUCCION_IDIOMA, INSTRUCCION_TONO, CAMPOS_REQUISICION,
+  type Tono,
+} from "@/lib/job-post-format";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -59,6 +62,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const tono: Tono = ["formal", "neutro", "amigable"].includes(body.tono) ? body.tono : "neutro";
     let insumo: Insumo;
 
     if (body.requisition_id) {
@@ -91,7 +95,8 @@ export async function POST(req: NextRequest) {
         work_mode: (data.work_mode as string | null) || null,
         salary_public: (data.salary_public as string | null) || null,
         english_required: (data.english_required as boolean | null) ?? null,
-        extras: (data.job_description as string | null) || null,
+        extras: [(data.job_description as string | null) || "", String(body.extras || "").trim()]
+          .filter(Boolean).join("\n\n") || null,
       };
     } else {
       insumo = {
@@ -136,6 +141,9 @@ ${TS_BRAND}
 FORMATO OBLIGATORIO
 ${TS_POST_FORMAT}
 
+TONO
+${INSTRUCCION_TONO[tono]}
+
 IDIOMAS
 1. Inglés — ${INSTRUCCION_IDIOMA.en}
 2. Español — ${INSTRUCCION_IDIOMA.es}
@@ -149,8 +157,11 @@ Si un dato no viene en la requisición, escríbelo entre corchetes para que
 Wellness lo complete — por ejemplo [años de experiencia] o [ciudad]. Nunca lo
 inventes.
 
+ADEMÁS DEL AVISO, LOS CAMPOS SUELTOS
+${CAMPOS_REQUISICION}
+
 Devuelve EXACTAMENTE este JSON, sin texto antes ni después, sin bloque de código:
-{"en":"...","es":"...","zh":"..."}
+{"en":"...","es":"...","zh":"...","campos":{"responsibilities":"...","requirements":"...","nice_to_have":"...","title_en":"...","hook_en":"...","description_en":"...","responsibilities_en":"...","requirements_en":"...","nice_to_have_en":"...","palabras_clave":"...","habilidades_tecnicas":"...","habilidades_blandas":"...","nivel_educacion":"...","seniority":"..."}}
 
 Dentro de cada cadena usa \\n para los saltos de línea.`;
 
@@ -170,10 +181,21 @@ Dentro de cada cadena usa \\n para los saltos de línea.`;
     const crudo = "{" + result.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
 
     let posts: { es: string; en: string; zh: string };
+    let campos: Record<string, string> = {};
     try {
       const limpio = crudo.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
       const j = JSON.parse(limpio);
       posts = { es: String(j.es || ""), en: String(j.en || ""), zh: String(j.zh || "") };
+      const c = j.campos || {};
+      for (const k of [
+        "responsibilities", "requirements", "nice_to_have",
+        "title_en", "hook_en", "description_en",
+        "responsibilities_en", "requirements_en", "nice_to_have_en",
+        "palabras_clave", "habilidades_tecnicas", "habilidades_blandas",
+        "nivel_educacion", "seniority",
+      ]) {
+        if (c[k]) campos[k] = String(c[k]);
+      }
     } catch {
       // Si el modelo devuelve algo que no parsea, es mejor entregar el texto
       // crudo que un error: Wellness puede recortarlo a mano y no pierde la
@@ -193,7 +215,7 @@ Dentro de cada cadena usa \\n para los saltos de línea.`;
       return NextResponse.json({ error: "El agente no devolvió contenido", raw: crudo }, { status: 502 });
     }
 
-    return NextResponse.json({ posts, model: result.model, usage: result.usage });
+    return NextResponse.json({ posts, campos, tono, model: result.model, usage: result.usage });
   } catch (e: any) {
     console.error("[job-post-multilang]", e);
     return NextResponse.json({ error: "Error interno", detail: e?.message || String(e) }, { status: 500 });

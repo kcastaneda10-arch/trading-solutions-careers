@@ -102,3 +102,51 @@ export const NOMBRE_IDIOMA: Record<IdiomaPost, string> = {
   en: "English",
   zh: "中文",
 };
+
+export type Tono = "formal" | "neutro" | "amigable";
+
+/**
+ * El tono cambia el registro, no la sustancia. Los bullets, los requisitos y
+ * las cifras son los mismos en los tres: lo que se mueve es cómo se le habla al
+ * candidato.
+ */
+export const INSTRUCCION_TONO: Record<Tono, string> = {
+  formal:
+    "Registro corporativo y sobrio. Trato de usted implícito, sin coloquialismos. " +
+    "Frases completas, verbos precisos. Es el tono para cargos de dirección, " +
+    "cumplimiento y posiciones reguladas.",
+  neutro:
+    "Registro profesional estándar, ni distante ni cercano. Es el tono por defecto " +
+    "y el que mejor funciona en portales de empleo.",
+  amigable:
+    "Registro cercano y directo, tuteo, frases más cortas. Sigue siendo profesional: " +
+    "cercano no es informal. Funciona para perfiles junior y tecnología.",
+};
+
+/**
+ * Además del aviso para publicar, el agente devuelve los campos sueltos que
+ * alimentan la requisición. Sin esto hay que copiar y pegar a mano de un texto
+ * corrido a seis casillas — que es justo el trabajo que se quería ahorrar.
+ */
+export const CAMPOS_REQUISICION = `
+Los campos van en texto plano, un ítem por línea, sin viñetas ni guiones al inicio:
+
+- responsibilities        · español, 7-9 líneas
+- requirements            · español, 6-8 líneas
+- nice_to_have            · español, 2-4 líneas
+- title_en                · el cargo en inglés, una línea
+- hook_en                 · una frase de gancho en inglés, máximo 140 caracteres
+- description_en          · el párrafo de rol en inglés, 3-4 frases
+- responsibilities_en     · inglés, las mismas 7-9 líneas
+- requirements_en         · inglés, las mismas 6-8 líneas
+- nice_to_have_en         · inglés, las mismas 2-4 líneas
+
+Y los campos que piden los portales de empleo, también un ítem por línea:
+
+- palabras_clave          · 8-10 términos de búsqueda, mezclando el cargo en español e
+                            inglés, las normas o herramientas del oficio y la ciudad
+- habilidades_tecnicas    · 6-9 · herramientas, normas y sistemas con nombre propio
+- habilidades_blandas     · 4-5
+- nivel_educacion         · una línea: Técnico / Tecnólogo / Profesional / Especialización / Maestría
+- seniority               · una línea: Asistente / Analista / Coordinador / Jefatura / Gerencia
+`.trim();
