@@ -24,6 +24,7 @@ import {
 } from "@/lib/requisitions";
 import { PREFILTER_TEMPLATES } from "@/lib/prefilter-templates";
 import PublishPanel from "@/components/PublishPanel";
+import AvisoMultiIdioma from "@/components/AvisoMultiIdioma";
 
 type Requisicion = {
   id: string;
@@ -258,6 +259,7 @@ function Tarjeta({
   const [problema, setProblema] = useState<string | null>(null);
   const [publicando, setPublicando] = useState(false);
   const [urlAplicacion, setUrlAplicacion] = useState<string | null>(null);
+  const [redactando, setRedactando] = useState(false);
 
   /**
    * El enlace donde la gente aplica vive en Neon, con id numérico; la vacante
@@ -656,6 +658,13 @@ function Tarjeta({
 
           {/* Acciones */}
           <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => setRedactando(true)}
+              title="Redacta el aviso completo en español, inglés y mandarín con el formato de Trading Solutions"
+              className="text-sm px-4 py-2 rounded-full border border-gray-300 hover:border-black hover:bg-gray-50"
+            >
+              ✦ Redactar aviso
+            </button>
             {editablePublicacion && (
               <button
                 onClick={() => mover("")}
@@ -702,6 +711,14 @@ function Tarjeta({
                 Publicar en las fuentes
               </button>
             </div>
+          )}
+
+          {redactando && (
+            <AvisoMultiIdioma
+              requisitionId={req.id}
+              titulo={req.title}
+              onCerrar={() => setRedactando(false)}
+            />
           )}
 
           {publicando && req.vacancy_id && (
