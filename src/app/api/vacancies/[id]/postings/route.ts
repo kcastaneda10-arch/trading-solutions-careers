@@ -87,20 +87,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Si la vacante nació de una requisición aprobada, publicarla cierra el
     // circuito: la requisición pasa a "publicada".
-    const { data: vac } = await supabaseAdmin
-      .from("ht_vacancies")
-      .select("requisition_id")
-      .eq("id", params.id)
-      .maybeSingle();
+    //
+    // PERO SOLO LA CIERRA LA PÁGINA DE EMPLEO
+    // Antes bastaba marcar CUALQUIER fuente. Marcar «Referidos» —que es
+    // avisarle a un conocido— dejaba la requisición en "publicada" con
+    // LinkedIn, Turpial y Magneto sin hacer. El tablero del líder y los
+    // indicadores leen ese estado y entienden "ya salió", cuando la vacante no
+    // estaba en ningún portal. Un estado que se adelanta a los hechos es peor
+    // que no tenerlo: nadie vuelve a revisar algo que ya dice "publicada".
+    //
+    // La página de empleo sí la cierra: es la única que crea el enlace donde
+    // la gente aplica y la puerta de entrada al funnel. Las demás amplifican.
+    if (source === "careers") {
+      const { data: vac } = await supabaseAdmin
+        .from("ht_vacancies")
+        .select("requisition_id")
+        .eq("id", params.id)
+        .maybeSingle();
 
-    const reqId = (vac as any)?.requisition_id;
-    if (reqId) {
-      const { error: reqErr } = await supabaseAdmin
-        .from("ht_requisitions")
-        .update({ status: "publicada", updated_at: new Date().toISOString() })
-        .eq("id", reqId)
-        .eq("status", "aprobada"); // solo desde aprobada: no revive una rechazada
-      if (reqErr) console.error("[postings] no se pudo cerrar la requisición:", reqErr.message);
+      const reqId = (vac as any)?.requisition_id;
+      if (reqId) {
+        const { error: reqErr } = await supabaseAdmin
+          .from("ht_requisitions")
+          .update({ status: "publicada", updated_at: new Date().toISOString() })
+          .eq("id", reqId)
+          .eq("status", "aprobada"); // solo desde aprobada: no revive una rechazada
+        if (reqErr) console.error("[postings] no se pudo cerrar la requisición:", reqErr.message);
+      }
     }
 
     return NextResponse.json({ success: true, publicacion: data });

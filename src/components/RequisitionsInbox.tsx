@@ -265,6 +265,25 @@ function Tarjeta({
   const [duplicadas, setDuplicadas] = useState<
     { id: string; title: string; created_at: string }[] | null
   >(null);
+  // Fuentes en las que todavía NO está publicada. `null` mientras se consulta.
+  const [pendientes, setPendientes] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!req.vacancy_id) return;
+    let vivo = true;
+    fetch(`/api/vacancies/${req.vacancy_id}/postings`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!vivo || !j?.fuentes) return;
+        setPendientes(j.fuentes.filter((f: any) => !f.publicada).map((f: any) => f.label));
+      })
+      .catch(() => {
+        // Sin el dato la tarjeta sigue sirviendo: se queda con el texto de antes.
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [req.vacancy_id, publicando]);
 
   /**
    * El enlace donde la gente aplica vive en Neon, con id numérico; la vacante
@@ -756,9 +775,22 @@ function Tarjeta({
 
           {req.vacancy_id && (
             <div className="flex items-center gap-3 pt-1 flex-wrap">
-              <p className="text-xs text-gray-400">
-                Vacante creada en el ATS. El proceso corre en el Funnel.
-              </p>
+              {/* Qué falta publicar, a la vista y no escondido dentro del panel.
+                  «Publicada» se leía como «ya salió a todos lados» cuando podía
+                  estar solo en la página de empleo. */}
+              {pendientes === null ? (
+                <p className="text-xs text-gray-400">
+                  Vacante creada en el ATS. El proceso corre en el Funnel.
+                </p>
+              ) : pendientes.length === 0 ? (
+                <p className="text-xs text-emerald-700 font-medium">
+                  Publicada en las 5 fuentes.
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  Falta publicarla en <strong>{pendientes.join(", ")}</strong>.
+                </p>
+              )}
               <button
                 onClick={abrirPublicacion}
                 className="text-sm px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 font-medium"
