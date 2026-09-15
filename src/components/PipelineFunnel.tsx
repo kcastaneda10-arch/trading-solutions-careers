@@ -263,6 +263,25 @@ export default function PipelineFunnel() {
 
   useEffect(() => { void load(); }, []);
 
+  /**
+   * Si la vacante filtrada ya no está en el desplegable, se vuelve a «todas».
+   *
+   * POR QUÉ
+   * El filtro vive en la URL (?vacancy=UUID). Si esa vacante se cierra y queda
+   * sin candidatos, desaparece de las dos listas del selector — y un <select>
+   * cuyo `value` no existe entre sus opciones muestra la PRIMERA, o sea «Todas
+   * las vacantes», mientras el filtro real sigue apuntando a la vacante
+   * invisible. La pantalla dice «todas» y no muestra a nadie. Pasa al cerrar
+   * una vacante teniéndola abierta en el Funnel.
+   */
+  useEffect(() => {
+    if (vacFilter === "all" || vacancies.length === 0) return;
+    const existe = [...opcionesVacante.abiertas, ...opcionesVacante.cerradas]
+      .some((o) => o.id === vacFilter);
+    if (!existe) setVacFilter("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vacancies, opcionesVacante, vacFilter]);
+
   // Listener para back/forward del browser (popstate)
   useEffect(() => {
     const onPop = () => {
