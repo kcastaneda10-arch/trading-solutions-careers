@@ -75,7 +75,22 @@ export default function PublishPanel({
 
   // El aviso sale con el formato estándar de la compañía. Antes se armaba a
   // mano y cada vacante quedaba distinta según quién la escribiera.
-  const texto = construirAviso(datos, enlace || null);
+  const generado = construirAviso(datos, enlace || null);
+
+  // POR QUÉ SE PUEDE EDITAR ACÁ
+  // El cuadro era de solo lectura y la nota decía «editalo después de pegarlo».
+  // En la práctica eso obliga a pegar en cinco portales y corregir lo mismo
+  // cinco veces, y cuando el texto sale con un error —una palabra de más, un
+  // signo mal puesto— no hay dónde arreglarlo antes de copiarlo. Se edita acá y
+  // se copia ya corregido.
+  //
+  // El texto editado vive mientras el panel esté abierto: sirve para ajustar la
+  // copia que se va a pegar, no para reemplazar el perfil. Lo que se guarda
+  // sigue siendo la requisición, y por eso «Volver al texto generado» siempre
+  // puede recuperarla.
+  const [editado, setEditado] = useState<string | null>(null);
+  const texto = editado ?? generado;
+  const tocado = editado !== null && editado !== generado;
 
   async function copiar() {
     try {
@@ -249,6 +264,14 @@ export default function PublishPanel({
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                 Texto para el portal
               </p>
+              {tocado && (
+                <button
+                  onClick={() => setEditado(null)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Volver al texto generado
+                </button>
+              )}
               <button
                 onClick={copiar}
                 className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-full bg-black text-white hover:bg-gray-800"
@@ -257,14 +280,16 @@ export default function PublishPanel({
               </button>
             </div>
             <textarea
-              readOnly
               value={texto}
+              onChange={(e) => setEditado(e.target.value)}
               rows={12}
-              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 font-mono bg-gray-50"
+              spellCheck={false}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 font-mono bg-white focus:border-black focus:outline-none"
             />
             <p className="text-xs text-gray-400 mt-2">
-              Sale del perfil que armaste en la requisición. Si querés cambiarlo para un
-              portal en particular, editalo después de pegarlo.
+              {tocado
+                ? "Estás editando la copia que vas a pegar. El perfil de la requisición no cambia; «Copiar» se lleva lo que ves acá."
+                : "Sale del perfil que armaste en la requisición. Podés ajustarlo acá antes de copiarlo — el cambio aplica a esta copia, no al perfil."}
             </p>
           </div>
 

@@ -99,17 +99,29 @@ function hashtags(d: DatosDelAviso): string[] {
   return tags.slice(0, 8);
 }
 
+/** «a» o «an» según cómo suene el cargo: an Export Executive, a Full Stack. */
+function articulo(cargo: string): string {
+  return /^[aeiou]/i.test(cargo.trim()) ? "an" : "a";
+}
+
 /** Arma el aviso completo, listo para pegar en LinkedIn o en un portal. */
 export function construirAviso(d: DatosDelAviso, urlAplicacion?: string | null): string {
   const titulo = d.title_en || d.title;
   const partes: string[] = [];
 
-  // ── Gancho ──
-  partes.push(
-    d.hook_en
-      ? `We're looking for a ${titulo} ${d.hook_en.replace(/^to\s+/i, "to ")}!`
-      : `We're looking for a ${titulo} to join our team!`,
-  );
+  // ── Titular y gancho ──
+  // El titular se cierra solo; el gancho va aparte, en su propia línea.
+  //
+  // Antes el gancho se metía DENTRO del titular, asumiendo que empezaba por
+  // "to …" — algo que solo se cumplía cuando lo escribía una persona. El
+  // agente de IA lo devuelve como una frase completa con punto final, y salía
+  // «We're looking for a FullStack Junior Developer Build the tech that moves
+  // global trade — … countries.!»: dos oraciones pegadas y un punto seguido de
+  // una admiración. El gancho es una frase, no un complemento del titular.
+  partes.push(`We're looking for ${articulo(titulo)} ${titulo} to join our team!`);
+
+  const gancho = (d.hook_en || "").trim();
+  if (gancho) partes.push(gancho.replace(/\s*[.!]+$/, "") + ".");
 
   partes.push(QUIENES_SOMOS);
 
