@@ -269,6 +269,26 @@ function Tarjeta({
    */
   async function abrirPublicacion() {
     setUrlAplicacion(null);
+    setProblema(null);
+
+    // Publicar lee la requisición de la base. Si quedó algo escrito sin
+    // guardar —la ciudad, el salario— el panel no lo ve y responde «falta
+    // ubicación» con la ciudad en pantalla. Se guarda primero y así lo que se
+    // publica es siempre lo que se está viendo.
+    if (editablePublicacion) {
+      setEnviando("guardar");
+      try {
+        const ok = await guardarPerfil();
+        if (!ok) return;
+        onCambio();
+      } catch (e: any) {
+        setProblema(e?.message || "No se pudo guardar antes de publicar");
+        return;
+      } finally {
+        setEnviando(null);
+      }
+    }
+
     try {
       const r = await fetch("/api/vacancies?status=open", { cache: "no-store" });
       const filas = await r.json();
@@ -293,33 +313,50 @@ function Tarjeta({
 
   const acciones = accionesDisponibles(req.status);
 
+  /**
+   * Manda el perfil que está en pantalla a la base. Devuelve `true` si quedó
+   * guardado; si no, deja el motivo en `problema` y devuelve `false`.
+   *
+   * POR QUÉ ES UNA FUNCIÓN APARTE
+   * Publicar lee la requisición DESDE LA BASE, mientras Wellness mira el
+   * formulario en pantalla. Mientras haya algo escrito y sin guardar, esas dos
+   * cosas no son lo mismo, y el panel responde «falta ubicación» con la ciudad
+   * escrita a la vista. Guardar antes de abrir el panel hace que no exista esa
+   * diferencia.
+   */
+  async function guardarPerfil(accion?: AccionRequisicion): Promise<boolean> {
+    const r = await fetch(`/api/requisitions/${req.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accion,
+        nota: nota || undefined,
+        ...perfil,
+        salary_cap_cop: perfil.salary_cap_cop ? Number(perfil.salary_cap_cop) : null,
+        form_template_key: perfil.form_template_key || null,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      setProblema([j.error, j.detail].filter(Boolean).join(" · "));
+      return false;
+    }
+    if (j.vacante) {
+      alert(
+        `Aprobada. Se creó la vacante "${j.vacante.title}" en el ATS con ${req.lead_email} ` +
+          `como líder.\n\nDesde ahora corren los 22 días hasta la oferta.\n\n` +
+          `Falta publicarla en las fuentes.`,
+      );
+    }
+    return true;
+  }
+
   async function mover(accion: AccionRequisicion | "") {
     setEnviando(accion || "guardar");
     setProblema(null);
     try {
-      const r = await fetch(`/api/requisitions/${req.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accion: accion || undefined,
-          nota: nota || undefined,
-          ...perfil,
-          salary_cap_cop: perfil.salary_cap_cop ? Number(perfil.salary_cap_cop) : null,
-          form_template_key: perfil.form_template_key || null,
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) {
-        setProblema([j.error, j.detail].filter(Boolean).join(" · "));
-        return;
-      }
-      if (j.vacante) {
-        alert(
-          `Aprobada. Se creó la vacante "${j.vacante.title}" en el ATS con ${req.lead_email} ` +
-            `como líder.\n\nDesde ahora corren los 22 días hasta la oferta.\n\n` +
-            `Falta publicarla en las fuentes.`,
-        );
-      }
+      const ok = await guardarPerfil(accion || undefined);
+      if (!ok) return;
       setNota("");
       onCambio();
     } catch (e: any) {
@@ -549,7 +586,9 @@ function Tarjeta({
                     value={perfil.location}
                     onChange={(e) => setPerfil({ ...perfil, location: e.target.value })}
                     className="mt-1 w-full text-sm border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Barranquilla, Colombia"
+                    // Decía «Barranquilla, Colombia» a secas y se leía como un
+                    // valor ya puesto: el campo parecía lleno estando vacío.
+                    placeholder="Ej.: Barranquilla, Colombia"
                   />
                 </label>
                 <label className="block">
