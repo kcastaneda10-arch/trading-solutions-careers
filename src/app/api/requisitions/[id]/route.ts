@@ -135,6 +135,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (nota) cambios.decision_note = nota;
 
     // ─── Al aprobar nace la vacante ──────────────────────────────────────
+    //
+    // POR QUÉ ESTO NO ES UN `insert` A SECAS
+    // Lo era, y creaba una vacante nueva cada vez, sin mirar qué había. Eso
+    // produjo dos clases de duplicado:
+    //
+    //   1. Aprobar dos veces la misma requisición → dos vacantes idénticas.
+    //   2. Aprobar una requisición para un cargo que YA tenía vacante abierta
+    //      —abierta antes de que existieran las requisiciones— → la vacante
+    //      nueva nace vacía y la vieja se queda con todos los candidatos. En
+    //      el funnel aparecen las dos, y la que Wellness abre primero muestra
+    //      cero personas aunque el proceso tenga treinta y ocho.
+    //
+    // El caso 1 se resuelve solo. El caso 2 no se puede adivinar por el
+    // título: «FullStack Junior» y «Full Stack Developer Junior» son el mismo
+    // cargo y no se parecen para una computadora; «Especialista SIG-SST» e
+    // «Integrated Management Systems & HSE Specialist» ni siquiera están en el
+    // mismo idioma. Así que no se adivina: se corta y se pregunta.
     let vacanteCreada: { id: string; title: string } | null = null;
     if (destino === "aprobada") {
       const modelId = await modeloDeCompetencias();
@@ -149,6 +166,82 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         );
       }
 
+      // ── Caso 1 · esta requisición ya tiene vacante ──
+      if (actual.vacancy_id) {
+        const { data: yaExiste } = await supabaseAdmin
+          .from("ht_vacancies")
+          .select("id, title")
+          .eq("id", actual.vacancy_id)
+          .maybeSingle<{ id: string; title: string }>();
+        if (yaExiste) {
+          vacanteCreada = yaExiste;
+        }
+      }
+
+      // ── Caso 2 · hay vacantes abiertas que nadie reclamó ──
+      // Una vacante abierta sin `requisition_id` viene de antes del flujo de
+      // requisiciones. Si existe alguna, lo más probable es que ESTA
+      // requisición sea justamente la de ese proceso. Se ofrece vincularla en
+      // vez de abrir una vacante paralela.
+      if (!vacanteCreada) {
+        const { data: huerfanas } = await supabaseAdmin
+          .from("ht_vacancies")
+          .select("id, title, created_at")
+          .eq("client_id", TS_CLIENT_ID)
+          .eq("status", "open")
+          .is("requisition_id", null);
+
+        const sueltas = huerfanas || [];
+        const vincularA = body.vincular_vacante_id ? String(body.vincular_vacante_id) : null;
+
+        if (vincularA) {
+          const elegida = sueltas.find((v: any) => v.id === vincularA);
+          if (!elegida) {
+            return NextResponse.json(
+              {
+                error: "Esa vacante ya no está disponible para vincular",
+                detail: "Puede que la hayan cerrado o vinculado a otra requisición mientras tanto.",
+              },
+              { status: 409 },
+            );
+          }
+          const { error: vinErr } = await supabaseAdmin
+            .from("ht_vacancies")
+            .update({ requisition_id: actual.id, hiring_lead_email: actual.lead_email })
+            .eq("id", vincularA);
+          if (vinErr) {
+            return NextResponse.json(
+              { error: "No se pudo vincular la vacante", detail: vinErr.message },
+              { status: 500 },
+            );
+          }
+          vacanteCreada = { id: (elegida as any).id, title: (elegida as any).title };
+        } else if (sueltas.length > 0 && body.crear_vacante_nueva !== true) {
+          // Se corta ANTES de escribir nada: la requisición sigue sin aprobar
+          // y no queda una vacante fantasma si Wellness elige mal.
+          return NextResponse.json(
+            {
+              error:
+                "Ya hay vacantes abiertas en el ATS que no pertenecen a ninguna requisición. " +
+                "Antes de crear una nueva hay que decir si alguna de estas es este mismo proceso.",
+              detail:
+                "Si se crea una vacante nueva teniendo la vieja abierta, los candidatos se " +
+                "quedan en la vieja y el funnel muestra el proceso vacío.",
+              requiere_decision: "vacante_duplicada",
+              vacantes_sueltas: sueltas.map((v: any) => ({
+                id: v.id,
+                title: v.title,
+                created_at: v.created_at,
+              })),
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
+    if (destino === "aprobada" && !vacanteCreada) {
+      const modelId = await modeloDeCompetencias();
       const { data: nueva, error: vacErr } = await supabaseAdmin
         .from("ht_vacancies")
         .insert({
@@ -183,7 +276,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
 
       vacanteCreada = nueva;
-      cambios.vacancy_id = nueva.id;
+    }
+
+    // Sirve igual si la vacante se acaba de crear, si se reusó la que ya
+    // tenía la requisición o si se vinculó una que estaba suelta.
+    if (destino === "aprobada" && vacanteCreada) {
+      cambios.vacancy_id = vacanteCreada.id;
       cambios.approved_at = new Date().toISOString();
       cambios.approved_by = actor;
     }

@@ -260,6 +260,11 @@ function Tarjeta({
   const [publicando, setPublicando] = useState(false);
   const [urlAplicacion, setUrlAplicacion] = useState<string | null>(null);
   const [redactando, setRedactando] = useState(false);
+  // Vacantes abiertas que no pertenecen a ninguna requisición. Si hay alguna,
+  // aprobar se frena y pregunta en vez de abrir una vacante paralela.
+  const [duplicadas, setDuplicadas] = useState<
+    { id: string; title: string; created_at: string }[] | null
+  >(null);
 
   /**
    * El enlace donde la gente aplica vive en Neon, con id numérico; la vacante
@@ -324,7 +329,10 @@ function Tarjeta({
    * escrita a la vista. Guardar antes de abrir el panel hace que no exista esa
    * diferencia.
    */
-  async function guardarPerfil(accion?: AccionRequisicion): Promise<boolean> {
+  async function guardarPerfil(
+    accion?: AccionRequisicion,
+    extra?: Record<string, unknown>,
+  ): Promise<boolean> {
     const r = await fetch(`/api/requisitions/${req.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -334,10 +342,17 @@ function Tarjeta({
         ...perfil,
         salary_cap_cop: perfil.salary_cap_cop ? Number(perfil.salary_cap_cop) : null,
         form_template_key: perfil.form_template_key || null,
+        ...extra,
       }),
     });
     const j = await r.json();
     if (!r.ok) {
+      // Aprobar se frena cuando hay vacantes abiertas sin dueño: hay que
+      // decidir si esta requisición es una de ellas antes de abrir otra.
+      if (j.requiere_decision === "vacante_duplicada") {
+        setDuplicadas(j.vacantes_sueltas || []);
+        return false;
+      }
       setProblema([j.error, j.detail].filter(Boolean).join(" · "));
       return false;
     }
@@ -351,12 +366,13 @@ function Tarjeta({
     return true;
   }
 
-  async function mover(accion: AccionRequisicion | "") {
+  async function mover(accion: AccionRequisicion | "", extra?: Record<string, unknown>) {
     setEnviando(accion || "guardar");
     setProblema(null);
     try {
-      const ok = await guardarPerfil(accion || undefined);
+      const ok = await guardarPerfil(accion || undefined, extra);
       if (!ok) return;
+      setDuplicadas(null);
       setNota("");
       onCambio();
     } catch (e: any) {
@@ -749,6 +765,56 @@ function Tarjeta({
               >
                 Publicar en las fuentes
               </button>
+            </div>
+          )}
+
+          {/* Vacantes abiertas sin requisición · hay que decidir antes de aprobar */}
+          {duplicadas && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+              <div className="bg-white w-full max-w-lg rounded-2xl p-6 max-h-[88vh] overflow-y-auto">
+                <h4 className="text-base font-bold text-black">
+                  ¿Esta requisición es para una vacante que ya está abierta?
+                </h4>
+                <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                  En el ATS hay {duplicadas.length === 1 ? "una vacante abierta" : `${duplicadas.length} vacantes abiertas`}{" "}
+                  que no {duplicadas.length === 1 ? "pertenece" : "pertenecen"} a ninguna requisición.
+                  Si «{req.title}» es {duplicadas.length === 1 ? "esa misma" : "alguna de esas"}, hay que
+                  vincularla: creando una nueva, los candidatos se quedan en la vieja y el funnel
+                  muestra el proceso vacío.
+                </p>
+
+                <div className="mt-4 space-y-2">
+                  {duplicadas.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => mover("aprobar", { vincular_vacante_id: v.id })}
+                      disabled={!!enviando}
+                      className="w-full text-left border border-gray-300 rounded-lg px-4 py-3 hover:border-black hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <div className="text-sm font-semibold text-black">{v.title}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Abierta desde {new Date(v.created_at).toLocaleDateString("es-CO")} · usar esta
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setDuplicadas(null)}
+                    className="text-sm px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => mover("aprobar", { crear_vacante_nueva: true })}
+                    disabled={!!enviando}
+                    className="text-sm px-4 py-2 rounded-full border border-gray-300 hover:border-black disabled:opacity-50"
+                  >
+                    Ninguna · crear una vacante nueva
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
