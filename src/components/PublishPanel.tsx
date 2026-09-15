@@ -14,7 +14,7 @@
  * dice con todas las letras qué falta hacer a mano.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { construirAviso, type DatosDelAviso } from "@/lib/job-post";
 
 type Fuente = {
@@ -103,6 +103,15 @@ export default function PublishPanel({
   }
 
   const [publicandoWeb, setPublicandoWeb] = useState(false);
+  const [marcando, setMarcando] = useState<string | null>(null);
+
+  // El aviso de error vive arriba del todo y la lista de fuentes queda abajo:
+  // apretando «Magneto» el mensaje aparecía fuera de la pantalla y el botón
+  // parecía no hacer nada. Si hay error, se trae a la vista.
+  const avisoError = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (error) avisoError.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   /** La página de empleo sí se puede publicar desde acá: escribe en Neon. */
   async function publicarEnCareers() {
@@ -128,28 +137,57 @@ export default function PublishPanel({
     }
   }
 
+  /**
+   * Marca o desmarca una fuente.
+   *
+   * ANTES SE PERDÍA EL ERROR
+   * Estas dos llamadas no miraban `r.ok`: se hacía el fetch, se llamaba a
+   * `cargar()` y listo. Si el servidor respondía 400, 401 o 500 —la sesión
+   * vencida es el caso más común— la fuente se quedaba sin marcar y en
+   * pantalla no aparecía absolutamente nada. El botón parecía no hacer nada y
+   * no había forma de saber por qué. Un `await fetch` sin revisar la respuesta
+   * no es «guardar»: es mandar y no preguntar.
+   */
   async function marcar(source: string, ya: boolean) {
     // La página de empleo no se "marca": se publica.
     if (source === "careers" && !ya) return publicarEnCareers();
+    setError(null);
+    setMarcando(source);
     try {
-      if (ya) {
-        await fetch(`/api/vacancies/${vacancyId}/postings?source=${source}`, { method: "DELETE" });
-      } else {
-        const url = window.prompt(
-          `Enlace de la publicación en ${source} (opcional, podés dejarlo vacío):`,
-          "",
+      const r = ya
+        ? await fetch(`/api/vacancies/${vacancyId}/postings?source=${source}`, { method: "DELETE" })
+        : await (async () => {
+            const url = window.prompt(
+              `Enlace de la publicación en ${source} (opcional, podés dejarlo vacío):`,
+              "",
+            );
+            // Cancelar el prompt no debe marcarla: es la forma de arrepentirse.
+            if (url === null) return null;
+            return fetch(`/api/vacancies/${vacancyId}/postings`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source, external_url: url || null }),
+            });
+          })();
+
+      if (!r) return; // se canceló el prompt
+
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}) as any);
+        const detalle = [j.error, j.detail].filter(Boolean).join(" · ");
+        setError(
+          detalle ||
+            (r.status === 401
+              ? "La sesión del panel venció. Volvé a entrar y probá de nuevo."
+              : `El servidor respondió ${r.status} y no se pudo ${ya ? "desmarcar" : "marcar"} ${source}.`),
         );
-        // Cancelar el prompt no debe marcarla: es la forma de arrepentirse.
-        if (url === null) return;
-        await fetch(`/api/vacancies/${vacancyId}/postings`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source, external_url: url || null }),
-        });
+        return;
       }
       cargar();
     } catch (e: any) {
       setError(e?.message || "No se pudo guardar");
+    } finally {
+      setMarcando(null);
     }
   }
 
@@ -174,7 +212,10 @@ export default function PublishPanel({
 
         <div className="px-7 py-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+            <div
+              ref={avisoError}
+              className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800"
+            >
               {error}
             </div>
           )}
@@ -233,18 +274,21 @@ export default function PublishPanel({
                       </div>
                       <button
                         onClick={() => marcar(f.key, f.publicada)}
+                        disabled={marcando === f.key || (f.key === "careers" && publicandoWeb)}
                         className={
-                          "ml-auto text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap " +
+                          "ml-auto text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap disabled:opacity-50 " +
                           (f.publicada
                             ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
                             : "border border-gray-300 text-gray-700 hover:bg-gray-50")
                         }
                       >
-                        {f.publicada
-                          ? "Publicada ✓"
-                          : f.key === "careers"
-                            ? publicandoWeb ? "Publicando…" : "Publicar ahora"
-                            : "Marcar publicada"}
+                        {marcando === f.key
+                          ? "Guardando…"
+                          : f.publicada
+                            ? "Publicada ✓"
+                            : f.key === "careers"
+                              ? publicandoWeb ? "Publicando…" : "Publicar ahora"
+                              : "Marcar publicada"}
                       </button>
                     </div>
                   );
