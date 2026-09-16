@@ -20,6 +20,34 @@
  * miente con más fuerza que cualquier número mal calculado, porque la posición
  * en una matriz se lee como un hecho. Acá, por debajo del mínimo de cobertura,
  * la persona NO se ubica: queda en una bandeja aparte que dice qué falta.
+ *
+ * ══════════════════════════════════════════════════════════════════
+ * DOS MOMENTOS, NO UNO — corregido 16-sep-2026
+ *
+ * La primera versión exigía 80 % de cobertura en LOS DOS EJES para poder
+ * ubicar a alguien. Eso servía para decidir a quién contratar y era inservible
+ * para todo lo demás, por una razón que estaba a la vista y no vi:
+ *
+ * En este proceso las pruebas van ANTES de la entrevista (batería 5,
+ * assessment 6, entrevista 7). Al decidir quién pasa a entrevista, el eje de
+ * capacidad tiene el 100 % de su evidencia disponible —assessment, roles y
+ * batería ya ocurrieron— pero el de ajuste no puede pasar del 36 %, porque
+ * siete de los doce criterios del TS Standard salen de la entrevista misma.
+ *
+ * Pedir evidencia de entrevista para decidir quién va a la entrevista es
+ * circular. Nadie habría entrado nunca a la matriz.
+ *
+ * Así que hay dos momentos con dos reglas distintas:
+ *
+ *   AVANCE  · ¿quién pasa a entrevista?  → decide SOLO la capacidad.
+ *             El ajuste se muestra, pero no bloquea: está incompleto a
+ *             propósito, y la entrevista es lo que lo llena.
+ *
+ *   TERNA   · ¿quién entra a la terna?   → deciden los dos ejes, el 9-box.
+ *
+ * Lo que no cambia entre los dos: un excluyente por debajo del mínimo bloquea
+ * siempre, y lo que no tiene evidencia no se inventa.
+ * ══════════════════════════════════════════════════════════════════
  */
 
 export type Banda = "bajo" | "medio" | "alto";
@@ -196,6 +224,109 @@ export function ubicar(ev: EvaluacionMinima): Ubicacion {
     celda: celdaDe(bCap, bAju), motivo: null,
   };
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MOMENTO 1 · ¿QUIÉN PASA A ENTREVISTA?
+   Decide la capacidad sola. Ver el bloque de arriba.
+   ══════════════════════════════════════════════════════════════ */
+
+export type Veredicto = "pasa" | "dudoso" | "no_pasa" | "bloqueado" | "falta_evidencia" | "sin_evaluar";
+
+export type Avance = {
+  veredicto: Veredicto;
+  capacidad: Banda | null;
+  /** Qué hacer, en una línea. */
+  decision: string;
+  /** Por qué, cuando no se puede decidir. */
+  motivo: string | null;
+};
+
+export const VEREDICTO_LABEL: Record<Veredicto, string> = {
+  pasa: "Pasa a entrevista",
+  dudoso: "Dudoso",
+  no_pasa: "No pasa",
+  bloqueado: "Bloqueado por excluyente",
+  falta_evidencia: "Falta evidencia",
+  sin_evaluar: "Sin evaluar",
+};
+
+/**
+ * El veredicto de avance. Solo mira capacidad.
+ *
+ * NO mira el ajuste, y eso es deliberado: en este proceso la entrevista es
+ * posterior a las pruebas, así que el ajuste está incompleto por diseño. Pedirlo
+ * acá sería pedir el resultado de la entrevista para autorizar la entrevista.
+ */
+export function ubicarAvance(ev: EvaluacionMinima): Avance {
+  if (!ev) {
+    return {
+      veredicto: "sin_evaluar", capacidad: null,
+      decision: "Correr el agente y cargar el assessment.",
+      motivo: "Todavía no se ha corrido la evaluación.",
+    };
+  }
+
+  const bloqueado = ev.bloqueado_por ?? [];
+  if (bloqueado.length > 0) {
+    return {
+      veredicto: "bloqueado", capacidad: null,
+      decision: "No avanza. Cerrar con devolución.",
+      motivo: `Excluyente por debajo del mínimo: ${bloqueado.join(", ")}.`,
+    };
+  }
+
+  const cCap = ev.capacidad_cobertura ?? 0;
+  if (cCap < COBERTURA_MINIMA) {
+    return {
+      veredicto: "falta_evidencia", capacidad: null,
+      decision: "Cargar el assessment y el juego de roles antes de decidir.",
+      motivo: `Capacidad en ${cCap} % de cobertura, mínimo ${COBERTURA_MINIMA} %.`,
+    };
+  }
+
+  const b = banda(ev.capacidad_puntaje);
+  if (!b) {
+    return {
+      veredicto: "sin_evaluar", capacidad: null,
+      decision: "Correr el agente.",
+      motivo: "Hay cobertura pero no hay puntaje. Revisar la evaluación.",
+    };
+  }
+
+  if (b === "alto") {
+    return {
+      veredicto: "pasa", capacidad: b,
+      decision: "Agendar entrevista. Llevar las preguntas pendientes.",
+      motivo: null,
+    };
+  }
+  if (b === "medio") {
+    return {
+      veredicto: "dudoso", capacidad: b,
+      decision: "Entrevistar solo si hay cupo, y con foco en lo que quedó flojo.",
+      motivo: null,
+    };
+  }
+  return {
+    veredicto: "no_pasa", capacidad: b,
+    decision: "No avanza. Cerrar con devolución concreta.",
+    motivo: null,
+  };
+}
+
+/** Los tres veredictos que sí son una decisión, en el orden en que se leen. */
+export const VEREDICTOS_DECIDIBLES: Veredicto[] = ["pasa", "dudoso", "no_pasa"];
+
+/**
+ * Qué hacer con cada grupo. Es el mismo texto que devuelve `ubicarAvance`,
+ * declarado aparte para que la pantalla pueda titular un grupo vacío: si el
+ * encabezado saliera del primer candidato, un grupo sin gente se quedaría mudo.
+ */
+export const DECISION_DEL_GRUPO: Record<"pasa" | "dudoso" | "no_pasa", string> = {
+  pasa: "Agendar entrevista. Llevar las preguntas pendientes.",
+  dudoso: "Entrevistar solo si hay cupo, y con foco en lo que quedó flojo.",
+  no_pasa: "No avanza. Cerrar con devolución concreta.",
+};
 
 /**
  * El dato que Kelly necesita para la conversación con dirección: cuántos

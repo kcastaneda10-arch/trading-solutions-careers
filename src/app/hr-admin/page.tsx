@@ -94,7 +94,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "rubricas", label: "Rúbricas", icon: ClipboardCheck },
-  { id: "nuevebox", label: "9-box", icon: Grid3x3 },
+  { id: "nuevebox", label: "Decisiones", icon: Grid3x3 },
   { id: "plantillas", label: "Plantillas", icon: SettingsIcon },
 ];
 
