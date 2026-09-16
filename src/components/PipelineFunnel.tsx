@@ -323,7 +323,10 @@ export default function PipelineFunnel() {
   }
   function clearSelection() { setSelectedIds(new Set()); }
   function selectAllInStage(stageId: string) {
-    const ids = (candidates.filter(c => (c.stage || "aplico") === stageId && (vacFilter === "all" || c.vacancy_id === vacFilter))).map(c => c.id);
+    // Sobre lo que se está viendo, no sobre la base entera: si no, «seleccionar
+    // toda la columna» alcanzaba a gente de procesos cerrados que no aparece
+    // en pantalla, y la acción siguiente les caía encima sin que nadie lo viera.
+    const ids = filtered.filter(c => (c.stage || "aplico") === stageId).map(c => c.id);
     setSelectedIds(prev => {
       const n = new Set(prev);
       ids.forEach(id => n.add(id));
@@ -361,10 +364,33 @@ export default function PipelineFunnel() {
     } catch { /* el funnel no depende de esto */ }
   }
 
-  const filtered = useMemo(
-    () => vacFilter === "all" ? candidates : candidates.filter(c => c.vacancy_id === vacFilter),
-    [candidates, vacFilter]
+  /**
+   * «Todas las vacantes» son las que están ABIERTAS, no todas las que existieron.
+   *
+   * POR QUÉ
+   * Antes no filtraba nada: traía los 802 candidatos históricos desde abril,
+   * mezclando procesos cerrados hace meses —Inside Sales, Customer
+   * Documentation, Pricing— con los cuatro que están corriendo. El tablero
+   * dejaba de ser el trabajo de hoy y pasaba a ser el archivo de la compañía,
+   * con columnas de cientos de personas que ya nadie va a mover.
+   *
+   * Las cerradas siguen a un clic: la casilla «ver cerradas» las vuelve a
+   * incluir, porque el proceso de esas personas existió y a veces hay que
+   * volver a mirarlo.
+   */
+  const idsAbiertas = useMemo(
+    () => new Set(vacancies.filter(v => v.status == null || v.status === "open").map(v => v.id)),
+    [vacancies],
   );
+
+  const filtered = useMemo(() => {
+    if (vacFilter !== "all") return candidates.filter(c => c.vacancy_id === vacFilter);
+    if (verCerradas) return candidates;
+    // Sin vacantes cargadas todavía no se esconde nada: mejor de más que un
+    // tablero vacío mientras llega la respuesta.
+    if (idsAbiertas.size === 0) return candidates;
+    return candidates.filter(c => c.vacancy_id && idsAbiertas.has(c.vacancy_id));
+  }, [candidates, vacFilter, verCerradas, idsAbiertas]);
 
   /** Dentro de cada columna, quien ya tiene resultado de bateria va primero y
    *  de mayor a menor match. El orden ES el ranking: no hace falta abrir otra
