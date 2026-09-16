@@ -113,23 +113,38 @@ export default function RequisitionsInbox() {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [nueva, setNueva] = useState(false);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  /**
+   * Recarga la bandeja.
+   *
+   * POR QUÉ NO VUELVE A PONER `cargando` EN TRUE
+   * Con `cargando` la pantalla entera se reemplaza por «Cargando
+   * requisiciones…», lo que DESMONTA todas las tarjetas. Cualquier recarga
+   * —guardar, aprobar, publicar— borraba de un golpe el estado local de la
+   * tarjeta: el panel que se estaba por abrir, lo que hubiera escrito sin
+   * guardar, la sección desplegada. Se notó al abrir «Publicar en las
+   * fuentes»: guardaba, recargaba, la tarjeta se desmontaba y el panel no
+   * llegaba a aparecer nunca.
+   *
+   * La primera carga sí ocupa la pantalla, porque no hay nada que mostrar.
+   * Las siguientes reemplazan los datos sin tumbar lo que está en uso.
+   */
+  const cargar = useCallback(async (primera = false) => {
+    if (primera) setCargando(true);
     setError(null);
     try {
-      const r = await fetch("/api/requisitions");
+      const r = await fetch("/api/requisitions", { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "No se pudo cargar la bandeja");
       setItems(j.requisiciones || []);
     } catch (e: any) {
       setError(e?.message || "Error de red");
     } finally {
-      setCargando(false);
+      if (primera) setCargando(false);
     }
   }, []);
 
   useEffect(() => {
-    cargar();
+    cargar(true);
   }, [cargar]);
 
   if (cargando) {
@@ -140,7 +155,7 @@ export default function RequisitionsInbox() {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
         <strong>No se pudo cargar:</strong> {error}
-        <button onClick={cargar} className="ml-3 underline">Reintentar</button>
+        <button onClick={() => cargar(true)} className="ml-3 underline">Reintentar</button>
       </div>
     );
   }
@@ -167,7 +182,7 @@ export default function RequisitionsInbox() {
             + Nueva requisición
           </button>
           <button
-            onClick={cargar}
+            onClick={() => cargar()}
             className="text-sm text-gray-500 hover:text-gray-900 underline"
           >
             Actualizar
@@ -304,7 +319,9 @@ function Tarjeta({
       try {
         const ok = await guardarPerfil();
         if (!ok) return;
-        onCambio();
+        // Acá NO se recarga la bandeja: lo guardado ya está en la base, que es
+        // lo único que el panel de publicación lee. Recargar solo serviría para
+        // refrescar la tarjeta de atrás, y el precio sería perder el panel.
       } catch (e: any) {
         setProblema(e?.message || "No se pudo guardar antes de publicar");
         return;
