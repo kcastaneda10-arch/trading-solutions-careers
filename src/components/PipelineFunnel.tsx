@@ -136,11 +136,31 @@ function candidatosDe(v: Vacancy): number {
  * «ver cerradas», porque el proceso de esas personas existió y a veces hay que
  * volver a mirarlo. Y cuando un título está repetido se le agrega el conteo y
  * la fecha, para poder distinguir cuál es cuál.
+ *
+ * EL DESEMPATE SE MIDE ENTRE LO QUE ESTÁ EN PANTALLA
+ * Antes los repetidos se contaban sobre TODAS las vacantes. Hay cuatro «Talent
+ * Acquisition Specialist» cerradas y vacías que el desplegable nunca muestra,
+ * y por culpa de ellas la única visible salía con «· 24 candidatos · con
+ * requisición · 26/8/2026» colgando. Un desempate contra opciones que no están
+ * en la lista no desempata nada: solo ensucia el nombre.
+ *
+ * Ahora se cuenta sobre las opciones que el <select> va a dibujar de verdad,
+ * que dependen de si «ver cerradas» está marcado y de cuál está seleccionada.
+ * Efecto: el nombre sale limpio, y el detalle aparece justo cuando dos
+ * opciones con el mismo título quedan una al lado de la otra.
  */
-function opcionesDeVacante(vacancies: Vacancy[]) {
+function opcionesDeVacante(vacancies: Vacancy[], verCerradas: boolean, vacFilter: string) {
+  const esAbierta = (v: Vacancy) => v.status == null || v.status === "open";
+
+  const abiertas = vacancies.filter(esAbierta);
+  // Las cerradas con gente adentro existen siempre, pero solo se dibujan si se
+  // piden — o si es la que está seleccionada, que si no quedaría en blanco.
+  const cerradas = vacancies.filter((v) => !esAbierta(v) && candidatosDe(v) > 0);
+  const cerradasVisibles = cerradas.filter((v) => verCerradas || v.id === vacFilter);
+
   const vistos = new Set<string>();
   const repetidos = new Set<string>();
-  for (const v of vacancies) {
+  for (const v of [...abiertas, ...cerradasVisibles]) {
     const t = v.title.trim().toLowerCase();
     if (vistos.has(t)) repetidos.add(t);
     vistos.add(t);
@@ -155,13 +175,11 @@ function opcionesDeVacante(vacancies: Vacancy[]) {
     return `${v.title} · ${partes.join(" · ")}`;
   };
 
-  const esAbierta = (v: Vacancy) => v.status == null || v.status === "open";
-
   return {
-    abiertas: vacancies.filter(esAbierta).map((v) => ({ id: v.id, label: etiqueta(v) })),
-    cerradas: vacancies
-      .filter((v) => !esAbierta(v) && candidatosDe(v) > 0)
-      .map((v) => ({ id: v.id, label: etiqueta(v) })),
+    abiertas: abiertas.map((v) => ({ id: v.id, label: etiqueta(v) })),
+    // Se devuelven TODAS las cerradas con candidatos: el contador de la casilla
+    // «ver cerradas (8)» las cuenta, aunque no estén dibujadas.
+    cerradas: cerradas.map((v) => ({ id: v.id, label: etiqueta(v) })),
   };
 }
 
@@ -231,7 +249,6 @@ const OWNER_STYLE: Record<StageOwner, { label: string; barColor: string; bgTint:
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
-  const opcionesVacante = useMemo(() => opcionesDeVacante(vacancies), [vacancies]);
   // El desplegable arranca solo con las abiertas: es lo que se está trabajando.
   const [verCerradas, setVerCerradas] = useState(false);
   // Inicializar vacFilter desde URL query (?vacancy=UUID) — persiste entre reloads.
@@ -253,6 +270,10 @@ export default function PipelineFunnel() {
       window.history.replaceState(null, '', newUrl);
     }
   };
+  const opcionesVacante = useMemo(
+    () => opcionesDeVacante(vacancies, verCerradas, vacFilter),
+    [vacancies, verCerradas, vacFilter],
+  );
   const [loading, setLoading] = useState(true);
   const [selectedCand, setSelectedCand] = useState<Cand | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
