@@ -323,16 +323,31 @@ export function getRubrica(key: string): Rubrica | undefined {
 /**
  * Qué rúbrica le corresponde a una vacante.
  *
- * Por ahora se resuelve por el título, que es lo que hay. Cuando haya más de
- * una rúbrica esto pasa a ser una columna en `ht_vacancies`: amarrar una
- * calificación a una coincidencia de texto envejece mal. Devuelve `undefined`
- * cuando el cargo no tiene rúbrica, y la pantalla lo dice en vez de calificar
- * con la regla de otro cargo.
+ * SE RESUELVE POR EL TÍTULO, Y ESO ES UN PARCHE
+ * La primera versión buscaba «sig» o «sst». La vacante real se llama
+ * «Integrated Management Systems & HSE Specialist», así que no coincidía con
+ * ninguna de las dos y el panel de evaluación simplemente no aparecía: la
+ * pantalla callada en vez de decir qué pasaba. Acá van también los términos en
+ * inglés con los que el cargo está publicado.
+ *
+ * Amarrar una calificación a una coincidencia de texto envejece mal y hay que
+ * cambiarlo por una columna `rubrica_key` en `ht_vacancies` con un selector en
+ * la ficha de la vacante. Mientras tanto, esta lista tiene que incluir cómo se
+ * llama el cargo DE VERDAD, no cómo lo llamamos entre nosotros.
+ *
+ * Devuelve `undefined` cuando el cargo no tiene rúbrica, y la pantalla lo dice
+ * en vez de calificar con la regla de otro cargo.
  */
+const CLAVES_SIG_SST = [
+  "sig", "sst", "hse", "hseq",
+  "sistemas integrados", "integrated management",
+  "seguridad y salud",
+];
+
 export function rubricaDeVacante(titulo?: string | null): Rubrica | undefined {
   const t = (titulo || "").toLowerCase();
   if (!t) return undefined;
-  if (t.includes("sig") || t.includes("sst")) return SIG_SST;
+  if (CLAVES_SIG_SST.some((k) => t.includes(k))) return SIG_SST;
   return undefined;
 }
 

@@ -150,12 +150,16 @@ function FilaVeredicto({ c, v }: { c: Criterio; v: Veredicto | undefined }) {
 
 export default function EvaluacionPanel({
   candidateId,
-  rubricaKey = "sig-sst",
+  rubricaKey,
+  cargo,
 }: {
   candidateId: string;
+  /** Sin rúbrica el panel se monta igual y lo dice. No se asume ninguna. */
   rubricaKey?: string;
+  /** El título de la vacante, para nombrarlo cuando no hay rúbrica. */
+  cargo?: string | null;
 }) {
-  const rubrica = getRubrica(rubricaKey);
+  const rubrica = rubricaKey ? getRubrica(rubricaKey) : undefined;
 
   const [ev, setEv] = useState<Evaluacion | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -167,6 +171,8 @@ export default function EvaluacionPanel({
   const [abierto, setAbierto] = useState(false);
 
   const cargar = useCallback(async () => {
+    // Sin rúbrica no hay nada que consultar: el panel solo explica por qué.
+    if (!rubricaKey) { setCargando(false); return; }
     try {
       const r = await fetch(
         `/api/agents/evaluate-candidate?candidate_id=${candidateId}&rubrica=${rubricaKey}`,
@@ -254,9 +260,16 @@ export default function EvaluacionPanel({
         <h3 className="text-[11px] uppercase tracking-wider font-bold text-gray-500 mb-2">
           🎯 Evaluación contra la rúbrica
         </h3>
-        <p className="text-xs text-gray-500 italic">
-          Este cargo todavía no tiene rúbrica cargada. Sin rúbrica no hay con qué calificar.
-        </p>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <p className="text-[12.5px] text-gray-700 leading-snug">
+            {cargo ? <>«{cargo}» todavía no tiene rúbrica.</> : "Este cargo todavía no tiene rúbrica."}{" "}
+            Sin rúbrica no hay con qué calificar, y el agente no va a inventar un criterio.
+          </p>
+          <p className="text-[11.5px] text-gray-500 leading-snug mt-1.5">
+            Las rúbricas cargadas se ven en la pestaña <b>Rúbricas</b>. Hoy se asignan por el título
+            del cargo.
+          </p>
+        </div>
       </div>
     );
   }

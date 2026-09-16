@@ -1995,13 +1995,18 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
           <CandidateFilesBlock candidateId={cand.id} candidateName={cand.name} />
 
           {/* La calificación va debajo de la evidencia, y no al revés: el orden
-              en pantalla es el orden del argumento. */}
-          {rubricaDeVacante(cand.ht_vacancies?.title) && (
-            <EvaluacionPanel
-              candidateId={cand.id}
-              rubricaKey={rubricaDeVacante(cand.ht_vacancies?.title)!.key}
-            />
-          )}
+              en pantalla es el orden del argumento.
+
+              Se monta SIEMPRE, aunque el cargo no tenga rúbrica. Antes se
+              escondía, y el resultado fue una ficha que no decía nada: había
+              que adivinar si el bloque no existía, si estaba más abajo, o si
+              algo se había roto. Sin rúbrica el panel lo dice con todas las
+              letras. */}
+          <EvaluacionPanel
+            candidateId={cand.id}
+            rubricaKey={rubricaDeVacante(cand.ht_vacancies?.title)?.key}
+            cargo={cand.ht_vacancies?.title}
+          />
         </div>
       </div>
     </div>
