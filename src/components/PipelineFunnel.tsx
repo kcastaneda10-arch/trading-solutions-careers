@@ -13,6 +13,7 @@ import JointSchedulingModal from "./JointSchedulingModal";
 import CandidateFilesBlock from "./CandidateFilesBlock";
 import EvaluacionPanel from "./EvaluacionPanel";
 import { rubricaDeVacante } from "@/lib/rubricas";
+import { escucharPedidos, tomarPedidoDeCandidato } from "@/lib/abrirCandidato";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -366,6 +367,37 @@ export default function PipelineFunnel() {
       setBateria(j.estados || {});
     } catch { /* el funnel no depende de esto */ }
   }
+
+  /**
+   * Abrir la ficha de alguien desde otra pantalla — hoy, desde el 9-box.
+   *
+   * Si el candidato todavía no está en memoria, se espera a que termine la
+   * carga en vez de no hacer nada: un clic que no abre nada es peor que uno
+   * que demora, porque no se sabe si falló o si la persona no existe.
+   */
+  // Es estado y no una ref a propósito: recogerlo tiene que provocar un
+  // render, si no el efecto de abajo no vuelve a correr y el pedido se queda
+  // esperando para siempre cuando la lista ya estaba cargada.
+  const [pedido, setPedido] = useState<string | null>(null);
+
+  // Recoger: al montar (se pidió desde otra pestaña y el Funnel todavía no
+  // existía) y cuando llega el evento (ya estaba en pantalla).
+  useEffect(() => {
+    function recoger() {
+      const id = tomarPedidoDeCandidato();
+      if (id) setPedido(id);
+    }
+    recoger();
+    return escucharPedidos(recoger);
+  }, []);
+
+  // Y resolverlo cuando la lista esté cargada. Si se pidió antes de que los
+  // candidatos llegaran, el pedido espera acá en vez de perderse.
+  useEffect(() => {
+    if (!pedido) return;
+    const c = candidates.find((x) => x.id === pedido);
+    if (c) { setSelectedCand(c); setPedido(null); }
+  }, [candidates, pedido]);
 
   /**
    * «Todas las vacantes» son las que están ABIERTAS, no todas las que existieron.

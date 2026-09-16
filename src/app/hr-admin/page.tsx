@@ -2,6 +2,7 @@
 
 import FunnelTiming from "@/components/FunnelTiming";
 import RubricasPanel from "@/components/RubricasPanel";
+import NueveBoxPanel from "@/components/NueveBoxPanel";
 import BateriaDashboard from "@/components/BateriaDashboard";
 import { LOGO_TS_SIMBOLO } from "@/lib/brand";
 
@@ -61,6 +62,7 @@ import {
   RefreshCw,
   ArrowRight,
   Settings as SettingsIcon,
+  Grid3x3,
 } from "lucide-react";
 import { jobs } from "@/data/jobs";
 // La bandeja donde caen las vacantes que piden los líderes desde WXM.
@@ -81,6 +83,7 @@ type Tab =
   | "onboarding"
   | "cvbank"
   | "rubricas"
+  | "nuevebox"
   | "plantillas";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -91,10 +94,11 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "onboarding", label: "Onboarding", icon: ClipboardCheck },
   { id: "cvbank", label: "CV Bank", icon: Database },
   { id: "rubricas", label: "Rúbricas", icon: ClipboardCheck },
+  { id: "nuevebox", label: "9-box", icon: Grid3x3 },
   { id: "plantillas", label: "Plantillas", icon: SettingsIcon },
 ];
 
-const VALID_TABS: Tab[] = ["dashboard", "requisiciones", "vacantes", "funnel", "onboarding", "cvbank", "rubricas", "plantillas"];
+const VALID_TABS: Tab[] = ["dashboard", "requisiciones", "vacantes", "funnel", "onboarding", "cvbank", "rubricas", "nuevebox", "plantillas"];
 
 function getInitialTab(): Tab {
   if (typeof window === 'undefined') return 'dashboard';
@@ -339,6 +343,7 @@ export default function HRAdminPage() {
         {tab === "onboarding" && <OnboardingTab />}
         {tab === "cvbank" && <CVBank />}
         {tab === "rubricas" && <RubricasPanel />}
+        {tab === "nuevebox" && <NueveBoxPanel />}
         {tab === "plantillas" && <ReminderRulesEditor />}
       </main>
 
