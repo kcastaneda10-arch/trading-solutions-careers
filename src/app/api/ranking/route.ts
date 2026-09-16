@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     const { data: evs, error: eErr } = await supabaseAdmin
       .from("ht_candidate_evaluations")
       .select(
-        "candidate_id, rubrica_key, rubrica_version, run_at, capacidad_puntaje, capacidad_cobertura, ajuste_puntaje, ajuste_cobertura, bloqueado_por, semaforo, veredictos",
+        "candidate_id, rubrica_key, rubrica_version, run_at, capacidad_puntaje, capacidad_cobertura, ajuste_puntaje, ajuste_cobertura, bloqueado_por, semaforo, veredictos, niveles_manuales",
       )
       .in("candidate_id", ids)
       .order("run_at", { ascending: false });
@@ -97,6 +97,9 @@ export async function GET(req: NextRequest) {
               ajuste_cobertura: ev.ajuste_cobertura,
               bloqueado_por: ev.bloqueado_por ?? [],
               semaforo: ev.semaforo,
+              // Lo que ya cargó Wellness, para que la tabla de carga muestre
+              // lo que hay en vez de dejarlo en blanco y provocar que se pise.
+              niveles_manuales: ev.niveles_manuales ?? {},
               preguntas_pendientes: pendientes,
             }
           : null,

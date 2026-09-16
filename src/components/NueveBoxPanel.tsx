@@ -33,6 +33,8 @@ import {
 } from "@/lib/nuevebox";
 import { pedirAbrirCandidato } from "@/lib/abrirCandidato";
 import { normalizeStage, stageLabel, stageOrder } from "@/lib/stage-labels";
+import { getRubrica, rubricaDeVacante } from "@/lib/rubricas";
+import CargaDeSala from "./CargaDeSala";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
@@ -46,13 +48,14 @@ type Evaluacion = {
   ajuste_cobertura: number | null;
   bloqueado_por: string[];
   semaforo: string;
+  niveles_manuales: Record<string, number> | null;
   preguntas_pendientes: string[];
 };
 
 type Fila = { id: string; nombre: string; etapa: string | null; evaluacion: Evaluacion | null };
 type Vacante = { id: string; title: string; status?: string };
 
-type Momento = "avance" | "terna";
+type Momento = "avance" | "terna" | "cargar";
 
 /**
  * Qué etapas mira cada momento. Sale de stage-labels, que es la fuente única
@@ -65,6 +68,7 @@ type Momento = "avance" | "terna";
 const POBLACION: Record<Momento, { min: number; max: number; nota: string }> = {
   avance: { min: 5, max: 6, nota: "Batería y assessment presencial · los que todavía no han sido entrevistados" },
   terna: { min: 7, max: 8, nota: "Entrevista de reclutador en adelante · los que ya tienen evidencia de ajuste" },
+  cargar: { min: 5, max: 6, nota: "Batería y assessment presencial · los que pasaron por la sala" },
 };
 
 function n2(x: number | null | undefined) {
@@ -319,6 +323,18 @@ export default function NueveBoxPanel() {
     window.location.hash = "funnel";
   }
 
+  // La rúbrica sale del título de la vacante seleccionada, igual que en la
+  // ficha del candidato. Una sola regla, en un solo lugar.
+  const rubrica = useMemo(() => {
+    const t = vacantes.find((v) => v.id === vacId)?.title;
+    const porTitulo = rubricaDeVacante(t);
+    if (porTitulo) return porTitulo;
+    // Si alguien ya tiene evaluación, esa evaluación dice con qué rúbrica se
+    // corrió: vale más que adivinar por el título.
+    const k = filas.find((f) => f.evaluacion?.rubrica_key)?.evaluacion?.rubrica_key;
+    return k ? getRubrica(k) : undefined;
+  }, [vacantes, vacId, filas]);
+
   // ── Población: solo los que llegaron al punto donde esta decisión existe ──
   const rango = POBLACION[momento];
   const { dentro, fuera } = useMemo(() => {
@@ -394,6 +410,7 @@ export default function NueveBoxPanel() {
         {([
           ["avance", "¿Quién pasa a entrevista?", "Decide la capacidad sola"],
           ["terna", "¿Quién entra a la terna?", "9-box · los dos ejes"],
+          ["cargar", "Cargar notas de la sala", "Assessment y juego de roles"],
         ] as [Momento, string, string][]).map(([id, t, s]) => (
           <button
             key={id}
@@ -452,6 +469,26 @@ export default function NueveBoxPanel() {
                 <GrupoAvance key={v} veredicto={v} gente={porVeredicto(v)} onVer={verEnFunnel} />
               ))}
             </div>
+          )}
+
+          {/* ══ CARGA DE LA SALA ══ */}
+          {momento === "cargar" && (
+            rubrica ? (
+              <CargaDeSala
+                rubrica={rubrica}
+                candidatos={dentro.map((f) => ({
+                  id: f.id,
+                  nombre: f.nombre,
+                  niveles: f.evaluacion?.niveles_manuales ?? null,
+                  tieneEvaluacion: !!f.evaluacion,
+                }))}
+                onGuardado={cargar}
+              />
+            ) : (
+              <p className="mt-5 text-sm text-gray-500 italic">
+                Esta vacante no tiene rúbrica, así que no hay criterios que cargar.
+              </p>
+            )
           )}
 
           {/* ══ MOMENTO 2 ══ */}
@@ -518,8 +555,11 @@ export default function NueveBoxPanel() {
             </>
           )}
 
-          {/* ── Los que no entran, en cualquiera de los dos momentos ── */}
-          {(bloqueados.length > 0 || sinEvidencia.length > 0 || sinEvaluar.length > 0) && (
+          {/* ── Los que no entran, en cualquiera de los dos momentos de decisión.
+                 En la carga no van: ahí todavía no hay nada que decidir, y
+                 repetir a la misma gente abajo solo confunde. ── */}
+          {momento !== "cargar" &&
+            (bloqueados.length > 0 || sinEvidencia.length > 0 || sinEvaluar.length > 0) && (
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               <Bandeja
                 titulo="Bloqueados"
@@ -549,8 +589,9 @@ export default function NueveBoxPanel() {
             </p>
           )}
 
-          {/* ── Las reglas, a la vista ── */}
-          <div className="mt-8 border-t border-gray-200 pt-4">
+          {/* ── Las reglas, a la vista. En la carga no aplican: ahí la
+                 referencia son las anclas, que están en la tabla. ── */}
+          <div className={"mt-8 border-t border-gray-200 pt-4 " + (momento === "cargar" ? "hidden" : "")}>
             <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-2">
               Con qué se decide
             </p>

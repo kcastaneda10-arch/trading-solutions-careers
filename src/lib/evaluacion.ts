@@ -63,6 +63,20 @@ export function criteriosDeWellness(r: Rubrica): { bloque: Bloque; criterio: Cri
 }
 
 /**
+ * Lo que se calificó EN LA SALA: assessment y juego de roles.
+ *
+ * Es un subconjunto de los criterios de Wellness — quedan fuera los de
+ * entrevista, que todavía no ocurrió. Existe para poder cargar una jornada de
+ * assessment de corrido, con la planilla del evaluador al lado, en vez de
+ * entrar a ocho fichas y bajar hasta el final en cada una.
+ */
+export function criteriosDeLaSala(r: Rubrica): { bloque: Bloque; criterio: Criterio }[] {
+  return criteriosDeWellness(r).filter(
+    ({ criterio }) => criterio.fuente === "assessment" || criterio.fuente === "roles",
+  );
+}
+
+/**
  * El semáforo mira LOS DOS ejes, no solo el que ordena la terna.
  *
  * Mirando solo capacidad, un candidato con el assessment y el juego de roles ya
