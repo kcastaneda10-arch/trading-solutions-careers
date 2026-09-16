@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest) {
       ajuste_puntaje: aju.puntaje,
       ajuste_cobertura: aju.cobertura,
       bloqueado_por: cap.bloqueado,
-      semaforo: semaforo(cap.cobertura, cap.bloqueado),
+      semaforo: semaforo(cap.cobertura, aju.cobertura, cap.bloqueado),
       documentos_leidos: prev?.documentos_leidos ?? [],
       documentos_omitidos: prev?.documentos_omitidos ?? [],
     };
@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
 
     const cap = calcularEje(rubrica.capacidad, niveles);
     const aju = calcularEje(rubrica.ajuste, niveles);
-    const sem = semaforo(cap.cobertura, cap.bloqueado);
+    const sem = semaforo(cap.cobertura, aju.cobertura, cap.bloqueado);
 
     const fila = {
       candidate_id: candidateId,

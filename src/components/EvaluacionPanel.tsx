@@ -266,12 +266,18 @@ export default function EvaluacionPanel({
   const deWellness = criteriosDeWellness(rubrica);
   const pendientes = (ev?.veredictos ?? []).filter((v) => v.estado === "sin_evidencia" && v.pregunta);
 
-  // Agrupar los criterios del agente por bloque, para que se lea con la misma
-  // estructura que la pestaña Rúbricas.
-  const bloques: { bloque: Bloque; criterios: Criterio[] }[] = [];
+  // Agrupar por EJE y luego por bloque. El eje tiene que estar a la vista: un
+  // «20 %» de capacidad junto a un «85 %» de ajuste, sin decir a qué eje
+  // pertenece cada uno, se lee como si sumaran — y no suman.
+  const ejes: { titulo: string; grupos: { bloque: Bloque; criterios: Criterio[] }[] }[] = [
+    { titulo: "Capacidad", grupos: [] },
+    { titulo: "Ajuste · TS Standard", grupos: [] },
+  ];
+  const idsCapacidad = new Set(rubrica.capacidad.map((b) => b.id));
   for (const { bloque, criterio } of delAgente) {
-    let g = bloques.find((x) => x.bloque.id === bloque.id);
-    if (!g) { g = { bloque, criterios: [] }; bloques.push(g); }
+    const eje = ejes[idsCapacidad.has(bloque.id) ? 0 : 1];
+    let g = eje.grupos.find((x) => x.bloque.id === bloque.id);
+    if (!g) { g = { bloque, criterios: [] }; eje.grupos.push(g); }
     g.criterios.push(criterio);
   }
 
@@ -371,16 +377,27 @@ export default function EvaluacionPanel({
           </button>
 
           {abierto && (
-            <div className="mt-2 space-y-3">
-              {bloques.map((g) => (
-                <div key={g.bloque.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center gap-2">
-                    <span className="text-[12.5px] font-bold text-gray-900">{g.bloque.nombre}</span>
-                    <span className="ml-auto font-mono text-[11px] text-gray-500">{g.bloque.peso}%</span>
-                  </div>
-                  <div className="px-3">
-                    {g.criterios.map((c) => (
-                      <FilaVeredicto key={c.id} c={c} v={porId.get(c.id)} />
+            <div className="mt-2 space-y-4">
+              {ejes.filter((e) => e.grupos.length > 0).map((e) => (
+                <div key={e.titulo}>
+                  <p className="text-[10.5px] uppercase tracking-wider font-bold text-gray-400 mb-1.5">
+                    Eje de {e.titulo}
+                  </p>
+                  <div className="space-y-2">
+                    {e.grupos.map((g) => (
+                      <div key={g.bloque.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center gap-2">
+                          <span className="text-[12.5px] font-bold text-gray-900">{g.bloque.nombre}</span>
+                          <span className="ml-auto font-mono text-[11px] text-gray-500">
+                            {g.bloque.peso}% del eje
+                          </span>
+                        </div>
+                        <div className="px-3">
+                          {g.criterios.map((c) => (
+                            <FilaVeredicto key={c.id} c={c} v={porId.get(c.id)} />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -401,8 +418,15 @@ export default function EvaluacionPanel({
             </p>
           </div>
           <div className="px-3 py-1">
-            {deWellness.map(({ criterio: c }) => (
-              <div key={c.id} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-b-0">
+            {deWellness.map(({ bloque, criterio: c }, i, arr) => (
+              <div key={c.id}>
+                {/* Rótulo del eje cuando cambia, para no mezclar capacidad con ajuste. */}
+                {(i === 0 || idsCapacidad.has(arr[i - 1].bloque.id) !== idsCapacidad.has(bloque.id)) && (
+                  <p className="text-[10.5px] uppercase tracking-wider font-bold text-gray-400 pt-2.5 pb-0.5">
+                    Eje de {idsCapacidad.has(bloque.id) ? "capacidad" : "ajuste · TS Standard"}
+                  </p>
+                )}
+                <div className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-b-0">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-semibold text-gray-900">{c.nombre}</span>
@@ -429,6 +453,7 @@ export default function EvaluacionPanel({
                     <option key={n} value={String(n)}>{n}</option>
                   ))}
                 </select>
+                </div>
               </div>
             ))}
           </div>

@@ -62,12 +62,21 @@ export function criteriosDeWellness(r: Rubrica): { bloque: Bloque; criterio: Cri
   return out;
 }
 
+/**
+ * El semáforo mira LOS DOS ejes, no solo el que ordena la terna.
+ *
+ * Mirando solo capacidad, un candidato con el assessment y el juego de roles ya
+ * cargados salía «listo para decidir» con el TS Standard en 36 %: la pantalla
+ * afirmando que hay con qué decidir cuando falta la entrevista entera. Es
+ * exactamente el error que este instrumento existe para no cometer.
+ */
 export function semaforo(
-  cobertura: number,
+  coberturaCapacidad: number,
+  coberturaAjuste: number,
   bloqueado: string[],
 ): Semaforo {
   if (bloqueado.length > 0) return "bloqueado";
-  return cobertura >= 100 ? "listo" : "falta_evidencia";
+  return coberturaCapacidad >= 100 && coberturaAjuste >= 100 ? "listo" : "falta_evidencia";
 }
 
 export const SEMAFORO_LABEL: Record<Semaforo, string> = {
