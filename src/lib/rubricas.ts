@@ -320,6 +320,22 @@ export function getRubrica(key: string): Rubrica | undefined {
   return RUBRICAS.find((r) => r.key === key);
 }
 
+/**
+ * Qué rúbrica le corresponde a una vacante.
+ *
+ * Por ahora se resuelve por el título, que es lo que hay. Cuando haya más de
+ * una rúbrica esto pasa a ser una columna en `ht_vacancies`: amarrar una
+ * calificación a una coincidencia de texto envejece mal. Devuelve `undefined`
+ * cuando el cargo no tiene rúbrica, y la pantalla lo dice en vez de calificar
+ * con la regla de otro cargo.
+ */
+export function rubricaDeVacante(titulo?: string | null): Rubrica | undefined {
+  const t = (titulo || "").toLowerCase();
+  if (!t) return undefined;
+  if (t.includes("sig") || t.includes("sst")) return SIG_SST;
+  return undefined;
+}
+
 /** Peso efectivo de un criterio dentro de su eje, en puntos sobre 100. */
 export function pesoEfectivo(bloque: Bloque, criterio: Criterio): number {
   return (bloque.peso * criterio.peso) / 100;

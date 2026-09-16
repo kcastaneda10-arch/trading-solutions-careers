@@ -11,6 +11,8 @@ import RejectionModal from "./RejectionModal";
 import RecruiterAssessmentCard from "./RecruiterAssessmentCard";
 import JointSchedulingModal from "./JointSchedulingModal";
 import CandidateFilesBlock from "./CandidateFilesBlock";
+import EvaluacionPanel from "./EvaluacionPanel";
+import { rubricaDeVacante } from "@/lib/rubricas";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -1959,6 +1961,15 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
 
           {/* Evidencia del proceso · vive aquí para que el expediente quede completo */}
           <CandidateFilesBlock candidateId={cand.id} candidateName={cand.name} />
+
+          {/* La calificación va debajo de la evidencia, y no al revés: el orden
+              en pantalla es el orden del argumento. */}
+          {rubricaDeVacante(cand.ht_vacancies?.title) && (
+            <EvaluacionPanel
+              candidateId={cand.id}
+              rubricaKey={rubricaDeVacante(cand.ht_vacancies?.title)!.key}
+            />
+          )}
         </div>
       </div>
     </div>
