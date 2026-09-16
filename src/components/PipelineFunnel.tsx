@@ -10,6 +10,7 @@ import {
 import RejectionModal from "./RejectionModal";
 import RecruiterAssessmentCard from "./RecruiterAssessmentCard";
 import JointSchedulingModal from "./JointSchedulingModal";
+import CandidateFilesBlock from "./CandidateFilesBlock";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -1955,6 +1956,9 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
               <p className="text-sm text-gray-500 italic">Aún no ha completado el prefiltro.</p>
             </div>
           )}
+
+          {/* Evidencia del proceso · vive aquí para que el expediente quede completo */}
+          <CandidateFilesBlock candidateId={cand.id} candidateName={cand.name} />
         </div>
       </div>
     </div>
