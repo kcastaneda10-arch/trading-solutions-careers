@@ -38,7 +38,7 @@ export async function GET(
  * Updates whitelisted fields on a candidate. Currently supports: vacancy_id, name, email, phone, stage, status.
  * Used for cases like switching a candidate to a different vacancy.
  */
-const ALLOWED_PATCH_FIELDS = ["vacancy_id", "name", "email", "phone", "stage", "status"];
+const ALLOWED_PATCH_FIELDS = ["vacancy_id", "name", "email", "phone", "stage", "status", "preferred_language"];
 
 export async function PATCH(
   req: NextRequest,
@@ -57,6 +57,14 @@ export async function PATCH(
     for (const k of ALLOWED_PATCH_FIELDS) {
       if (body[k] !== undefined) updates[k] = body[k];
     }
+    // La columna tiene CHECK (es|en) · sin esto un valor raro devuelve un 500 crudo.
+    if (updates.preferred_language !== undefined) {
+      const lang = String(updates.preferred_language || "").toLowerCase();
+      if (lang !== "es" && lang !== "en") {
+        return NextResponse.json({ error: "preferred_language debe ser 'es' o 'en'" }, { status: 400 });
+      }
+      updates.preferred_language = lang;
+    }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Sin campos válidos para actualizar' }, { status: 400 });
     }
@@ -66,7 +74,7 @@ export async function PATCH(
       .from('ht_candidates')
       .update(updates)
       .eq('id', candidateId)
-      .select('id, name, email, vacancy_id, stage, status')
+      .select('id, name, email, vacancy_id, stage, status, preferred_language')
       .single();
 
     if (error) {

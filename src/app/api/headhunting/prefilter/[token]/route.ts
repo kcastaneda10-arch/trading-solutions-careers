@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected, sendViaGmail } from "@/lib/gmail";
 import { recordStageEvent } from "@/lib/stage-events";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 
 // Techos por vacancy_id (en COP mensuales)
 const SALARY_CAPS: Record<string, number> = {
@@ -158,7 +159,7 @@ function buildRejectionHtmlEn(name: string, clientName: string, vacancyTitle: st
     <p>Thank you for taking the time to apply for the <strong>${vacancyTitle}</strong> position at ${clientName}. After reviewing your application, we have decided to move forward with other candidates whose profile is a closer match for the position at this time. However, ${clientName} is always growing and we'd love to keep in touch.</p>
     <p>Your information stays in our database for future opportunities. We also invite you to follow us on LinkedIn to stay updated on new openings: <a href="${TS_LINKEDIN_URL}">${TS_LINKEDIN_URL}</a></p>
     <p>We appreciate your interest in ${clientName} and thank you again. We sincerely wish you all the best in your future endeavors.</p>
-    <p>Regards,<br><strong>Kelly Castañeda</strong><br>Talent Acquisition and Development Lead<br>${clientName}</p>
+    <p>Best regards,<br><strong>Talent Team</strong><br>${clientName}</p>
   </div>
 </body></html>`;
 }
@@ -216,7 +217,7 @@ export async function POST(
 
   const { data: candidate, error } = await supabaseAdmin
     .from("ht_candidates")
-    .select("id, name, email, vacancy_id, stage, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title, form_template_key)")
+    .select("id, name, email, vacancy_id, stage, preferred_language, prefilter_token_expires_at, prefilter_completed_at, ht_clients(name), ht_vacancies(title, form_template_key, country)")
     .eq("prefilter_token", params.token)
     .single();
 
@@ -411,8 +412,17 @@ export async function POST(
   if (decision === "reject") {
     updates.status = "rejected";
 
-    // Auto-detectar idioma desde lo que el candidato escribió en el form
-    const lang = detectLanguage(body.why_ts, body.next_role, body.extra, body.english_cert);
+    // El idioma del proceso manda: en China el candidato no habla español, así
+    // que el descarte sale en inglés aunque haya escrito poco en el formulario.
+    // Fuera de China se sigue detectando por lo que escribió.
+    const lang = resolveCandidateLang({
+      formTemplateKey: templateKey,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: (candidate as any).ht_vacancies?.title,
+      country: (candidate as any).ht_vacancies?.country,
+    }) === "en"
+      ? "en"
+      : detectLanguage(body.why_ts, body.next_role, body.extra, body.english_cert);
     // @ts-expect-error supabase relation
     const clientName = candidate.ht_clients?.name || "Trading Solutions";
     // @ts-expect-error supabase relation
@@ -431,7 +441,7 @@ export async function POST(
           to: candidate.email as string,
           subject,
           html,
-          fromName: "Kelly Castañeda",
+          fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
         });
         if (draftRes.ok) {
           updates.rejection_draft_id = draftRes.draft_id;

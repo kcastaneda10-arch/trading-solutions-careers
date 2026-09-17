@@ -8,6 +8,7 @@
 import { neon } from "@neondatabase/serverless";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPortalToken, isValidSignatureFor } from "@/lib/portal-token";
+import { resolveCandidateLang, type CandidateLang } from "@/lib/candidate-lang";
 
 export const runtime = "nodejs";
 
@@ -21,8 +22,9 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// Mapeo de status interno → step visible al candidato
-const STAGE_FLOW = [
+// Mapeo de status interno → step visible al candidato.
+// Las vacantes de China corren en inglés · el portal también.
+const STAGE_FLOW_ES = [
   { key: "received", label: "Aplicación recibida", icon: "📨" },
   { key: "review", label: "En revisión por nuestro equipo", icon: "🔍" },
   { key: "assessment", label: "Evaluación psicométrica", icon: "📝" },
@@ -31,22 +33,32 @@ const STAGE_FLOW = [
   { key: "hired", label: "Bienvenido al equipo", icon: "✨" },
 ];
 
-function statusToStage(status: string): { current: number; descriptor: string } {
+const STAGE_FLOW_EN = [
+  { key: "received", label: "Application received", icon: "📨" },
+  { key: "review", label: "Under review by our team", icon: "🔍" },
+  { key: "assessment", label: "Assessment", icon: "📝" },
+  { key: "interview", label: "Interview", icon: "💬" },
+  { key: "offer", label: "Offer", icon: "🎉" },
+  { key: "hired", label: "Welcome to the team", icon: "✨" },
+];
+
+function statusToStage(status: string, lang: CandidateLang): { current: number; descriptor: string } {
+  const en = lang === "en";
   switch (status) {
     case "new":
-      return { current: 1, descriptor: "Tu aplicación está en revisión por nuestro equipo." };
+      return { current: 1, descriptor: en ? "Your application is being reviewed by our team." : "Tu aplicación está en revisión por nuestro equipo." };
     case "reviewing":
-      return { current: 1, descriptor: "Estás en revisión activa. En los próximos días te contactaremos con el siguiente paso." };
+      return { current: 1, descriptor: en ? "You are under active review. We'll contact you with the next step in the coming days." : "Estás en revisión activa. En los próximos días te contactaremos con el siguiente paso." };
     case "interview":
-      return { current: 3, descriptor: "Has avanzado a entrevista. Revisa tu correo para agendar." };
+      return { current: 3, descriptor: en ? "You have moved forward to the interview stage. Please check your email to schedule it." : "Has avanzado a entrevista. Revisa tu correo para agendar." };
     case "offer":
-      return { current: 4, descriptor: "Estamos cerrando los detalles de tu oferta." };
+      return { current: 4, descriptor: en ? "We are finalizing the details of your offer." : "Estamos cerrando los detalles de tu oferta." };
     case "hired":
-      return { current: 5, descriptor: "¡Bienvenido al equipo Trading Solutions!" };
+      return { current: 5, descriptor: en ? "Welcome to the Trading Solutions team!" : "¡Bienvenido al equipo Trading Solutions!" };
     case "rejected":
-      return { current: -1, descriptor: "Esta aplicación fue cerrada. Te invitamos a explorar otras vacantes." };
+      return { current: -1, descriptor: en ? "This application was closed. We invite you to explore our other openings." : "Esta aplicación fue cerrada. Te invitamos a explorar otras vacantes." };
     default:
-      return { current: 0, descriptor: "Tu aplicación fue recibida." };
+      return { current: 0, descriptor: en ? "Your application was received." : "Tu aplicación fue recibida." };
   }
 }
 
@@ -100,12 +112,17 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     try {
       const vRows = await sql`SELECT title_es, title, location FROM vacancies WHERE id = ${app.job_id} LIMIT 1`;
       if (vRows.length > 0) {
-        vacancyTitle = (vRows[0].title_es as string) ?? (vRows[0].title as string) ?? app.job_title;
+        // En inglés se prefiere el título en inglés de la vacante.
+        vacancyTitle = resolveCandidateLang({ jobId: app.job_id, jobTitle: app.job_title, country: (vRows[0].location as string) ?? null }) === "en"
+          ? ((vRows[0].title as string) ?? (vRows[0].title_es as string) ?? app.job_title)
+          : ((vRows[0].title_es as string) ?? (vRows[0].title as string) ?? app.job_title);
         vacancyLocation = (vRows[0].location as string) ?? null;
       }
     } catch { /* ignore */ }
 
-    const stageInfo = statusToStage(app.status);
+    const lang = resolveCandidateLang({ jobId: app.job_id, jobTitle: app.job_title, country: vacancyLocation });
+    const STAGE_FLOW = lang === "en" ? STAGE_FLOW_EN : STAGE_FLOW_ES;
+    const stageInfo = statusToStage(app.status, lang);
     // Si tiene assessment_completed pero status sigue en reviewing/new, ajustar visualización
     const showAssessment = assessment !== null;
 
@@ -144,6 +161,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
           applied_at: app.created_at,
           last_update: app.updated_at,
         },
+        lang,
         stages: stageOrder,
         descriptor: stageInfo.descriptor,
         assessment: showAssessment ? assessment : null,

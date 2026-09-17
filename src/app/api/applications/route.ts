@@ -9,6 +9,7 @@ import { recordStageEvent } from "@/lib/stage-events";
 // La resolución job_id → vacancy_id es compartida con
 // /api/admin/sync-applications-to-funnel · no duplicarla acá.
 import { resolveVacancyId } from "@/lib/vacancy-map";
+import { resolveCandidateLang } from "@/lib/candidate-lang";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
 
@@ -163,8 +164,21 @@ export async function POST(request: NextRequest) {
         } catch { /* config no existe aún — usa defaults */ }
 
         const firstName = full_name.split(' ')[0];
-        const subject = `Trading Solutions · Recibimos tu aplicación a ${job_title}`;
-        const html = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#1a1a1a;background:#f5f5f5;margin:0;padding:0">
+        // Las vacantes de China corren en inglés · mandarles el acuse en
+        // español es escribirles en un idioma que no hablan.
+        // Misma señal que el portal del candidato: id, título y ubicación de
+        // la vacante. Si difieren, el acuse y el portal saldrían en idiomas
+        // distintos para la misma aplicación.
+        let jobLocation: string | null = null;
+        try {
+          const locRows = await sql`SELECT location FROM vacancies WHERE id = ${job_id} LIMIT 1`;
+          if (locRows.length > 0) jobLocation = (locRows[0].location as string) ?? null;
+        } catch { /* si no se puede leer, quedan el id y el título */ }
+        const lang = resolveCandidateLang({ jobId: job_id, jobTitle: job_title, country: jobLocation });
+        const subject = lang === "en"
+          ? `Trading Solutions · We received your application for ${job_title}`
+          : `Trading Solutions · Recibimos tu aplicación a ${job_title}`;
+        const htmlEs = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#1a1a1a;background:#f5f5f5;margin:0;padding:0">
 <div style="max-width:600px;margin:0 auto;background:#ffffff">
   <div style="background:#0F172A;padding:28px;text-align:center"><h1 style="color:#fff;font-size:22px;margin:0;font-weight:600">Trading Solutions</h1></div>
   <div style="padding:32px">
@@ -185,6 +199,30 @@ export async function POST(request: NextRequest) {
   </div>
   <div style="padding:18px 32px;text-align:center;color:#999;font-size:12px;border-top:1px solid #eee">Boutique Freight Forwarder · Operación en +10 países</div>
 </div></body></html>`;
+
+        const htmlEn = `<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#1a1a1a;background:#f5f5f5;margin:0;padding:0">
+<div style="max-width:600px;margin:0 auto;background:#ffffff">
+  <div style="background:#0F172A;padding:28px;text-align:center"><h1 style="color:#fff;font-size:22px;margin:0;font-weight:600">Trading Solutions</h1></div>
+  <div style="padding:32px">
+    <p>Hi ${firstName},</p>
+    <p>Thank you for applying for <strong>${job_title}</strong> at Trading Solutions. We received your application and our team is reviewing it.</p>
+    <div style="background:#EBF0FF;border-radius:8px;padding:16px;margin:16px 0">
+      <p style="margin:0 0 8px"><strong>What we commit to:</strong></p>
+      <ul style="margin:0;padding-left:20px">
+        <li>We get back to you within <strong>7 business days</strong>, either way</li>
+        <li>If you don't move forward, we tell you why, honestly and respectfully</li>
+        <li>Your information stays confidential</li>
+      </ul>
+    </div>
+    <p>You can check the status of your application at any time:</p>
+    <p style="text-align:center"><a href="${portalLink}" style="display:inline-block;background:#2C64ED;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600">View my process</a></p>
+    <p style="font-size:12px;color:#666">If you have any questions, just reply to this email.</p>
+    <p style="margin-top:24px">Best regards,<br><strong>Talent Team · Trading Solutions</strong></p>
+  </div>
+  <div style="padding:18px 32px;text-align:center;color:#999;font-size:12px;border-top:1px solid #eee">Boutique Freight Forwarder · Operations in 10+ countries</div>
+</div></body></html>`;
+
+        const html = lang === "en" ? htmlEn : htmlEs;
 
         // Preferir Gmail si está conectado
         const gmail = await isGmailConnected();

@@ -10,6 +10,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 import { recordStageEvent } from "@/lib/stage-events";
 import crypto from "crypto";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 
 export async function POST(
   req: NextRequest,
@@ -23,7 +24,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("*, ht_vacancies(title), ht_clients(name)")
+      .select("*, ht_vacancies(title, form_template_key, country), ht_clients(name)")
       .eq("id", candidateId)
       .single();
 
@@ -60,8 +61,16 @@ export async function POST(
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
     const formUrl = `${baseUrl}/prefiltro/${token}`;
-    const firstName = (candidate.name || "").split(" ")[0] || "candidato";
-    const vacancyTitle = candidate.ht_vacancies?.title || "la vacante";
+    const rawVacancyTitle = (candidate as any).ht_vacancies?.title as string | undefined;
+    // El proceso de China corre en inglés · el candidato no habla español.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: rawVacancyTitle,
+      country: (candidate as any).ht_vacancies?.country,
+    });
+    const vacancyTitle = rawVacancyTitle || (lang === "en" ? "the position" : "la vacante");
+    const firstName = (candidate.name || "").split(" ")[0] || (lang === "en" ? "there" : "candidato");
 
     const gmailStatus = await isGmailConnected();
     if (!gmailStatus.connected) {
@@ -74,6 +83,30 @@ export async function POST(
         note: "Gmail no conectado — copia el link manualmente.",
       });
     }
+
+    const htmlEn = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 24px; background: #f9f9f9; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  .cta { display: inline-block; background: #2C64ED; color: white !important; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 16px 0; }
+  .footer { margin-top: 24px; color: #999; font-size: 12px; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>Thank you for your interest in joining Trading Solutions and in the <strong>${vacancyTitle}</strong> position.</p>
+    <p>As a first step in our process, we ask you to complete a short questionnaire that helps us get to know you better. It takes <strong>7-10 minutes</strong>.</p>
+    <p style="text-align:center"><a href="${formUrl}" class="cta">Complete the questionnaire</a></p>
+    <p>Details:</p>
+    <ul>
+      <li>Estimated time: 7-10 minutes</li>
+      <li>The link is valid for 7 days</li>
+      <li>Your answers are saved automatically</li>
+    </ul>
+    <p>If you have any questions, just reply to this email.</p>
+    <p>Best regards,<br><strong>Talent Team</strong><br>Trading Solutions</p>
+    <div class="footer">This link is personal and non-transferable.</div>
+  </div>
+</body></html>`;
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -101,9 +134,11 @@ export async function POST(
 
     const draftRes = await createDraftViaGmail({
       to: candidate.email,
-      subject: `Trading Solutions · Cuestionario inicial para ${candidate.name}`,
-      html,
-      fromName: "Kelly Castañeda",
+      subject: lang === "en"
+        ? `Trading Solutions · Pre-screening questionnaire for ${vacancyTitle}`
+        : `Trading Solutions · Cuestionario inicial para ${candidate.name}`,
+      html: lang === "en" ? htmlEn : html,
+      fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
     });
 
     if (!draftRes.ok) {

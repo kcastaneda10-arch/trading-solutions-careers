@@ -26,8 +26,12 @@ import {
   buildRejectionHtml,
   rejectionSubject,
   REJECTION_FROM_NAME,
+  REJECTION_FROM_NAME_EN,
+  EN_REJECTION_BODY,
   REJECTION_REPLY_TO,
 } from "@/lib/rejection-email";
+import { resolveCandidateLang } from "@/lib/candidate-lang";
+
 
 export const runtime = "nodejs";
 
@@ -82,7 +86,7 @@ export async function POST(
     // Cargar candidato
     const { data: candidate, error: fetchErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, vacancy_id, stage, ht_vacancies(title)")
+      .select("id, name, email, vacancy_id, stage, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .maybeSingle();
 
@@ -90,9 +94,17 @@ export async function POST(
       return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
     }
 
-    // @ts-expect-error supabase relation
-    const vacancyTitle: string = candidate.ht_vacancies?.title || "la posición";
-    const firstName = (candidate.name || "").split(" ")[0] || "candidato";
+    // El idioma del proceso decide hasta los textos por defecto.
+    const candLang = resolveCandidateLang({
+      formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: (candidate as any).ht_vacancies?.title,
+      country: (candidate as any).ht_vacancies?.country,
+    });
+    const vacancyTitle: string =
+      ((candidate as any).ht_vacancies?.title as string) ||
+      (candLang === "en" ? "the position" : "la posición");
+    const firstName = (candidate.name || "").split(" ")[0] || (candLang === "en" ? "there" : "candidato");
 
     // Update candidato
     const updates: Record<string, unknown> = {
@@ -115,14 +127,19 @@ export async function POST(
         const gmail = await isGmailConnected();
         if (gmail.connected) {
           // El note_public manda; si no hay, usamos el template de la categoría
-          const messageBody = notePublic || category.public_message_template || "";
+          // En inglés, la plantilla de la categoría está en español: solo sirve
+          // el texto que el reclutador escribió para esta persona. Si no hay,
+          // se usa el cuerpo genérico en inglés en vez de mandarle español.
+          const messageBody = candLang === "en"
+            ? (notePublic || EN_REJECTION_BODY)
+            : (notePublic || category.public_message_template || "");
           if (messageBody) {
-            const html = buildRejectionHtml(firstName, vacancyTitle, messageBody);
+            const html = buildRejectionHtml(firstName, vacancyTitle, messageBody, candLang);
             const draftRes = await createDraftViaGmail({
               to: candidate.email as string,
-              subject: rejectionSubject(vacancyTitle),
+              subject: rejectionSubject(vacancyTitle, candLang),
               html,
-              fromName: REJECTION_FROM_NAME,
+              fromName: candLang === "en" ? REJECTION_FROM_NAME_EN : REJECTION_FROM_NAME,
               replyTo: REJECTION_REPLY_TO,
             });
             if (draftRes.ok) {

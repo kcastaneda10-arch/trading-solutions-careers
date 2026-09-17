@@ -14,7 +14,9 @@ import crypto from 'crypto';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createDraftViaGmail, isGmailConnected } from '@/lib/gmail';
-import { asuntoRecordatorio, htmlRecordatorio, textoRecordatorio, FIRMA_RECORDATORIO } from '@/lib/recordatorio-prefiltro';
+import { asuntoRecordatorio, htmlRecordatorio, textoRecordatorio, FIRMA_RECORDATORIO,
+  asuntoRecordatorioEn, htmlRecordatorioEn, EN_REMINDER_SIGNATURE } from '@/lib/recordatorio-prefiltro';
+import { resolveCandidateLang } from '@/lib/candidate-lang';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,8 +26,11 @@ type Modo = 'previsualizar' | 'borrador';
 
 const DIAS_VIGENCIA = 7;
 
-function formatoFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' });
+function formatoFecha(iso: string, lang: 'es' | 'en' = 'es'): string {
+  return new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-CO', {
+    day: 'numeric',
+    month: 'long',
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -71,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     const { data: cands, error } = await supabaseAdmin
       .from('ht_candidates')
-      .select('id, name, email, prefilter_token, prefilter_token_expires_at, prefilter_completed_at, ht_vacancies(title)')
+      .select('id, name, email, preferred_language, prefilter_token, prefilter_token_expires_at, prefilter_completed_at, ht_vacancies(title, form_template_key, country)')
       .in('id', ids.slice(0, 100));
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -111,13 +116,22 @@ export async function POST(req: NextRequest) {
       }
 
       const vacante = (c as any).ht_vacancies?.title ?? null;
-      const datos = { nombre, vacante, url: `${baseUrl}/prefiltro/${token}`, vence: vence ? formatoFecha(vence) : null };
+      // China corre en inglés · el recordatorio sigue el idioma del proceso.
+      const lang = resolveCandidateLang({
+        formTemplateKey: (c as any).ht_vacancies?.form_template_key,
+        preferredLanguage: (c as any).preferred_language,
+        jobTitle: vacante,
+        country: (c as any).ht_vacancies?.country,
+      });
+      const datos = { nombre, vacante, url: `${baseUrl}/prefiltro/${token}`, vence: vence ? formatoFecha(vence, lang) : null };
 
       const r = await createDraftViaGmail({
         to: c.email,
-        subject: asuntoRecordatorio(vacante),
-        html: htmlRecordatorio(datos),
-        fromName: `${FIRMA_RECORDATORIO} · Trading Solutions`,
+        subject: lang === 'en' ? asuntoRecordatorioEn(vacante) : asuntoRecordatorio(vacante),
+        html: lang === 'en' ? htmlRecordatorioEn(datos) : htmlRecordatorio(datos),
+        fromName: lang === 'en'
+          ? `${EN_REMINDER_SIGNATURE} · Trading Solutions`
+          : `${FIRMA_RECORDATORIO} · Trading Solutions`,
       });
 
       resultado.push({

@@ -24,8 +24,12 @@ import {
   buildRejectionHtml,
   rejectionSubject,
   REJECTION_FROM_NAME,
+  REJECTION_FROM_NAME_EN,
+  EN_REJECTION_BODY,
   REJECTION_REPLY_TO,
 } from "@/lib/rejection-email";
+import { resolveCandidateLang } from "@/lib/candidate-lang";
+
 
 export const runtime = "nodejs";
 
@@ -43,7 +47,7 @@ export async function POST(
     const { data: cand, error: fetchErr } = await supabaseAdmin
       .from("ht_candidates")
       .select(
-        "id, name, email, stage, status, rejection_category, rejection_note_public, rejection_sent_at, ht_vacancies(title)",
+        "id, name, email, stage, status, preferred_language, rejection_category, rejection_note_public, rejection_sent_at, ht_vacancies(title, form_template_key, country)",
       )
       .eq("id", params.candidateId)
       .maybeSingle();
@@ -70,9 +74,19 @@ export async function POST(
       );
     }
 
+    // China corre en inglés · el correo de descarte también.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (cand as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (cand as any).preferred_language,
+      jobTitle: (cand as any).ht_vacancies?.title,
+      country: (cand as any).ht_vacancies?.country,
+    });
+
     // El texto que se le escribió al rechazarlo manda; si no hay, se cae al
     // template de la categoría. Si tampoco hay, no inventamos un mensaje.
     let messageBody = (cand.rejection_note_public as string | null)?.trim() || "";
+    // Las plantillas de categoría están en español · en inglés no sirven.
+    if (!messageBody && lang === "en") messageBody = EN_REJECTION_BODY;
     if (!messageBody && cand.rejection_category) {
       const { data: cat } = await supabaseAdmin
         .from("ts_rejection_categories")
@@ -104,18 +118,20 @@ export async function POST(
       );
     }
 
-    // @ts-expect-error relación de supabase
-    const vacancyTitle: string = cand.ht_vacancies?.title || "la posición";
-    const firstName = (cand.name || "").split(" ")[0] || "candidato";
-    const html = buildRejectionHtml(firstName, vacancyTitle, messageBody);
-    const subject = rejectionSubject(vacancyTitle);
+    const vacancyTitle: string =
+      ((cand as any).ht_vacancies?.title as string) ||
+      (lang === "en" ? "the position" : "la posición");
+    const firstName = (cand.name || "").split(" ")[0] || (lang === "en" ? "there" : "candidato");
+    const html = buildRejectionHtml(firstName, vacancyTitle, messageBody, lang);
+    const subject = rejectionSubject(vacancyTitle, lang);
+    const fromName = lang === "en" ? REJECTION_FROM_NAME_EN : REJECTION_FROM_NAME;
 
     if (mode === "draft") {
       const res = await createDraftViaGmail({
         to: cand.email as string,
         subject,
         html,
-        fromName: REJECTION_FROM_NAME,
+        fromName,
         replyTo: REJECTION_REPLY_TO,
       });
       if (!res.ok) {
@@ -139,7 +155,7 @@ export async function POST(
       to: cand.email as string,
       subject,
       html,
-      fromName: REJECTION_FROM_NAME,
+      fromName,
       replyTo: REJECTION_REPLY_TO,
     });
     if (!res.ok) {

@@ -19,6 +19,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { resolveCandidateLang, isChinaProcess } from "@/lib/candidate-lang";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getResend, EMAIL_FROM, EMAIL_BCC } from "@/lib/resend";
 import { buildIcs, buildGoogleCalendarUrl } from "@/lib/ics";
@@ -31,6 +32,15 @@ const TYPE_LABEL: Record<string, string> = {
   area_lead: 'Entrevista con líder del área',
   wellness: 'Entrevista de Wellness / Fit cultural',
   final: 'Entrevista final',
+};
+
+const TYPE_LABEL_EN: Record<string, string> = {
+  recruiter: 'Recruiter interview',
+  cwo: 'Interview with the CWO',
+  technical: 'Technical interview',
+  area_lead: 'Interview with the hiring lead',
+  wellness: 'Wellness / culture fit interview',
+  final: 'Final interview',
 };
 
 export async function POST(
@@ -62,7 +72,7 @@ export async function POST(
     // Get candidate + vacancy
     const { data: cand, error: cErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, vacancy_id, ht_vacancies(title)")
+      .select("id, name, email, vacancy_id, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .single();
     if (cErr || !cand) {
@@ -72,6 +82,19 @@ export async function POST(
     // @ts-expect-error supabase relation
     const vacTitle: string = cand.ht_vacancies?.title || 'Trading Solutions';
     const typeLabel = TYPE_LABEL[body.interview_type];
+    // Idioma del proceso · China va en inglés y con la hora en su huso.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (cand as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (cand as any).preferred_language,
+      jobTitle: (cand as any).ht_vacancies?.title,
+      country: (cand as any).ht_vacancies?.country,
+    });
+    const typeLabelEn = TYPE_LABEL_EN[body.interview_type] || typeLabel;
+    const china = isChinaProcess({
+      formTemplateKey: (cand as any).ht_vacancies?.form_template_key,
+      jobTitle: (cand as any).ht_vacancies?.title,
+      country: (cand as any).ht_vacancies?.country,
+    });
     const icsUid = `ts-${crypto.randomBytes(8).toString('hex')}@tradingsolutions.com`;
 
     // Insert interview
@@ -100,9 +123,13 @@ export async function POST(
     const ev = {
       uid: icsUid,
       title: `${typeLabel} · ${vacTitle} · Trading Solutions`,
-      description: `Entrevista para la posición de ${vacTitle} en Trading Solutions.\n\n${
-        body.meeting_url ? `Link de la reunión: ${body.meeting_url}\n\n` : ''
-      }Si necesitas reagendar, responde a este correo. ¡Nos vemos!\n\nEquipo Talent Acquisition · Trading Solutions`,
+      description: lang === 'en'
+        ? `Interview for the ${vacTitle} position at Trading Solutions.\n\n${
+            body.meeting_url ? `Meeting link: ${body.meeting_url}\n\n` : ''
+          }If you need to reschedule, just reply to this email. See you there!\n\nTalent Team · Trading Solutions`
+        : `Entrevista para la posición de ${vacTitle} en Trading Solutions.\n\n${
+            body.meeting_url ? `Link de la reunión: ${body.meeting_url}\n\n` : ''
+          }Si necesitas reagendar, responde a este correo. ¡Nos vemos!\n\nEquipo Talent Acquisition · Trading Solutions`,
       start: scheduledAt,
       durationMinutes: duration,
       location: body.location,
@@ -131,7 +158,42 @@ export async function POST(
           timeZone: 'America/Bogota',
         });
 
-        const html = `
+        // En inglés se manda la hora local del candidato (China) y, entre
+        // paréntesis, la de Colombia: la reunión es entre los dos husos.
+        const fmtDateCn = scheduledAt.toLocaleString('en-US', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+          timeZone: china ? 'Asia/Shanghai' : 'America/Bogota',
+        });
+        const fmtDateCo = scheduledAt.toLocaleString('en-US', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota',
+        });
+
+        const htmlEn = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #111;">
+            <div style="background: #000; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 800; letter-spacing: 2px; font-size: 14px;">TRADING SOLUTIONS</div>
+            <div style="border: 1px solid #e5e5e5; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0 0 14px;">Hi ${cand.name?.split(' ')[0] || ''},</p>
+              <p style="margin: 0 0 14px; line-height: 1.55;">Your <strong>${typeLabelEn.toLowerCase()}</strong> for the <strong>${vacTitle}</strong> position is confirmed.</p>
+              <div style="background: #f5f5f5; border-left: 4px solid #000; padding: 14px 16px; margin: 16px 0; border-radius: 4px;">
+                <div style="font-size: 13px; line-height: 1.6;">
+                  <strong>📅 ${fmtDateCn}${china ? ' (China time)' : ' (Colombia time)'}</strong><br/>
+                  ${china ? `<span style="color:#555;">${fmtDateCo} Colombia time</span><br/>` : ''}
+                  <strong>⏱ Duration:</strong> ${duration} minutes<br/>
+                  ${body.meeting_url ? `<strong>🔗 Link:</strong> <a href="${body.meeting_url}" style="color: #2C64ED;">${body.meeting_url}</a><br/>` : ''}
+                  ${body.location ? `<strong>📍 Location:</strong> ${body.location}<br/>` : ''}
+                </div>
+              </div>
+              <div style="text-align: center; margin: 22px 0;">
+                <a href="${googleUrl}" style="display: inline-block; background: #2C64ED; color: #fff; padding: 12px 24px; text-decoration: none; font-weight: 700; border-radius: 8px; font-size: 13px;">📆 Add to Google Calendar</a>
+              </div>
+              <p style="margin: 16px 0 0; font-size: 12px; color: #555; line-height: 1.55;">The attached .ics file also works with Outlook, Apple Calendar and others. If you can't make it, please reply to this email as soon as possible so we can reschedule.</p>
+              <p style="margin: 22px 0 0; font-size: 12px; color: #888;">Talent Team · Trading Solutions</p>
+            </div>
+          </div>
+        `;
+
+        const htmlEs = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #111;">
             <div style="background: #000; color: #fff; padding: 16px 20px; border-radius: 8px 8px 0 0; font-weight: 800; letter-spacing: 2px; font-size: 14px;">TRADING SOLUTIONS</div>
             <div style="border: 1px solid #e5e5e5; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
@@ -154,11 +216,15 @@ export async function POST(
           </div>
         `;
 
+        const html = lang === 'en' ? htmlEn : htmlEs;
+
         const r = await getResend().emails.send({
           from: EMAIL_FROM,
           to: cand.email,
           bcc: EMAIL_BCC,
-          subject: `Trading Solutions · ${typeLabel} agendada para ${vacTitle}`,
+          subject: lang === 'en'
+            ? `Trading Solutions · ${typeLabelEn} scheduled for ${vacTitle}`
+            : `Trading Solutions · ${typeLabel} agendada para ${vacTitle}`,
           html,
           attachments: [
             {

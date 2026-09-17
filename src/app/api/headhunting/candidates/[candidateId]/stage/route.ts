@@ -18,8 +18,27 @@ import crypto from "crypto";
 // Las etapas válidas (v4 + legacy) viven en la fuente única de verdad.
 // No declarar listas de etapas acá.
 import { VALID_STAGES } from "@/lib/stage-labels";
+import { resolveCandidateLang } from "@/lib/candidate-lang";
 
 const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
+
+function buildRejectionHtmlEn(name: string, vacancyTitle: string): string {
+  const firstName = (name || "").split(" ")[0] || "candidate";
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: Inter, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; padding: 24px; background: #f9f9f9; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; }
+  a { color: #2C64ED; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>Thank you for taking the time to apply for the <strong>${vacancyTitle}</strong> position at Trading Solutions. After reviewing your application, we have decided to move forward with other candidates whose profile is a closer match for the position at this time. Trading Solutions keeps growing, and we would love to stay in touch.</p>
+    <p>Your information stays in our database for future opportunities. We also invite you to follow us on LinkedIn to hear about new openings: <a href="${TS_LINKEDIN_URL}">${TS_LINKEDIN_URL}</a></p>
+    <p>We appreciate your interest in Trading Solutions and wish you all the best in your next steps.</p>
+    <p>Best regards,<br><strong>Talent Team</strong><br>Trading Solutions</p>
+  </div>
+</body></html>`;
+}
 
 function buildRejectionHtml(name: string, vacancyTitle: string): string {
   const firstName = (name || "").split(" ")[0] || "candidato";
@@ -62,7 +81,7 @@ export async function POST(
     // Cargar candidato
     const { data: candidate, error: fetchErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, vacancy_id, stage, status, ht_vacancies(title)")
+      .select("id, name, email, vacancy_id, stage, status, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .single();
 
@@ -154,12 +173,24 @@ export async function POST(
         const gmail = await isGmailConnected();
         if (gmail.connected) {
           // @ts-expect-error supabase relation
-          const vacancyTitle = candidate.ht_vacancies?.title || "la posición";
+          const rawVacancyTitle = candidate.ht_vacancies?.title as string | undefined;
+          // El proceso de China corre en inglés · también el descarte.
+          const rejLang = resolveCandidateLang({
+            formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+            preferredLanguage: (candidate as any).preferred_language,
+            jobTitle: rawVacancyTitle,
+            country: (candidate as any).ht_vacancies?.country,
+          });
+          const vacancyTitle = rawVacancyTitle || (rejLang === "en" ? "the position" : "la posición");
           const draftRes = await createDraftViaGmail({
             to: candidate.email as string,
-            subject: `Trading Solutions · Sobre tu aplicación`,
-            html: buildRejectionHtml(candidate.name as string, vacancyTitle),
-            fromName: "Kelly Castañeda",
+            subject: rejLang === "en"
+              ? `Trading Solutions · About your application`
+              : `Trading Solutions · Sobre tu aplicación`,
+            html: rejLang === "en"
+              ? buildRejectionHtmlEn(candidate.name as string, vacancyTitle)
+              : buildRejectionHtml(candidate.name as string, vacancyTitle),
+            fromName: rejLang === "en" ? "Trading Solutions Talent Team" : "Kelly Castañeda",
           });
           if (draftRes.ok) {
             draftId = draftRes.draft_id;
