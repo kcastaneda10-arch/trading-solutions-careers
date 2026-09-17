@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     // ── Candidato y lo que la batería ya calculó ──
     const { data: cand, error: cErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, stage, headline, current_job_role, current_company, years_experience, english_level, skills, ht_results(*)")
+      .select("id, name, stage, headline, current_job_role, current_company, years_experience, english_level, skills, prefilter_data, ht_results(*)")
       .eq("id", candidateId)
       .maybeSingle<Record<string, unknown>>();
 
@@ -222,6 +222,23 @@ export async function POST(req: NextRequest) {
 
     // ── Contexto de texto: lo que ya está estructurado en el ATS ──
     const bat = (cand.ht_results as any[])?.[0] ?? null;
+
+    // Del prefiltro se manda lo que dice algo del cargo. Documento, teléfono y
+    // ciudad no entran: son datos de contacto, no evidencia, y varios de los
+    // campos vecinos son justamente los que la rúbrica prohíbe mirar.
+    const PREFILTRO_UTIL = [
+      "why_ts", "next_role", "extra", "availability", "english_level", "english_cert",
+      "edu_type", "years_logistics", "excel_level", "leadership", "team_size",
+      "license_status", "intl_clients", "crms", "pricing_exp", "years_sales",
+    ];
+    const pf = (cand.prefilter_data ?? null) as Record<string, unknown> | null;
+    const prefiltro = pf
+      ? JSON.stringify(
+          Object.fromEntries(
+            PREFILTRO_UTIL.filter((k) => pf[k] != null && pf[k] !== "").map((k) => [k, pf[k]]),
+          ),
+        ).slice(0, 2200)
+      : null;
     const contexto = [
       `Nombre: ${cand.name}`,
       cand.headline ? `Titular: ${cand.headline}` : "",
@@ -229,8 +246,15 @@ export async function POST(req: NextRequest) {
       cand.years_experience != null ? `Años de experiencia declarados: ${cand.years_experience}` : "",
       cand.english_level ? `Inglés declarado (sin verificar): ${cand.english_level}` : "",
       bat ? `Resultado de la batería ya calculado por el instrumento — NO lo recalcules, úsalo: ${JSON.stringify(bat).slice(0, 1800)}` : "Batería: no la ha presentado.",
+      // El prefiltro estaba en la base y el agente no lo veía. Es respuesta
+      // declarada en un formulario, no conducta observada, y va rotulado como
+      // tal para que no se use como prueba de algo que había que ver.
+      prefiltro
+        ? `Respuestas del prefiltro — DECLARADAS por la persona en un formulario, sirven para ubicar y para preguntar, NO como prueba de una conducta: ${prefiltro}`
+        : "Prefiltro: no lo ha respondido.",
       `Documentos leídos: ${leidos.join(", ")}`,
       omitidos.length ? `Documentos que NO se pudieron leer: ${omitidos.join(", ")}` : "",
+      `Tipos de documento en el expediente: ${adjuntos.map((f) => f.kind).join(", ") || "ninguno"}`,
     ].filter(Boolean).join("\n");
 
     const criterios = criteriosDelAgente(rubrica);
@@ -278,9 +302,15 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle<{ niveles_manuales: Record<string, number> | null }>();
 
+    // EL ORDEN IMPORTA Y ESTABA AL REVÉS.
+    // Primero el agente, y ENCIMA lo que cargó quien estuvo en la sala. Antes
+    // el agente pisaba el nivel manual, así que volver a correrlo borraba la
+    // calificación de una persona que sí vio el assessment. En los criterios
+    // que los dos pueden tocar, el que estuvo ahí manda.
     const manuales = prev?.niveles_manuales ?? {};
-    const niveles: Record<string, number | null> = { ...manuales };
+    const niveles: Record<string, number | null> = {};
     for (const v of completos) niveles[v.criterio_id] = v.nivel;
+    Object.assign(niveles, manuales);
 
     const cap = calcularEje(rubrica.capacidad, niveles);
     const aju = calcularEje(rubrica.ajuste, niveles);

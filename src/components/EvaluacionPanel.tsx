@@ -426,8 +426,9 @@ export default function EvaluacionPanel({
           <div className="bg-amber-50 px-3 py-2 border-b border-amber-200">
             <p className="text-[12.5px] font-bold text-amber-900">Lo que califica Wellness</p>
             <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
-              Assessment, juego de roles y entrevista. El agente no los toca: nadie puede leer de un
-              PDF cómo alguien ejecutó en una sala.
+              En los criterios de assessment el agente ya propuso leyendo el entregable escrito; lo
+              que pongas acá manda sobre eso, porque vos estuviste en la sala. El juego de roles y la
+              entrevista los calificás sin ayuda: de eso no quedó documento que leer.
             </p>
           </div>
           <div className="px-3 py-1">

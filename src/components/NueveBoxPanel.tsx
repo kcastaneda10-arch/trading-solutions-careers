@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CELDAS, COLUMNAS, CORTES, COBERTURA_MINIMA, FILAS, BANDA_LABEL,
   VEREDICTO_LABEL, VEREDICTOS_DECIDIBLES, DECISION_DEL_GRUPO,
+  COBERTURA_MINIMA_AVANCE, COBERTURA_MINIMA_TERNA,
   celdaDe, fugaDeCapaces, ubicar, ubicarAvance,
   type Avance, type Banda, type Celda, type Ubicacion, type Veredicto,
 } from "@/lib/nuevebox";
@@ -582,8 +583,8 @@ export default function NueveBoxPanel() {
                 titulo="Falta evidencia"
                 bajada={
                   momento === "avance"
-                    ? `Falta cargar el assessment y el juego de roles. Por debajo de ${COBERTURA_MINIMA} % de cobertura en capacidad no hay con qué decidir.`
-                    : `Por debajo de ${COBERTURA_MINIMA} % de cobertura el puntaje no es comparable, y una posición en la matriz se leería como un hecho.`
+                    ? `Hace falta al menos ${COBERTURA_MINIMA_AVANCE} % de cobertura en capacidad. Correr el agente sobre el caso escrito, o cargar las notas de la sala.`
+                    : `Por debajo de ${COBERTURA_MINIMA_TERNA} % de cobertura el puntaje no es comparable, y una posición en la matriz se leería como un hecho.`
                 }
                 gente={sinEvidencia} onVer={verEnFunnel} tono="ambar"
               />
@@ -615,9 +616,14 @@ export default function NueveBoxPanel() {
                 arriba. 3 es «cumple lo esperado», por eso la banda media arranca ahí.
               </li>
               <li>
-                · Hace falta al menos <span className="font-mono">{COBERTURA_MINIMA} %</span> de
-                cobertura para tener veredicto
-                {momento === "avance" ? " en capacidad" : " en los dos ejes"}.
+                · Hace falta al menos{" "}
+                <span className="font-mono">
+                  {momento === "avance" ? COBERTURA_MINIMA_AVANCE : COBERTURA_MINIMA_TERNA} %
+                </span>{" "}
+                de cobertura {momento === "avance" ? "en capacidad" : "en los dos ejes"}. El filtro
+                pide menos que la decisión final a propósito: mandar a alguien a una entrevista que
+                no la merecía cuesta una hora; meterlo a la terna sin evidencia cuesta una
+                contratación.
               </li>
               {momento === "avance" ? (
                 <li>

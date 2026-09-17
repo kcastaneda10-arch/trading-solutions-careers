@@ -45,15 +45,42 @@ export const FUENTE_LABEL: Record<Fuente, string> = {
   simulacion: "Simulación",
 };
 
-/** Quién produce el dato. La IA solo puede leer documentos. */
-export const FUENTE_LA_CARGA: Record<Fuente, "agente" | "wellness"> = {
+/**
+ * Quién produce el dato.
+ *
+ * LA PRIMERA VERSIÓN CORTÓ MAL — corregido 17-sep-2026
+ * Decía que el assessment solo lo podía calificar Wellness, «porque se vio en
+ * la sala y nadie lo puede leer de un PDF». Eso confunde dos cosas distintas
+ * que pasan en la misma mañana:
+ *
+ *   el PRODUCTO — el caso escrito, la matriz, el plan que la persona entregó.
+ *                 Es un documento. Está en el expediente. Se puede leer.
+ *   la CONDUCTA — cómo se paró frente al equipo, si sostuvo el criterio, cómo
+ *                 negoció. Eso sí murió en la sala si nadie lo anotó.
+ *
+ * El caso escrito ES el entregable que pide el criterio de ejecución. Negarse
+ * a leerlo no es prudencia: es tirar la evidencia más directa que hay.
+ *
+ * Por eso el assessment es «ambos»: el agente propone leyendo el producto,
+ * y quien estuvo en la sala corrige. Cuando hay nivel manual, el manual manda
+ * — la persona que estuvo ahí vio más que el papel.
+ */
+export type QuienCalifica = "agente" | "wellness" | "ambos";
+
+export const FUENTE_LA_CARGA: Record<Fuente, QuienCalifica> = {
   bateria: "agente",        // ya está calculada; el agente la lee, no la recalcula
   hoja_de_vida: "agente",
   referencias: "agente",
   simulacion: "agente",
-  assessment: "wellness",   // se vio en la sala; nadie lo puede leer de un PDF
-  roles: "wellness",
-  entrevista: "wellness",
+  assessment: "ambos",      // el producto lo lee el agente; la conducta la vio Wellness
+  roles: "wellness",        // conducta pura: no quedó nada escrito que leer
+  entrevista: "wellness",   // todavía no ocurrió
+};
+
+export const CARGA_LABEL: Record<QuienCalifica, string> = {
+  agente: "El agente lo lee",
+  wellness: "Lo califica Wellness",
+  ambos: "El agente propone, Wellness corrige",
 };
 
 export type Criterio = {

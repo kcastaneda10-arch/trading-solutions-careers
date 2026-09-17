@@ -16,6 +16,7 @@ import {
   RUBRICAS,
   FUENTE_LABEL,
   FUENTE_LA_CARGA,
+  CARGA_LABEL,
   pesoEfectivo,
   type Bloque,
   type Criterio,
@@ -24,15 +25,14 @@ import {
 
 function Chip({ fuente }: { fuente: Criterio["fuente"] }) {
   const laCarga = FUENTE_LA_CARGA[fuente];
+  const color =
+    laCarga === "agente" ? "bg-emerald-50 text-emerald-800"
+    : laCarga === "ambos" ? "bg-sky-50 text-sky-800"
+    : "bg-amber-50 text-amber-800";
   return (
     <span
-      title={laCarga === "agente" ? "El agente puede leer esta fuente" : "Lo califica Wellness; nadie lo puede leer de un documento"}
-      className={
-        "text-[10.5px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap " +
-        (laCarga === "agente"
-          ? "bg-emerald-50 text-emerald-800"
-          : "bg-amber-50 text-amber-800")
-      }
+      title={CARGA_LABEL[laCarga]}
+      className={"text-[10.5px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap " + color}
     >
       {FUENTE_LABEL[fuente]}
     </span>
@@ -211,8 +211,9 @@ export default function RubricasPanel() {
       </section>
 
       <p className="text-xs text-gray-400 mt-8 max-w-2xl leading-relaxed">
-        Las fuentes en verde las puede leer el agente de IA. Las de ámbar las califica Wellness:
-        nadie puede leer de un PDF cómo alguien ejecutó en una sala.
+        En verde, lo que el agente lee del expediente. En azul, lo que el agente propone leyendo el
+        entregable escrito y corrige quien estuvo en la sala. En ámbar, lo que solo puede calificar
+        quien estuvo ahí: nadie puede leer de un PDF cómo alguien se paró frente al equipo.
       </p>
     </div>
   );

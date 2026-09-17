@@ -14,10 +14,15 @@
  * en amarillo. La salida más útil de todo esto no es el puntaje: es la lista de
  * preguntas que hay que hacerle a la persona antes de moverla.
  *
- * LO QUE EL AGENTE NO PUEDE LEER
- * Assessment, juego de roles y entrevista los califica Wellness. Nadie puede
- * leer de un PDF cómo alguien ejecutó en una sala, y un instrumento que finja
- * lo contrario miente sobre su propia evidencia.
+ * LO QUE EL AGENTE PUEDE Y NO PUEDE LEER
+ * Puede leer PRODUCTOS: la hoja de vida, el caso escrito del assessment, la
+ * matriz o el plan que la persona entregó, el resultado de la batería. No puede
+ * leer CONDUCTA: cómo se paró frente al equipo en el juego de roles, si sostuvo
+ * el criterio cuando lo contradijeron. Eso murió en la sala si nadie lo anotó.
+ *
+ * En los criterios de assessment el agente PROPONE leyendo el entregable y
+ * quien estuvo en la sala corrige. Cuando hay nivel manual, el manual manda:
+ * la persona que estaba ahí vio más que el papel.
  */
 
 import type { Bloque, Criterio, Rubrica } from "@/lib/rubricas";
@@ -40,23 +45,27 @@ export type Veredicto = {
 
 export type Semaforo = "listo" | "falta_evidencia" | "bloqueado";
 
-/** Criterios que el agente puede resolver leyendo documentos. */
+/** Criterios que el agente puede resolver leyendo documentos, aunque después
+    alguien los corrija. */
 export function criteriosDelAgente(r: Rubrica): { bloque: Bloque; criterio: Criterio }[] {
   const out: { bloque: Bloque; criterio: Criterio }[] = [];
   for (const b of [...r.capacidad, ...r.ajuste]) {
     for (const c of b.criterios) {
-      if (FUENTE_LA_CARGA[c.fuente] === "agente") out.push({ bloque: b, criterio: c });
+      const q = FUENTE_LA_CARGA[c.fuente];
+      if (q === "agente" || q === "ambos") out.push({ bloque: b, criterio: c });
     }
   }
   return out;
 }
 
-/** Criterios que solo puede calificar una persona que estuvo ahí. */
+/** Criterios que puede cargar quien estuvo en la sala. Incluye los de
+    assessment: ahí el agente propone y esta carga corrige. */
 export function criteriosDeWellness(r: Rubrica): { bloque: Bloque; criterio: Criterio }[] {
   const out: { bloque: Bloque; criterio: Criterio }[] = [];
   for (const b of [...r.capacidad, ...r.ajuste]) {
     for (const c of b.criterios) {
-      if (FUENTE_LA_CARGA[c.fuente] === "wellness") out.push({ bloque: b, criterio: c });
+      const q = FUENTE_LA_CARGA[c.fuente];
+      if (q === "wellness" || q === "ambos") out.push({ bloque: b, criterio: c });
     }
   }
   return out;
@@ -136,6 +145,18 @@ REGLAS QUE NO SE NEGOCIAN
 7. Si un archivo viene ilegible, en blanco o es un escaneo sin texto
    reconocible, dilo en "evidencia" con esas palabras y deja estado
    "sin_evidencia". No adivines el contenido.
+
+8. Los criterios de ASSESSMENT se resuelven leyendo el ENTREGABLE que la
+   persona produjo: el caso escrito, la matriz, el plan. Juzgá el trabajo que
+   está en el papel, no la persona. Si en el expediente no hay ningún producto
+   del assessment, es "sin_evidencia" — no lo deduzcas de la hoja de vida.
+   Nunca juzgues conducta de sala: cómo se paró, cómo negoció, si sostuvo el
+   criterio cuando lo contradijeron. Eso no está en ningún documento, y lo
+   califica quien estuvo ahí.
+
+9. El prefiltro es lo que la persona DECLARÓ de sí misma en un formulario. Sirve
+   para ubicar y para preguntar, no como prueba de una conducta. No lo uses como
+   evidencia de un criterio que pide haber visto algo.
 `.trim();
 
 export function construirPrompt(

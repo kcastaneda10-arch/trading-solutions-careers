@@ -135,9 +135,10 @@ export default function CargaDeSala({
   return (
     <div className="mt-5">
       <p className="text-[12.5px] text-gray-500 max-w-3xl leading-snug mb-3">
-        Lo que se vio en la sala: assessment y juego de roles. Los criterios de entrevista no están
-        acá porque la entrevista todavía no ocurrió. Tocá el nombre de una columna para ver sus
-        anclas de conducta.
+        Lo que se vio en la sala: assessment y juego de roles. En los de assessment el agente ya
+        propuso un nivel leyendo el caso escrito; lo que pongas acá manda sobre eso, porque vos
+        estuviste ahí. Los de entrevista no están porque la entrevista todavía no ocurrió. Tocá el
+        nombre de una columna para ver sus anclas de conducta.
       </p>
 
       <div className="overflow-x-auto border border-gray-200 rounded-xl">

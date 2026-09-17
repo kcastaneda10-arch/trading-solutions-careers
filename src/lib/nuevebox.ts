@@ -60,11 +60,24 @@ export type Banda = "bajo" | "medio" | "alto";
 export const CORTES = { medio: 3.0, alto: 4.0 } as const;
 
 /**
- * Cobertura mínima para ubicar a alguien en la matriz. Por debajo de esto el
- * puntaje existe pero no es comparable, y una posición en una grilla se lee
- * como un hecho.
+ * Cobertura mínima. NO es la misma para las dos decisiones, y la diferencia
+ * no es un atajo: es la asimetría real entre lo que cuesta equivocarse.
+ *
+ * Mandar a alguien a una entrevista que no lo merecía cuesta una hora. Meter a
+ * alguien en la terna sin evidencia cuesta una contratación. El umbral de un
+ * filtro no tiene por qué ser el de una decisión final, y ponerlos iguales fue
+ * pereza mía: dejaba la pantalla de avance permanentemente vacía.
+ *
+ * El 60 % de avance está elegido para que alcance con el caso escrito (45 %)
+ * más la batería (20 %), que es lo que hay en el expediente antes de la
+ * entrevista. La cobertura va igual en pantalla, así que siempre se ve sobre
+ * qué se está decidiendo.
  */
-export const COBERTURA_MINIMA = 80;
+export const COBERTURA_MINIMA_AVANCE = 60;
+export const COBERTURA_MINIMA_TERNA = 80;
+
+/** @deprecated Usar la del momento. Se mantiene por compatibilidad de import. */
+export const COBERTURA_MINIMA = COBERTURA_MINIMA_TERNA;
 
 export const BANDA_LABEL: Record<Banda, string> = {
   alto: "Alta", medio: "Media", bajo: "Baja",
@@ -205,13 +218,13 @@ export function ubicar(ev: EvaluacionMinima): Ubicacion {
 
   const cCap = ev.capacidad_cobertura ?? 0;
   const cAju = ev.ajuste_cobertura ?? 0;
-  if (cCap < COBERTURA_MINIMA || cAju < COBERTURA_MINIMA) {
+  if (cCap < COBERTURA_MINIMA_TERNA || cAju < COBERTURA_MINIMA_TERNA) {
     const faltan: string[] = [];
-    if (cCap < COBERTURA_MINIMA) faltan.push(`capacidad ${cCap} %`);
-    if (cAju < COBERTURA_MINIMA) faltan.push(`ajuste ${cAju} %`);
+    if (cCap < COBERTURA_MINIMA_TERNA) faltan.push(`capacidad ${cCap} %`);
+    if (cAju < COBERTURA_MINIMA_TERNA) faltan.push(`ajuste ${cAju} %`);
     return {
       estado: "falta_evidencia", capacidad: null, ajuste: null, celda: null,
-      motivo: `Evidencia insuficiente para ubicarlo (${faltan.join(" · ")}, mínimo ${COBERTURA_MINIMA} %).`,
+      motivo: `Evidencia insuficiente para ubicarlo (${faltan.join(" · ")}, mínimo ${COBERTURA_MINIMA_TERNA} %).`,
     };
   }
 
@@ -276,11 +289,11 @@ export function ubicarAvance(ev: EvaluacionMinima): Avance {
   }
 
   const cCap = ev.capacidad_cobertura ?? 0;
-  if (cCap < COBERTURA_MINIMA) {
+  if (cCap < COBERTURA_MINIMA_AVANCE) {
     return {
       veredicto: "falta_evidencia", capacidad: null,
-      decision: "Cargar el assessment y el juego de roles antes de decidir.",
-      motivo: `Capacidad en ${cCap} % de cobertura, mínimo ${COBERTURA_MINIMA} %.`,
+      decision: "Correr el agente sobre el caso escrito, o cargar las notas de la sala.",
+      motivo: `Capacidad en ${cCap} % de cobertura, mínimo ${COBERTURA_MINIMA_AVANCE} % para decidir avance.`,
     };
   }
 
