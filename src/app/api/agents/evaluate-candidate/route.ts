@@ -22,6 +22,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { isAdminRequest } from "@/lib/bateria/auth";
 import { getAnthropic } from "@/lib/anthropic";
 import { getRubrica, calcularEje } from "@/lib/rubricas";
+import { veredictosDeBateria } from "@/lib/bateria-a-rubrica";
 import {
   construirPrompt,
   criteriosDelAgente,
@@ -97,8 +98,12 @@ export async function PATCH(req: NextRequest) {
 
     const veredictos: Veredicto[] = (prev?.veredictos as Veredicto[]) ?? [];
 
-    const niveles: Record<string, number | null> = { ...manuales };
+    // Mismo orden que en el POST: el agente abajo, Wellness encima. Acá estaba
+    // igual de invertido, así que guardar una calificación la dejaba tapada por
+    // el veredicto del agente en los criterios que los dos pueden tocar.
+    const niveles: Record<string, number | null> = {};
     for (const v of veredictos) niveles[v.criterio_id] = v.nivel;
+    Object.assign(niveles, manuales);
 
     const cap = calcularEje(rubrica.capacidad, niveles);
     const aju = calcularEje(rubrica.ajuste, niveles);
@@ -158,12 +163,26 @@ export async function POST(req: NextRequest) {
     // ── Candidato y lo que la batería ya calculó ──
     const { data: cand, error: cErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, stage, headline, current_job_role, current_company, years_experience, english_level, skills, prefilter_data, ht_results(*)")
+      .select("id, name, stage, headline, current_job_role, current_company, years_experience, english_level, skills, prefilter_data")
       .eq("id", candidateId)
       .maybeSingle<Record<string, unknown>>();
 
     if (cErr) return NextResponse.json({ error: "No se pudo leer el candidato", detail: cErr.message }, { status: 500 });
     if (!cand) return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
+
+    // ── La batería. Vive en ts_bat_sessions, que es lo que lee el funnel.
+    //    Antes se buscaba en ht_results y no estaba ahí: por eso un candidato
+    //    con 89 % de match salía «sin evidencia» en los tres criterios de
+    //    batería, con el agente proponiendo preguntarle en la entrevista un
+    //    dato que la compañía ya tenía. ──
+    const { data: bateria } = await supabaseAdmin
+      .from("ts_bat_sessions")
+      .select("scores, match_data, status, finished_at")
+      .eq("ht_candidate_id", candidateId)
+      .not("scores", "is", null)
+      .order("finished_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ scores: any; match_data: any; status: string; finished_at: string | null }>();
 
     // ── Adjuntos del expediente ──
     const { data: files } = await supabaseAdmin
@@ -221,7 +240,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Contexto de texto: lo que ya está estructurado en el ATS ──
-    const bat = (cand.ht_results as any[])?.[0] ?? null;
+    // Los criterios que la batería resuelve NO van al modelo: se calculan.
+    // Lo que sí va es el resto del resultado, como contexto.
+    const deBateria = veredictosDeBateria(rubrica, bateria?.scores ?? null);
+    const idsBateria = new Set(deBateria.map((v) => v.criterio_id));
+    const matchGlobal = (bateria?.match_data as any)?.global ?? null;
 
     // Del prefiltro se manda lo que dice algo del cargo. Documento, teléfono y
     // ciudad no entran: son datos de contacto, no evidencia, y varios de los
@@ -245,7 +268,9 @@ export async function POST(req: NextRequest) {
       cand.current_job_role ? `Cargo actual: ${cand.current_job_role}${cand.current_company ? " en " + cand.current_company : ""}` : "",
       cand.years_experience != null ? `Años de experiencia declarados: ${cand.years_experience}` : "",
       cand.english_level ? `Inglés declarado (sin verificar): ${cand.english_level}` : "",
-      bat ? `Resultado de la batería ya calculado por el instrumento — NO lo recalcules, úsalo: ${JSON.stringify(bat).slice(0, 1800)}` : "Batería: no la ha presentado.",
+      bateria?.scores
+        ? `Batería psicométrica YA CALIFICADA por el instrumento${matchGlobal != null ? ` · match global ${matchGlobal} %` : ""}. Los criterios que salen de ella ya están resueltos por el código y NO están en tu lista. Esto va solo como contexto: ${JSON.stringify(bateria.scores).slice(0, 2500)}`
+        : "Batería: no la ha presentado.",
       // El prefiltro estaba en la base y el agente no lo veía. Es respuesta
       // declarada en un formulario, no conducta observada, y va rotulado como
       // tal para que no se use como prueba de algo que había que ver.
@@ -257,7 +282,9 @@ export async function POST(req: NextRequest) {
       `Tipos de documento en el expediente: ${adjuntos.map((f) => f.kind).join(", ") || "ninguno"}`,
     ].filter(Boolean).join("\n");
 
-    const criterios = criteriosDelAgente(rubrica);
+    const criterios = criteriosDelAgente(rubrica).filter(
+      ({ criterio }) => !idsBateria.has(criterio.id),
+    );
     const prompt = construirPrompt(rubrica, criterios, contexto);
 
     const anthropic = getAnthropic();
@@ -287,11 +314,14 @@ export async function POST(req: NextRequest) {
     // Todo criterio del agente que el modelo no haya devuelto cuenta como sin
     // evidencia. Si no, un criterio omitido subiría la cobertura sin dato.
     const porId = new Map(veredictos.map((v) => [v.criterio_id, v]));
-    const completos: Veredicto[] = criterios.map(({ criterio }) =>
+    const delModelo: Veredicto[] = criterios.map(({ criterio }) =>
       porId.get(criterio.id) ?? {
         criterio_id: criterio.id, estado: "sin_evidencia", nivel: null,
         evidencia: null, fuente: null, pregunta: `¿${criterio.observar}?`,
       });
+
+    // Los de batería son aritmética sobre un número ya calculado; van tal cual.
+    const completos: Veredicto[] = [...deBateria, ...delModelo];
 
     // ── Niveles que ya cargó Wellness (assessment, roles, entrevista) ──
     const { data: prev } = await supabaseAdmin
