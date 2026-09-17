@@ -17,6 +17,17 @@
  * Si la requisición no trae un dato, sale entre corchetes en vez de inventarse.
  * Un aviso con [años de experiencia] a la vista se corrige en diez segundos; uno
  * con un dato inventado se publica sin que nadie lo note.
+ *
+ * Y SE CORRIGE ACÁ, NO AFUERA
+ * El panel de la derecha era de solo lectura, con un botón de copiar. O sea que
+ * para quitar un [Your Name] había que copiar el aviso a otro lado, arreglarlo
+ * allá y pegarlo en el portal — y el corchete que la pantalla marcaba en amarillo
+ * seguía marcado, porque el texto nunca cambiaba. Mostrar un problema sin dejar
+ * arreglarlo en el mismo lugar es la mitad del trabajo.
+ *
+ * Ahora el aviso se edita en el sitio. El contador de «falta completar» baja solo
+ * a medida que se llenan los corchetes, cada idioma guarda su propia corrección,
+ * y siempre se puede volver a lo que escribió el agente.
  */
 
 import { useState } from "react";
@@ -68,6 +79,8 @@ export default function AvisoMultiIdioma({
   const [tono, setTono] = useState<Tono>("neutro");
   const [cargando, setCargando] = useState(false);
   const [posts, setPosts] = useState<Record<Idioma, string> | null>(null);
+  /** Lo que devolvió el agente, intacto, para poder volver atrás. */
+  const [original, setOriginal] = useState<Record<Idioma, string> | null>(null);
   const [campos, setCampos] = useState<CamposGenerados>({});
   const [activa, setActiva] = useState<Idioma>("es");
   const [error, setError] = useState<string | null>(null);
@@ -86,10 +99,11 @@ export default function AvisoMultiIdioma({
       if (!r.ok) {
         // Sin el detalle queda un "error" mudo y hay que ir a los logs.
         setError([j.error, j.detail].filter(Boolean).join(" · "));
-        if (j.raw) setPosts({ es: j.raw, en: j.raw, zh: j.raw });
+        if (j.raw) { setPosts({ es: j.raw, en: j.raw, zh: j.raw }); setOriginal({ es: j.raw, en: j.raw, zh: j.raw }); }
         return;
       }
       setPosts(j.posts);
+      setOriginal(j.posts);
       setCampos(j.campos || {});
     } catch (e: any) {
       setError(e?.message || "No se pudo generar");
@@ -109,7 +123,20 @@ export default function AvisoMultiIdioma({
     }
   }
 
+  /** Corrige el aviso del idioma que está a la vista. Cada uno guarda el suyo. */
+  function editar(texto: string) {
+    setPosts((p) => (p ? { ...p, [activa]: texto } : p));
+  }
+
+  function volverAlGenerado() {
+    if (!original) return;
+    setPosts((p) => (p ? { ...p, [activa]: original[activa] } : p));
+  }
+
+  // Se recalcula con cada tecla: el contador de corchetes baja solo mientras
+  // se llenan, que es la única forma de saber que ya no falta nada.
   const huecos = posts ? Array.from(new Set(posts[activa].match(/\[[^\]]+\]/g) || [])) : [];
+  const editado = !!posts && !!original && posts[activa] !== original[activa];
   const hayCampos = Object.keys(campos).length > 0;
 
   return (
@@ -187,7 +214,20 @@ export default function AvisoMultiIdioma({
             {/* Derecha · resultado */}
             <div className="flex flex-col">
               <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="text-xs font-semibold text-gray-700">Aviso sugerido</div>
+                <div className="text-xs font-semibold text-gray-700">
+                  Aviso sugerido
+                  {posts && (
+                    <span className="ml-1.5 font-normal text-gray-400">· se puede corregir acá</span>
+                  )}
+                </div>
+                {posts && editado && (
+                  <button
+                    onClick={volverAlGenerado}
+                    className="text-[11px] text-gray-500 underline hover:text-black mr-auto ml-2"
+                  >
+                    Volver al texto generado
+                  </button>
+                )}
                 {posts && (
                   <button
                     onClick={copiar}
@@ -227,6 +267,17 @@ export default function AvisoMultiIdioma({
                 </div>
               )}
 
+              {/* Cerrar el círculo: si la pantalla avisó que faltaba algo, también
+                  tiene que avisar cuando ya no falta. Si no, nunca se sabe si se
+                  llenó bien o si el aviso simplemente dejó de aparecer. */}
+              {posts && huecos.length === 0 && editado && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-2 mb-2">
+                  <div className="text-[11px] text-emerald-800">
+                    No quedan corchetes pendientes en esta versión.
+                  </div>
+                </div>
+              )}
+
               <div className="flex-1 bg-gray-100 rounded-xl min-h-[380px] max-h-[52vh] overflow-y-auto">
                 {!posts && !cargando && (
                   <div className="h-full flex items-center justify-center text-center px-8 py-16">
@@ -245,9 +296,15 @@ export default function AvisoMultiIdioma({
                   </div>
                 )}
                 {posts && (
-                  <pre className="p-4 text-[13px] leading-relaxed whitespace-pre-wrap font-sans text-gray-900">
-                    {posts[activa]}
-                  </pre>
+                  <textarea
+                    value={posts[activa]}
+                    onChange={(e) => editar(e.target.value)}
+                    spellCheck
+                    aria-label="Aviso sugerido · se puede corregir"
+                    className="w-full h-full min-h-[380px] bg-transparent p-4 text-[13px] leading-relaxed
+                               font-sans text-gray-900 resize-none outline-none
+                               focus:bg-white focus:ring-2 focus:ring-gray-900 rounded-xl"
+                  />
                 )}
               </div>
 
