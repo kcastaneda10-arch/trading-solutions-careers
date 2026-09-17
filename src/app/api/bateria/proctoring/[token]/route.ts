@@ -54,10 +54,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
 
   const { data: eventos, error: eErr } = await supabaseAdmin
     .from('ts_bat_events')
-    .select('kind, created_at')
+    .select('kind, at')
     .eq('session_id', sesion.id)
     .in('kind', [...COPIA, ...AMBIENTE])
-    .order('created_at');
+    .order('at');
 
   if (eErr) return NextResponse.json({ error: eErr.message }, { status: 500 });
 
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
           ? `Los ${deCopia} eventos son intentos de copiar. Esa es la señal para la que se montó el proctoring.`
           : `${deCopia} intentos de copiar y ${deAmbiente} eventos de ambiente. Solo los primeros hablan de conducta.`,
 
-      primeros: (eventos ?? []).slice(0, 20).map((e) => ({ tipo: e.kind, cuando: e.created_at })),
+      primeros: (eventos ?? []).slice(0, 20).map((e) => ({ tipo: e.kind, cuando: e.at })),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );
