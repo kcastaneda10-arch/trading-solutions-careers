@@ -61,14 +61,26 @@ type Momento = "avance" | "terna" | "cargar";
  * Qué etapas mira cada momento. Sale de stage-labels, que es la fuente única
  * del proceso: batería 5, assessment 6, entrevista 7, terna 8.
  *
- * Existe porque la primera versión traía a todo el mundo, incluidos los que
- * todavía están en prefiltro. Alguien que ni siquiera presentó la batería no
- * es una decisión pendiente: es ruido que hace ver el tablero lleno de huecos.
+ * LA PRIMERA VERSIÓN ABARCABA DE MÁS — corregido 17-sep-2026
+ * Traía batería y assessment juntos, así que los dieciséis que todavía están
+ * presentando la batería aparecían en la tabla de carga de la sala. No pasaron
+ * por la sala: no hay nada que cargarles. Y en la lista de avance ocupaban
+ * lugar para nunca tener veredicto, porque les falta justamente el 80 % de la
+ * capacidad.
+ *
+ * Los tres momentos son de UNA etapa cada uno, la etapa donde esa decisión
+ * existe de verdad:
+ *   cargar y avance → assessment presencial (6). Ya pasaron por la sala y
+ *                     todavía no fueron entrevistados.
+ *   terna           → entrevista en adelante (7–8).
+ *
+ * Quien está en batería no es una decisión pendiente todavía: es alguien a
+ * quien hay que citar al assessment, y eso se hace en el Funnel.
  */
 const POBLACION: Record<Momento, { min: number; max: number; nota: string }> = {
-  avance: { min: 5, max: 6, nota: "Batería y assessment presencial · los que todavía no han sido entrevistados" },
+  avance: { min: 6, max: 6, nota: "Assessment presencial · pasaron por la sala y todavía no han sido entrevistados" },
   terna: { min: 7, max: 8, nota: "Entrevista de reclutador en adelante · los que ya tienen evidencia de ajuste" },
-  cargar: { min: 5, max: 6, nota: "Batería y assessment presencial · los que pasaron por la sala" },
+  cargar: { min: 6, max: 6, nota: "Assessment presencial · los que estuvieron en la sala" },
 };
 
 function n2(x: number | null | undefined) {
