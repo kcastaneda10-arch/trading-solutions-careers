@@ -177,12 +177,12 @@ export async function POST(req: NextRequest) {
     //    dato que la compañía ya tenía. ──
     const { data: bateria } = await supabaseAdmin
       .from("ts_bat_sessions")
-      .select("scores, match_data, status, finished_at")
+      .select("scores, match_data, validity, status, finished_at")
       .eq("ht_candidate_id", candidateId)
       .not("scores", "is", null)
       .order("finished_at", { ascending: false })
       .limit(1)
-      .maybeSingle<{ scores: any; match_data: any; status: string; finished_at: string | null }>();
+      .maybeSingle<{ scores: any; match_data: any; validity: any; status: string; finished_at: string | null }>();
 
     // ── Adjuntos del expediente ──
     const { data: files } = await supabaseAdmin
@@ -242,7 +242,8 @@ export async function POST(req: NextRequest) {
     // ── Contexto de texto: lo que ya está estructurado en el ATS ──
     // Los criterios que la batería resuelve NO van al modelo: se calculan.
     // Lo que sí va es el resto del resultado, como contexto.
-    const deBateria = veredictosDeBateria(rubrica, bateria?.scores ?? null);
+    const deBateria = veredictosDeBateria(rubrica, bateria?.scores ?? null, bateria?.validity ?? null);
+    const validez = (bateria?.validity as any)?.veredicto ?? null;
     const idsBateria = new Set(deBateria.map((v) => v.criterio_id));
     const matchGlobal = (bateria?.match_data as any)?.global ?? null;
 
@@ -269,7 +270,7 @@ export async function POST(req: NextRequest) {
       cand.years_experience != null ? `Años de experiencia declarados: ${cand.years_experience}` : "",
       cand.english_level ? `Inglés declarado (sin verificar): ${cand.english_level}` : "",
       bateria?.scores
-        ? `Batería psicométrica YA CALIFICADA por el instrumento${matchGlobal != null ? ` · match global ${matchGlobal} %` : ""}. Los criterios que salen de ella ya están resueltos por el código y NO están en tu lista. Esto va solo como contexto: ${JSON.stringify(bateria.scores).slice(0, 2500)}`
+        ? `Batería psicométrica YA CALIFICADA por el instrumento${matchGlobal != null ? ` · match global ${matchGlobal} %` : ""}${validez ? ` · VALIDEZ DEL PROTOCOLO: ${validez}` : ""}.${validez === "no_interpretable" ? " El protocolo NO es interpretable, así que sus puntajes no son evidencia de nada, tampoco en contra: no los uses para ningún criterio." : ""} Los criterios que salen de ella ya están resueltos por el código y NO están en tu lista. Esto va solo como contexto: ${JSON.stringify(bateria.scores).slice(0, 2500)}`
         : "Batería: no la ha presentado.",
       // El prefiltro estaba en la base y el agente no lo veía. Es respuesta
       // declarada en un formulario, no conducta observada, y va rotulado como

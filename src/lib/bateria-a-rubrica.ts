@@ -31,6 +31,39 @@ type ScoresBateria = {
   integridad?: { byDimension?: Record<string, number> | null; permisividadGlobal?: number | null } | null;
 } | null | undefined;
 
+/** El veredicto de validez que ya calcula el propio instrumento. */
+export type VeredictoValidez = "sin_alertas" | "con_reservas" | "no_interpretable";
+
+type ValidezBateria = { veredicto?: VeredictoValidez | null } | null | undefined;
+
+/**
+ * UN PROTOCOLO INVÁLIDO NO ES UN MAL RESULTADO: ES UN NO-RESULTADO
+ *
+ * Esto se escribió mirando un caso real. El informe decía, de una sola persona,
+ * que la sesión era inválida —42 eventos de proctoring, deseabilidad social
+ * alta— y acto seguido usaba los puntajes igual para concluir que no era apta
+ * por integridad. Las dos cosas no se sostienen juntas. Si el protocolo no es
+ * interpretable, los puntajes no son evidencia de nada: tampoco en contra.
+ *
+ * Y el costo de equivocarse no es simétrico. Rechazar a alguien fuerte por una
+ * medición inválida es un error invisible y definitivo: la persona no vuelve y
+ * nadie se entera de que se perdió. Citarla de nuevo cuesta una hora.
+ *
+ * La regla, entonces, escala con la consecuencia:
+ *
+ *   no_interpretable → la batería no aporta NINGÚN veredicto. Los criterios
+ *                      quedan sin evidencia y se convierten en preguntas.
+ *   con_reservas     → aporta veredictos, con la reserva escrita en la cita,
+ *                      PERO no puede hundir un excluyente: un criterio que
+ *                      termina la candidatura exige medición limpia.
+ *   sin_alertas      → aporta todo.
+ */
+export const VALIDEZ_LABEL: Record<VeredictoValidez, string> = {
+  sin_alertas: "Sin alertas de validez",
+  con_reservas: "Con reservas de validez",
+  no_interpretable: "Protocolo no interpretable",
+};
+
 /**
  * De 0–100 a 1–5, respetando las anclas escritas en la rúbrica.
  *
@@ -88,9 +121,21 @@ export function criteriosQueResuelveLaBateria(r: Rubrica): string[] {
  * normal y termina en «sin evidencia». No se rellena con el promedio ni con
  * nada: que el instrumento no haya medido algo es un dato, no un hueco.
  */
-export function veredictosDeBateria(r: Rubrica, scores: ScoresBateria): Veredicto[] {
+export function veredictosDeBateria(
+  r: Rubrica,
+  scores: ScoresBateria,
+  validez?: ValidezBateria,
+): Veredicto[] {
   if (!scores) return [];
+
+  const v: VeredictoValidez = validez?.veredicto ?? "sin_alertas";
+
+  // Protocolo no interpretable: la batería no dice nada. Ni a favor ni en
+  // contra. Los criterios salen de acá sin resolver y terminan como preguntas.
+  if (v === "no_interpretable") return [];
+
   const out: Veredicto[] = [];
+  const reserva = v === "con_reservas" ? " · lectura CON RESERVAS de validez" : "";
 
   for (const b of [...r.capacidad, ...r.ajuste]) {
     for (const c of b.criterios) {
@@ -101,11 +146,30 @@ export function veredictosDeBateria(r: Rubrica, scores: ScoresBateria): Veredict
       const nivel = nivelDesdePorcentaje(typeof valor === "number" ? valor : null);
       if (nivel == null) continue;
 
+      // Un excluyente termina la candidatura. Con la validez en duda, eso no se
+      // hace con este número: se declara sin evidencia y se verifica con
+      // conducta, en el assessment o en la entrevista.
+      if (c.excluyente && nivel <= 2 && v !== "sin_alertas") {
+        out.push({
+          criterio_id: c.id,
+          estado: "sin_evidencia",
+          nivel: null,
+          evidencia:
+            `La batería marca ${Math.round(valor as number)} sobre 100, pero la sesión quedó ` +
+            `con reservas de validez. Un criterio excluyente no se resuelve con una medición en duda.`,
+          fuente: "Batería psicométrica · validez comprometida",
+          pregunta:
+            `Verificar ${c.nombre.toLowerCase()} con conducta observable —un caso donde la norma ` +
+            `le costaba algo— o repetir la batería en condiciones controladas.`,
+        });
+        continue;
+      }
+
       out.push({
         criterio_id: c.id,
         estado: nivel >= 3 ? "cumple" : "no_cumple",
         nivel,
-        evidencia: `${lectura.etiqueta}: ${Math.round(valor as number)} sobre 100`,
+        evidencia: `${lectura.etiqueta}: ${Math.round(valor as number)} sobre 100${reserva}`,
         fuente: "Batería psicométrica · resultado del instrumento",
         pregunta: null,
       });
