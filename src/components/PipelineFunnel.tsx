@@ -104,6 +104,26 @@ type PrefilterData = {
   years_leading_sig?: number;
   cert_audit_cycles?: number;
   case_answer?: string;
+  // China · plantilla china. El _meta del prefiltro trae los knock-outs y el
+  // salario; sin esto la ficha no mostraba nada de lo que el candidato
+  // respondió y había que ir a la base a mirarlo.
+  current_city?: string;
+  work_authorized?: boolean;
+  onsite_available?: boolean;
+  salary_usd?: string;
+  years_experience?: number;
+  pipl_consent?: boolean;
+  _meta?: {
+    china?: boolean;
+    salary_usd_expectation?: string | null;
+    salary_usd_parsed?: number | null;
+    salary_cap_usd?: number;
+    salary_over_budget?: boolean;
+    english_candidate_rank?: number;
+    english_min_required_rank?: number;
+    work_authorized?: boolean;
+    onsite_available?: boolean;
+  };
 };
 
 /** Etiqueta legible del estado de la licencia en SST. */
@@ -1943,6 +1963,39 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
                   <Row k="CRMs usados" v={pf.crms.join(", ")} />
                 )}
               </Section>
+
+              {pf._meta?.china && (
+                <Section title="🇨🇳 Prefiltro China">
+                  {pf.current_city && <Row k="Ciudad" v={pf.current_city} />}
+                  {typeof pf._meta.work_authorized === "boolean" && (
+                    <Row
+                      k="Autorizado para trabajar"
+                      v={
+                        <strong className={pf._meta.work_authorized ? "text-emerald-700" : "text-red-700"}>
+                          {pf._meta.work_authorized ? "Sí" : "No"}
+                        </strong>
+                      }
+                    />
+                  )}
+                  {typeof pf._meta.onsite_available === "boolean" && (
+                    <Row k="Presencial" v={pf._meta.onsite_available ? "Sí" : "No"} />
+                  )}
+                  {typeof pf.years_experience === "number" && <Row k="Años de experiencia" v={`${pf.years_experience}`} />}
+                  {(pf._meta.salary_usd_expectation || pf.salary_usd) && (
+                    <Row
+                      k="Expectativa (USD/mes)"
+                      v={
+                        <span className={pf._meta.salary_over_budget ? "text-red-700 font-bold" : "font-bold"}>
+                          {pf._meta.salary_usd_expectation || pf.salary_usd}
+                          {pf._meta.salary_over_budget && pf._meta.salary_cap_usd
+                            ? ` · sobre el tope de USD ${pf._meta.salary_cap_usd}`
+                            : ""}
+                        </span>
+                      }
+                    />
+                  )}
+                </Section>
+              )}
 
               {pf.license_status && (
                 <Section title="🛡️ Credenciales SIG-SST">

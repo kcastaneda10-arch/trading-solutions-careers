@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 
 export const runtime = "nodejs";
 
@@ -27,21 +28,28 @@ export async function POST(req: NextRequest, { params }: { params: { candidateId
 
     const { data: cand } = await supabaseAdmin
       .from("ht_candidates")
-      .select("name, email, ht_vacancies(title)")
+      .select("name, email, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .single();
 
     if (!cand || !cand.email) return NextResponse.json({ error: "Candidato sin email" }, { status: 404 });
 
-    const firstName = (cand.name || "").split(" ")[0] || "candidato";
-    // @ts-expect-error supabase relation
-    const vacancyTitle: string = cand.ht_vacancies?.title || "la posición";
+    // Idioma del proceso · China va en ingles.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (cand as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (cand as any).preferred_language,
+      jobTitle: (cand as any).ht_vacancies?.title,
+      country: (cand as any).ht_vacancies?.country,
+    });
+    const firstName = (cand.name || "").split(" ")[0] || (lang === "en" ? "there" : "candidato");
+    const vacancyTitle: string = (cand as any).ht_vacancies?.title || (lang === "en" ? "the position" : "la posición");
     const interviewerLabel = interviewerNames.length > 0 ? interviewerNames.join(" y ") : "nuestro equipo";
+    const interviewerLabelEn = interviewerNames.length > 0 ? interviewerNames.join(" and ") : "our team";
 
     const gmail = await isGmailConnected();
     if (!gmail.connected) return NextResponse.json({ error: "Gmail no conectado" }, { status: 503 });
 
-    const html = `<!DOCTYPE html>
+    const htmlEs = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
   .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
@@ -60,11 +68,34 @@ export async function POST(req: NextRequest, { params }: { params: { candidateId
   </div>
 </body></html>`;
 
+    const htmlEn = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .cta { display: inline-block; background: #0a0a0a; color: white !important; text-decoration: none; padding: 13px 28px; font-weight: 700; margin: 16px 0; letter-spacing: 0.3px; }
+  p { font-size: 14px; margin: 0 0 14px; }
+  .footer { color: #737373; font-size: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>We are moving on to the next stage of the process for <strong>${vacancyTitle}</strong>. The next conversation is with <strong>${interviewerLabelEn}</strong> · it will last around ${durationMinutes} minutes over video.</p>
+    <p>Choose the time that works best for you · you will only see options where everyone is available at the same time. Once you confirm, the Google Meet video call is created automatically.</p>
+    <p style="text-align:center"><a href="${jointLink}" class="cta">Choose a time</a></p>
+    <p>If none of the available times work for you, just reply to this email and we will find one together.</p>
+    <p>Best regards,<br><strong>Talent Team</strong> · Trading Solutions</p>
+    <div class="footer">The link stays active for 7 days. The Google Meet video call is created automatically when you confirm your time.</div>
+  </div>
+</body></html>`;
+
+    const html = lang === "en" ? htmlEn : htmlEs;
+
     const draftRes = await createDraftViaGmail({
       to: cand.email as string,
-      subject: `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
+      subject: lang === "en"
+        ? `Trading Solutions · Choose your interview time for ${vacancyTitle}`
+        : `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
       html,
-      fromName: "Kelly Castañeda",
+      fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
       replyTo: "jointheteam@tradingsolutions.com",
     });
 

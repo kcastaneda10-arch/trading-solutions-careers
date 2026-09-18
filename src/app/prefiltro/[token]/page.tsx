@@ -609,7 +609,7 @@ export default function PrefiltroForm() {
             <Q label="Years of relevant experience in freight forwarding / the role area">
               <input type="number" min={0} max={50} value={cnYearsExp} onChange={(e) => setCnYearsExp(e.target.value)} style={inputStyle} placeholder="0" />
             </Q>
-            <Q label="Salary expectation in USD (monthly)">
+            <Q label="Monthly salary expectation in USD (gross)">
               <input value={cnSalaryUsd} onChange={(e) => setCnSalaryUsd(e.target.value)} style={inputStyle} placeholder="e.g. 2000" inputMode="numeric" />
             </Q>
           </Section>

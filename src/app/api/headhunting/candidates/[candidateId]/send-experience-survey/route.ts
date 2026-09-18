@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendViaGmail, isGmailConnected } from "@/lib/gmail";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 import crypto from "crypto";
 
 export async function POST(
@@ -25,13 +26,21 @@ export async function POST(
     // Get candidate + vacancy
     const { data: cand, error: cErr } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, stage, status, vacancy_id")
+      .select("id, name, email, stage, status, vacancy_id, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .single();
 
     if (cErr || !cand) {
       return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
     }
+
+    // Idioma del proceso · China va en ingles.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (cand as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (cand as any).preferred_language,
+      jobTitle: (cand as any).ht_vacancies?.title,
+      country: (cand as any).ht_vacancies?.country,
+    });
 
     // Determine outcome
     let outcome: 'rejected' | 'hired' | 'withdrew' | 'other' = 'other';
@@ -90,16 +99,24 @@ export async function POST(
         if (!gmail.connected) {
           emailResult = { sent: false, error: "Gmail no conectado · ve a Settings y conecta Gmail" };
         } else {
-          const firstName = cand.name?.split(' ')[0] || 'Hola';
-          const subject = outcome === 'hired'
+          const firstName = cand.name?.split(' ')[0] || (lang === 'en' ? 'there' : 'Hola');
+          const subjectEs = outcome === 'hired'
             ? `${firstName}, ¿cómo fue tu experiencia con Trading Solutions?`
             : `${firstName}, nos gustaría conocer tu opinión sobre el proceso`;
+          const subjectEn = outcome === 'hired'
+            ? `${firstName}, how was your experience with Trading Solutions?`
+            : `${firstName}, we would love to hear your thoughts on the process`;
+          const subject = lang === 'en' ? subjectEn : subjectEs;
 
           const greeting = outcome === 'hired'
             ? `¡Felicitaciones por unirte a Trading Solutions! Antes de empezar, queremos saber cómo viviste el proceso.`
             : `Gracias por participar en nuestro proceso de selección. Aunque esta vez no avanzamos juntos, tu experiencia importa y nos ayuda a mejorar.`;
 
-          const html = `
+          const greetingEn = outcome === 'hired'
+            ? `Congratulations on joining Trading Solutions! Before you start, we would like to know how the process felt for you.`
+            : `Thank you for taking part in our selection process. Even though we are not moving forward together this time, your experience matters and helps us improve.`;
+
+          const htmlEs = `
             <div style="font-family: 'Open Sauce Sans', -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #0a0a0a; background: #fafafa;">
               <div style="font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #737373; margin-bottom: 12px;">Trading Solutions · Talento</div>
               <div style="border: 1px solid #e8e8e8; padding: 32px; background: white;">
@@ -119,11 +136,32 @@ export async function POST(
             </div>
           `;
 
+          const htmlEn = `
+            <div style="font-family: 'Open Sauce Sans', -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #0a0a0a; background: #fafafa;">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #737373; margin-bottom: 12px;">Trading Solutions · Talent</div>
+              <div style="border: 1px solid #e8e8e8; padding: 32px; background: white;">
+                <p style="margin: 0 0 14px; font-size: 14px;">Hi ${firstName},</p>
+                <p style="margin: 0 0 14px; line-height: 1.6; font-size: 14px;">${greetingEn}</p>
+                <p style="margin: 0 0 18px; line-height: 1.6; font-size: 14px;">It takes less than <strong>2 minutes</strong>. Your answers are confidential and they help us make the process better for those who come next.</p>
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${surveyLink}" style="display: inline-block; background: #0a0a0a; color: #fff; padding: 13px 28px; text-decoration: none; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;">Answer the survey</a>
+                </div>
+                <p style="margin: 18px 0 0; font-size: 12px; color: #737373;">If the button does not work, copy this link:<br/><span style="color: #0a0a0a; word-break: break-all;">${surveyLink}</span></p>
+                <p style="margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #e8e8e8; font-size: 12px; color: #737373; line-height: 1.6;">
+                  Best regards,<br/>
+                  <strong style="color: #0a0a0a;">Talent Team</strong> · Trading Solutions
+                </p>
+              </div>
+            </div>
+          `;
+
+          const html = lang === 'en' ? htmlEn : htmlEs;
+
           const r = await sendViaGmail({
             to: cand.email,
             subject,
             html,
-            fromName: "Kelly Castañeda",
+            fromName: lang === 'en' ? EN_SIGNATURE_NAME : "Kelly Castañeda",
             replyTo: "jointheteam@tradingsolutions.com",
           });
 

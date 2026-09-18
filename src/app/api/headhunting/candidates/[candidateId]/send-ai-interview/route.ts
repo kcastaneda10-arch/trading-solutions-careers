@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 import crypto from "crypto";
 
 export async function POST(
@@ -25,7 +26,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("*, ht_vacancies(title), ht_clients(name)")
+      .select("*, ht_vacancies(title, form_template_key, country), ht_clients(name)")
       .eq("id", candidateId)
       .single();
 
@@ -64,16 +65,23 @@ export async function POST(
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
     const interviewUrl = `${baseUrl}/entrevista-ia/${token}`;
-    const firstName = (candidate.name as string).split(" ")[0] || "candidato";
+    // Idioma del proceso · China va en ingles.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: (candidate as any).ht_vacancies?.title,
+      country: (candidate as any).ht_vacancies?.country,
+    });
+    const firstName = (candidate.name as string).split(" ")[0] || (lang === "en" ? "there" : "candidato");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vacancyTitle = (candidate as any).ht_vacancies?.title || "la vacante";
+    const vacancyTitle = (candidate as any).ht_vacancies?.title || (lang === "en" ? "the position" : "la vacante");
 
     // Try to create Gmail draft
     let draftId: string | null = null;
     try {
       const gmail = await isGmailConnected();
       if (gmail.connected) {
-        const html = `<!DOCTYPE html>
+        const htmlEs = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
   .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
@@ -100,11 +108,42 @@ export async function POST(
   </div>
 </body></html>`;
 
+        const htmlEn = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .cta { display: inline-block; background: #0a0a0a; color: white !important; text-decoration: none; padding: 13px 28px; font-weight: 700; margin: 16px 0; letter-spacing: 0.3px; }
+  ul { margin: 8px 0 16px; padding-left: 20px; }
+  li { margin-bottom: 5px; font-size: 14px; }
+  p { font-size: 14px; margin: 0 0 14px; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>You have reached the next stage of the process for <strong>${vacancyTitle}</strong>. The next step is a conversation with our virtual recruiter · it is by voice, in real time, and it ends with a short section in English.</p>
+    <p>It is not an exam · she will ask you about your experience and you can tell her about it naturally, like any other call.</p>
+    <p style="text-align:center"><a href="${interviewUrl}" class="cta">Start the interview</a></p>
+    <p>A few details so you are comfortable:</p>
+    <ul>
+      <li>It takes between 15 and 20 minutes</li>
+      <li>You need a computer with a microphone, a stable internet connection and a quiet space</li>
+      <li>Speak naturally · she listens and answers you</li>
+      <li>The link stays active for 72 hours</li>
+      <li>Better to do it in one go, without long pauses</li>
+    </ul>
+    <p>After the interview we will get in touch with you about the next steps. If you have any questions, just reply to this email.</p>
+    <p>Best regards,<br><strong>Talent Team</strong> · Trading Solutions</p>
+  </div>
+</body></html>`;
+
+        const html = lang === "en" ? htmlEn : htmlEs;
+
         const draftRes = await createDraftViaGmail({
           to: candidate.email as string,
-          subject: `Trading Solutions · Entrevista para ${vacancyTitle}`,
+          subject: lang === "en"
+            ? `Trading Solutions · Interview for ${vacancyTitle}`
+            : `Trading Solutions · Entrevista para ${vacancyTitle}`,
           html,
-          fromName: "Kelly Castañeda",
+          fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
         });
         if (draftRes.ok) {
           draftId = draftRes.draft_id;

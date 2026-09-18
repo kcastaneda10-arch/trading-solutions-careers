@@ -114,6 +114,24 @@ function checkEnglishLevel(englishLevel: string | undefined, vacancyId: string):
   return { fails: true, sub_detail: sub, minRank, candidateRank };
 }
 
+/**
+ * Tope mensual (USD bruto) aprobado para el cargo de China.
+ *
+ * NO descarta: quien pide más queda en revisión con la bandera puesta. El
+ * salario se negocia y el presupuesto puede moverse; lo que no puede pasar es
+ * que alguien que pide el doble aparezca como «pasó el prefiltro» y se le
+ * gaste una entrevista sin que nadie lo haya visto.
+ */
+const CHINA_SALARY_CAP_USD = 1500;
+
+/** "USD 2,500/month gross" → 2500. Devuelve null si no hay número legible. */
+function parseSalaryUsd(raw: unknown): number | null {
+  const digits = String(raw ?? "").replace(/[^0-9.]/g, "");
+  if (!digits) return null;
+  const n = Number(digits);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 const TS_LINKEDIN_URL = "https://www.linkedin.com/company/trading-sol/";
 
 // Auto-detección sencilla ES/EN basada en frecuencia de palabras-función.
@@ -263,9 +281,19 @@ export async function POST(
       decision = "pass";
     }
 
+    // Presupuesto · sobre el tope no se rechaza, se manda a revisión.
+    const salaryUsd = parseSalaryUsd(body.salary_usd);
+    const salaryOverBudget = salaryUsd !== null && salaryUsd > CHINA_SALARY_CAP_USD;
+    if (salaryOverBudget && decision === "pass") {
+      decision = "review";
+    }
+
     meta = {
       china: true,
       salary_usd_expectation: body.salary_usd ?? null, // dato · no descarta
+      salary_usd_parsed: salaryUsd,
+      salary_cap_usd: CHINA_SALARY_CAP_USD,
+      salary_over_budget: salaryOverBudget,
       english_min_required_rank: CHINA_ENGLISH_MIN_RANK,
       english_candidate_rank: englishRank,
       english_fails: englishFails,

@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 
 export async function POST(
   req: NextRequest,
@@ -32,7 +33,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("*, ht_vacancies(title), ht_clients(name)")
+      .select("*, ht_vacancies(title, form_template_key, country), ht_clients(name)")
       .eq("id", candidateId)
       .single();
 
@@ -48,11 +49,24 @@ export async function POST(
       );
     }
 
-    // Primer nombre para personalizar el saludo
-    const firstName = (candidate.name || "").split(" ")[0] || "candidato";
-    const vacancyTitle = candidate.ht_vacancies?.title || "la vacante";
+    // El proceso de China corre en ingles · el candidato no habla espanol.
+    const rawVacancyTitle = (candidate as any).ht_vacancies?.title as string | undefined;
+    const lang = resolveCandidateLang({
+      formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: rawVacancyTitle,
+      country: (candidate as any).ht_vacancies?.country,
+    });
 
-    const subject = `Trading Solutions · Pruebas complementarias para ${candidate.name}`;
+    // Primer nombre para personalizar el saludo
+    const firstName =
+      (candidate.name || "").split(" ")[0] || (lang === "en" ? "there" : "candidato");
+    const vacancyTitle = rawVacancyTitle || (lang === "en" ? "the position" : "la vacante");
+
+    const subject =
+      lang === "en"
+        ? `Trading Solutions · Complementary assessments for ${candidate.name}`
+        : `Trading Solutions · Pruebas complementarias para ${candidate.name}`;
 
     // HTML body con la plantilla de Mary, ajustada para mantener orden y
     // dejar placeholders muy visibles para Bluesite y Psicoalianza.
@@ -108,11 +122,65 @@ export async function POST(
   </div>
 </body></html>`;
 
+    // Gemelo en ingles · mismos cinco cuestionarios, mismos placeholders para
+    // Bluesite y Psicoalianza, firma del equipo en vez de una persona.
+    const htmlEn = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; margin: 0; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  ol { padding-left: 20px; }
+  ol li { margin-bottom: 14px; }
+  a { color: #0a0a0a; text-decoration: underline; }
+  .nota { color: #737373; font-size: 13px; }
+  .placeholder { background: #fff8e1; padding: 6px 10px; color: #8a6d1c; font-weight: 600; font-size: 13px; }
+  .footer { margin-top: 24px; color: #a3a3a3; font-size: 11px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
+  p { margin: 0 0 14px; font-size: 14px; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+
+    <p>You have reached the next stage for the <strong>${vacancyTitle}</strong> position. Before the final interview we would like to understand a little more about how you think and work · these questionnaires give us that picture.</p>
+
+    <ol>
+      <li>
+        <strong>16 Personalities (MBTI):</strong> <a href="https://www.16personalities.com/free-personality-test">16personalities.com</a><br>
+        <span class="nota">When you finish, send us the two links that appear under the share icon.</span>
+      </li>
+      <li>
+        <strong>DISC:</strong> <a href="https://miperfildisc.com/">miperfildisc.com</a><br>
+        <span class="nota">You will receive the result by email · please forward it to this same address.</span>
+      </li>
+      <li>
+        <strong>Motivation test:</strong> <a href="https://motivation-test-production.up.railway.app/">motivation-test-production.up.railway.app</a>
+      </li>
+      <li>
+        <strong>BETESA (Bluesite):</strong>
+        <span class="placeholder">[ PASTE PERSONAL LINK ]</span>
+      </li>
+      <li>
+        <strong>Psicoalianza:</strong>
+        <span class="placeholder">[ PASTE PERSONAL LINK ]</span>
+      </li>
+    </ol>
+
+    <p>Take your time · they add up to around 2 hours in total and you can split them across several sessions. There are no right answers, only your own way of seeing things.</p>
+
+    <p>Let us know through this same email when you are done. If anything comes up along the way, just write to us.</p>
+
+    <p>Best regards,<br>
+    <strong>Talent Team</strong><br>
+    Talent Acquisition and Development<br>
+    Trading Solutions</p>
+
+    <div class="footer">Before sending, paste the personal Bluesite and Psicoalianza links.</div>
+  </div>
+</body></html>`;
+
     const draftRes = await createDraftViaGmail({
       to: candidate.email,
       subject,
-      html,
-      fromName: "Kelly Castañeda",
+      html: lang === "en" ? htmlEn : html,
+      fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
     });
 
     if (!draftRes.ok) {
@@ -139,6 +207,7 @@ export async function POST(
       candidate_name: candidate.name,
       candidate_email: candidate.email,
       vacancy: vacancyTitle,
+      idioma: lang,
       draft_id: draftRes.draft_id,
       gmail_email: draftRes.gmail_email,
       note: "Draft creado en Gmail. Antes de enviar, completa los enlaces personalizados de Bluesite y Psicoalianza.",

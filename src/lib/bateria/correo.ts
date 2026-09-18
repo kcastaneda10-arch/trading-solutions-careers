@@ -139,3 +139,122 @@ export function htmlBateria(d: DatosCorreo): string {
   </div>
 </body></html>`;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Version en ingles · procesos de China.
+ *
+ * Gemela exacta de la version en espanol: mismos datos, misma estructura,
+ * mismos estilos. La unica diferencia de fondo es la pantalla de
+ * consentimiento: la Ley 1581 de 2012 es colombiana y no le dice nada a un
+ * candidato en Shenzhen, asi que el correo en ingles anuncia la pantalla de
+ * consentimiento sin citar la ley.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** El correo en ingles tambien lo firma el equipo, no una persona. */
+export const FIRMA_EN = 'Talent Team';
+
+export function asuntoBateriaEn(vacante: string | null): string {
+  return vacante
+    ? `Trading Solutions \u00b7 Selection assessment for ${vacante}`
+    : 'Trading Solutions \u00b7 Selection assessment';
+}
+
+/** Version en texto plano, para clientes de correo que no muestran HTML. */
+export function textoBateriaEn(d: DatosCorreo): string {
+  const hola = primerNombre(d.nombre) ? `Hi ${primerNombre(d.nombre)},` : 'Hi,';
+  return [
+    hola,
+    '',
+    d.vacante
+      ? `You have moved forward to the next stage of the process for ${d.vacante} at Trading Solutions.`
+      : 'You have moved forward to the next stage of our selection process at Trading Solutions.',
+    '',
+    'The next step is an assessment that helps us get to know you better.',
+    '',
+    `Your personal link: ${d.url}`,
+    '',
+    'Before you start, please note:',
+    '\u00b7 It takes around 90 minutes and is completed in a single session. You cannot pause it and resume later.',
+    '\u00b7 You need a computer with a stable internet connection. It does not display properly on a phone.',
+    '\u00b7 In remote mode your camera must stay on during the whole assessment. If you prefer not to turn it on, reply to this email and we will schedule you to take it on-site at our offices.',
+    '\u00b7 Find a quiet space with no interruptions before you open the link.',
+    '\u00b7 The link is personal, non-transferable, and works only once.',
+    '\u00b7 Answer with your first reaction. Your answers are saved automatically.',
+    '',
+    'When you open the link you will first see the data processing consent screen. Read it carefully: the assessment does not start without your consent.',
+    '',
+    'If you have any questions, just reply to this email.',
+    '',
+    d.firma ?? FIRMA_EN,
+    'Trading Solutions',
+  ].join('\n');
+}
+
+export function htmlBateriaEn(d: DatosCorreo): string {
+  const nombre = primerNombre(d.nombre);
+  const hola = nombre ? `Hi <strong>${nombre}</strong>,` : 'Hi,';
+  const intro = d.vacante
+    ? `You have moved forward to the next stage of the process for <strong>${d.vacante}</strong> at Trading Solutions.`
+    : 'You have moved forward to the next stage of our selection process at Trading Solutions.';
+
+  const punto = (txt: string) =>
+    `<li style="margin:0 0 9px;line-height:1.55">${txt}</li>`;
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;color:#0A0A0A">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff">
+
+    <div style="background:${AZUL};padding:26px 32px">
+      <p style="margin:0;color:#ffffff;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700">Trading Solutions</p>
+      <p style="margin:6px 0 0;color:#ffffff;font-size:19px;font-weight:600">Selection assessment</p>
+    </div>
+
+    <div style="padding:30px 32px">
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.6">${hola}</p>
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.6">${intro}</p>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.6">
+        The next step is an assessment that helps us <strong>get to know you better</strong>.
+      </p>
+
+      <p style="margin:0 0 24px;text-align:center">
+        <a href="${d.url}" style="display:inline-block;background:${AZUL};color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:8px;font-weight:600;font-size:16px">Start the assessment</a>
+      </p>
+
+      <div style="background:#EEF3FE;border:1px solid #C7D9FB;border-radius:8px;padding:16px 18px;margin:0 0 20px">
+        <p style="margin:0 0 10px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${AZUL};font-weight:700">Before you start</p>
+        <ul style="margin:0;padding-left:18px;font-size:14px;color:#374151">
+          ${punto('It takes around <strong>90 minutes</strong> and is completed in <strong>a single session</strong>. You cannot pause it and resume later.')}
+          ${punto('You need a <strong>computer</strong> with a stable internet connection. It does not display properly on a phone.')}
+          ${punto('In remote mode <strong>your camera must stay on</strong> during the whole assessment. If you prefer not to turn it on, reply to this email and we will schedule you to take it <strong>on-site</strong> at our offices.')}
+          ${punto('Find a quiet space with no interruptions <em>before</em> you open the link.')}
+          ${punto('The link is <strong>personal and non-transferable</strong>, and works only once.')}
+          ${punto('Answer with your first reaction. Your answers are saved automatically.')}
+        </ul>
+      </div>
+
+      <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#374151">
+        When you open the link you will first see the <strong>data processing consent</strong> screen.
+        Read it carefully: the assessment does not start without your consent.
+      </p>
+      <p style="margin:0 0 22px;font-size:14px;line-height:1.6;color:#374151">
+        If you have any questions, just reply to this email.
+      </p>
+
+      <p style="margin:0;font-size:15px;line-height:1.6">
+        ${d.firma ?? FIRMA_EN}<br>
+        <span style="color:#6B7280;font-size:13.5px">Trading Solutions</span>
+      </p>
+    </div>
+
+    <div style="padding:18px 32px 26px;border-top:1px solid #E5E7EB">
+      <p style="margin:0;font-size:11.5px;color:#9CA3AF;line-height:1.6">
+        Personal link, generated for you. If you are not ${nombre || 'the intended recipient'}, please ignore this email.<br>
+        If the button does not open, copy this address into your browser:<br>
+        <span style="color:#6B7280;word-break:break-all">${d.url}</span>
+      </p>
+    </div>
+
+  </div>
+</body></html>`;
+}

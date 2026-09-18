@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
+import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
 
 export const runtime = "nodejs";
 
@@ -100,6 +101,32 @@ function buildEmailHtml(firstName: string, vacancyTitle: string, calendlyUrl: st
 </body></html>`;
 }
 
+// Misma plantilla, en ingles · los procesos de China se comunican en ingles.
+function buildEmailHtmlEn(firstName: string, vacancyTitle: string, calendlyUrl: string, host: { firstName: string; fullName: string; role: string }, customMessage?: string): string {
+  const messageBody = customMessage ||
+    `You have moved on to the next stage of the process for <strong>${vacancyTitle}</strong>. The next conversation is an <strong>in-person interview</strong> with <strong>${host.fullName}</strong> at our Barranquilla offices.<br><br><strong>📍 Address:</strong> Cra. 57 #99A-65, Torre Sur, Office 1501.<br><strong>🪪 Important:</strong> bring your <strong>original ID document</strong> (you cannot enter the building without it).`;
+  const slotText = `Choose the time that best fits your availability · you will see ${host.firstName}'s calendar and can book whichever slot you prefer:`;
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  body { font-family: 'Open Sauce Sans', -apple-system, sans-serif; line-height: 1.6; color: #0a0a0a; padding: 24px; background: #fafafa; }
+  .container { max-width: 600px; margin: 0 auto; background: white; padding: 32px; border: 1px solid #e8e8e8; }
+  .cta { display: inline-block; background: #0a0a0a; color: white !important; text-decoration: none; padding: 13px 28px; font-weight: 700; margin: 16px 0; letter-spacing: 0.3px; }
+  p { font-size: 14px; margin: 0 0 14px; }
+  .footer { color: #737373; font-size: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
+</style></head><body>
+  <div class="container">
+    <p>Hi <strong>${firstName}</strong>,</p>
+    <p>${messageBody}</p>
+    <p>${slotText}</p>
+    <p style="text-align:center"><a href="${calendlyUrl}" class="cta">Choose a time</a></p>
+    <p style="font-size:13px;color:#737373"><em>Note: Colombian public holidays are not working days · if you see one available (e.g. Monday, May 18 · Ascension Day), please pick another day.</em></p>
+    <p>If none of the available times work for you, just reply to this email and we will find one together.</p>
+    <p>Best regards,<br><strong>Talent Team</strong> · Trading Solutions</p>
+    <div class="footer">The address and the details are also included in the Calendly invitation once you confirm your time.</div>
+  </div>
+</body></html>`;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { candidateId: string } }
@@ -114,7 +141,7 @@ export async function POST(
 
     const { data: candidate, error } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, name, email, phone, vacancy_id, stage, ht_vacancies(title)")
+      .select("id, name, email, phone, vacancy_id, stage, preferred_language, ht_vacancies(title, form_template_key, country)")
       .eq("id", candidateId)
       .single();
 
@@ -122,9 +149,15 @@ export async function POST(
       return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
     }
 
-    const firstName = (candidate.name || "").split(" ")[0] || "candidato";
-    // @ts-expect-error supabase relation
-    const vacancyTitle: string = candidate.ht_vacancies?.title || "la posición";
+    // Idioma del proceso · China va en ingles.
+    const lang = resolveCandidateLang({
+      formTemplateKey: (candidate as any).ht_vacancies?.form_template_key,
+      preferredLanguage: (candidate as any).preferred_language,
+      jobTitle: (candidate as any).ht_vacancies?.title,
+      country: (candidate as any).ht_vacancies?.country,
+    });
+    const firstName = (candidate.name || "").split(" ")[0] || (lang === "en" ? "there" : "candidato");
+    const vacancyTitle: string = (candidate as any).ht_vacancies?.title || (lang === "en" ? "the position" : "la posición");
 
     // Selección de host según stage y vacante:
     //   1. Stage cwo_interview → siempre Yohanna (en cualquier vacante)
@@ -146,12 +179,16 @@ export async function POST(
       try {
         const gmail = await isGmailConnected();
         if (gmail.connected) {
-          const html = buildEmailHtml(firstName, vacancyTitle, calendlyUrl, host, customMessage);
+          const html = lang === "en"
+            ? buildEmailHtmlEn(firstName, vacancyTitle, calendlyUrl, host, customMessage)
+            : buildEmailHtml(firstName, vacancyTitle, calendlyUrl, host, customMessage);
           const draftRes = await createDraftViaGmail({
             to: candidate.email as string,
-            subject: `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
+            subject: lang === "en"
+              ? `Trading Solutions · Choose your interview time for ${vacancyTitle}`
+              : `Trading Solutions · Elige tu horario para la entrevista de ${vacancyTitle}`,
             html,
-            fromName: host.fullName,
+            fromName: lang === "en" ? EN_SIGNATURE_NAME : host.fullName,
             replyTo: "jointheteam@tradingsolutions.com",
           });
           if (draftRes.ok) draftId = draftRes.draft_id;
@@ -175,7 +212,9 @@ export async function POST(
     }
 
     // WhatsApp link · pre-llenado para click-to-send (firmado por el host correspondiente)
-    const waMessage = `Hola ${firstName}, te escribo desde Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle}. La próxima conversación es una entrevista PRESENCIAL con ${host.fullName}.\n📍 Dirección: Cra. 57 #99A-65, Torre Sur, Oficina 1501 — Barranquilla.\n🪪 Importante: lleva tu cédula en original.\n\nElige el horario que mejor te funcione desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\n${host.firstName}`;
+    const waMessageEs = `Hola ${firstName}, te escribo desde Trading Solutions.\n\nPasaste a la siguiente etapa para ${vacancyTitle}. La próxima conversación es una entrevista PRESENCIAL con ${host.fullName}.\n📍 Dirección: Cra. 57 #99A-65, Torre Sur, Oficina 1501 — Barranquilla.\n🪪 Importante: lleva tu cédula en original.\n\nElige el horario que mejor te funcione desde acá: ${calendlyUrl}\n\nSi ninguno te funciona, regálame una respuesta y buscamos juntos.\n\nUn abrazo,\n${host.firstName}`;
+    const waMessageEn = `Hi ${firstName}, this is Trading Solutions.\n\nYou have moved on to the next stage for ${vacancyTitle}. The next conversation is an IN-PERSON interview with ${host.fullName}.\n📍 Address: Cra. 57 #99A-65, Torre Sur, Office 1501 — Barranquilla.\n🪪 Important: bring your original ID document.\n\nChoose the time that works best for you here: ${calendlyUrl}\n\nIf none of them work, just reply and we will find one together.\n\nBest regards,\nTalent Team · Trading Solutions`;
+    const waMessage = lang === "en" ? waMessageEn : waMessageEs;
     const cleanPhone = (candidate.phone || "").replace(/[^0-9]/g, "");
     const finalPhone = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
     const waLink = finalPhone
