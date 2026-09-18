@@ -52,6 +52,9 @@ type Cand = {
   prefilter_completed_at: string | null;
   prefilter_data: PrefilterData | null;
   cv_url: string | null;
+  /** De dónde salió el candidato · 'cv_proceso_anterior' = HV cargada de un
+   *  banco o de una búsqueda previa, no aplicó por la web. */
+  source?: string | null;
   ht_vacancies?: { title: string };
   // Rejection metadata · llenado al rechazar con motivo
   rejection_category?: string | null;
@@ -255,6 +258,8 @@ export default function PipelineFunnel() {
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
   // El desplegable arranca solo con las abiertas: es lo que se está trabajando.
   const [verCerradas, setVerCerradas] = useState(false);
+  /** Origen: separa lo que se cargó de un proceso anterior de lo que llegó solo. */
+  const [origenFilter, setOrigenFilter] = useState<"all" | "cv_proceso_anterior" | "web">("all");
   // Inicializar vacFilter desde URL query (?vacancy=UUID) — persiste entre reloads.
   // Usamos query string (no hash) porque el HR Admin ya usa el hash para el tab.
   const [vacFilter, setVacFilterState] = useState(() => {
@@ -419,13 +424,22 @@ export default function PipelineFunnel() {
   );
 
   const filtered = useMemo(() => {
-    if (vacFilter !== "all") return candidates.filter(c => c.vacancy_id === vacFilter);
-    if (verCerradas) return candidates;
+    let base: Cand[];
+    if (vacFilter !== "all") base = candidates.filter(c => c.vacancy_id === vacFilter);
+    else if (verCerradas) base = candidates;
     // Sin vacantes cargadas todavía no se esconde nada: mejor de más que un
     // tablero vacío mientras llega la respuesta.
-    if (idsAbiertas.size === 0) return candidates;
-    return candidates.filter(c => c.vacancy_id && idsAbiertas.has(c.vacancy_id));
-  }, [candidates, vacFilter, verCerradas, idsAbiertas]);
+    else if (idsAbiertas.size === 0) base = candidates;
+    else base = candidates.filter(c => c.vacancy_id && idsAbiertas.has(c.vacancy_id));
+
+    if (origenFilter === "cv_proceso_anterior") {
+      return base.filter(c => c.source === "cv_proceso_anterior");
+    }
+    if (origenFilter === "web") {
+      return base.filter(c => c.source !== "cv_proceso_anterior");
+    }
+    return base;
+  }, [candidates, vacFilter, verCerradas, idsAbiertas, origenFilter]);
 
   /** Dentro de cada columna, quien ya tiene resultado de bateria va primero y
    *  de mayor a menor match. El orden ES el ranking: no hace falta abrir otra
@@ -489,6 +503,20 @@ export default function PipelineFunnel() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="ts-eyebrow text-[10px]">Origen</span>
+              <select
+                value={origenFilter}
+                onChange={(e) => setOrigenFilter(e.target.value as "all" | "cv_proceso_anterior" | "web")}
+                className="text-xs font-medium border border-[var(--ts-gray-20)] bg-white px-2 py-1 hover:border-[var(--ts-black)] focus:border-[var(--ts-black)] outline-none transition-colors"
+                style={{ borderRadius: 0 }}
+                title="Separa las hojas de vida cargadas de un proceso anterior de quienes aplicaron por la web"
+              >
+                <option value="all">Todos</option>
+                <option value="cv_proceso_anterior">CV proceso anterior</option>
+                <option value="web">Aplicaron por la web</option>
+              </select>
+            </div>
             <span className="ts-eyebrow text-[10px]">Vacante</span>
             <div className="flex items-center gap-2">
               <select
@@ -638,6 +666,14 @@ export default function PipelineFunnel() {
                               <div className="mt-2 inline-block ts-eyebrow text-[9px] tracking-[1.5px] text-[var(--ts-gray-90)] border border-[var(--ts-gray-20)] px-1.5 py-0.5">
                                 {c.ht_vacancies?.title || "—"}
                               </div>
+                              {c.source === "cv_proceso_anterior" && (
+                                <div
+                                  className="mt-1.5 inline-block ts-eyebrow text-[9px] tracking-[1.5px] text-[var(--ts-gray-60)] bg-[var(--ts-gray-10)] px-1.5 py-0.5"
+                                  title="Hoja de vida cargada de un proceso anterior · no aplicó por la web"
+                                >
+                                  CV proceso anterior
+                                </div>
+                              )}
                             </button>
                             <ChipBateria est={bateria[c.id]} />
                           </div>

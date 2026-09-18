@@ -38,7 +38,22 @@ export async function GET(
  * Updates whitelisted fields on a candidate. Currently supports: vacancy_id, name, email, phone, stage, status.
  * Used for cases like switching a candidate to a different vacancy.
  */
-const ALLOWED_PATCH_FIELDS = ["vacancy_id", "name", "email", "phone", "stage", "status", "preferred_language"];
+const ALLOWED_PATCH_FIELDS = ["vacancy_id", "name", "email", "phone", "stage", "status", "preferred_language", "source"];
+
+/**
+ * Orígenes con los que se cataloga a un candidato. `cv_proceso_anterior` es
+ * para las hojas de vida que Wellness carga de un banco o de un proceso previo:
+ * sin esa marca quedan idénticas a quien aplicó por la web y no hay forma de
+ * separar la búsqueda nueva de lo que ya se tenía.
+ */
+const ALLOWED_SOURCES = [
+  "public_form",
+  "public_form_internal",
+  "cv_proceso_anterior",
+  "linkedin",
+  "referido",
+  "email_manual",
+];
 
 export async function PATCH(
   req: NextRequest,
@@ -57,6 +72,17 @@ export async function PATCH(
     for (const k of ALLOWED_PATCH_FIELDS) {
       if (body[k] !== undefined) updates[k] = body[k];
     }
+    if (updates.source !== undefined) {
+      const src = String(updates.source || "").toLowerCase().trim();
+      if (!ALLOWED_SOURCES.includes(src)) {
+        return NextResponse.json(
+          { error: `source inválido · valores permitidos: ${ALLOWED_SOURCES.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      updates.source = src;
+    }
+
     // La columna tiene CHECK (es|en) · sin esto un valor raro devuelve un 500 crudo.
     if (updates.preferred_language !== undefined) {
       const lang = String(updates.preferred_language || "").toLowerCase();
@@ -74,7 +100,7 @@ export async function PATCH(
       .from('ht_candidates')
       .update(updates)
       .eq('id', candidateId)
-      .select('id, name, email, vacancy_id, stage, status, preferred_language')
+      .select('id, name, email, vacancy_id, stage, status, preferred_language, source')
       .single();
 
     if (error) {
