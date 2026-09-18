@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { CONSENT_TEXT_VERSION } from '@/lib/bateria/items';
+import { consentVersionFor, batteryVersionFor, type BatLang } from '@/lib/bateria/i18n';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   try {
-    const { token, camera, name, email } = await req.json();
+    const { token, camera, name, email, lang: langRaw } = await req.json();
+    // El idioma lo manda la pantalla que el candidato acaba de leer.
+    const lang: BatLang = String(langRaw || '').toLowerCase() === 'en' ? 'en' : 'es';
     if (!token) return NextResponse.json({ error: 'Token requerido' }, { status: 400 });
 
     const { data: session, error: eSes } = await supabaseAdmin
@@ -30,11 +33,16 @@ export async function POST(req: NextRequest) {
     const patch: Record<string, unknown> = {
       consent_data_at: now,
       consent_cam_at: camera ? now : null,
-      consent_text_ver: CONSENT_TEXT_VERSION,
+      // El candidato en inglés acepta el texto PIPL, no el de habeas data. Sin
+      // esta distinción la auditoría no puede mostrar QUÉ aceptó cada persona.
+      consent_text_ver: consentVersionFor(lang, CONSENT_TEXT_VERSION),
       consent_ip: ip,
       consent_ua: req.headers.get('user-agent'),
       modality: camera ? 'remoto' : 'presencial_pendiente',
       status: session.status === 'created' ? 'consented' : session.status,
+      // La versión queda marcada con el idioma en que se presentó: un puntaje
+      // en inglés no se lee contra el baremo en español.
+      battery_version: batteryVersionFor(lang),
       updated_at: now,
     };
     if (name) patch.candidate_name = name;

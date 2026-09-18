@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 const TS_BLACK = "#0A0A0A";
@@ -29,13 +29,263 @@ type CItem = {
 };
 type CBlock = { key: string; label: string; intro: string; timedSeconds: number | null; items: CItem[] };
 
-const L5 = [
-  { v: 1, label: "Muy en desacuerdo" },
-  { v: 2, label: "En desacuerdo" },
-  { v: 3, label: "Neutral" },
-  { v: 4, label: "De acuerdo" },
-  { v: 5, label: "Muy de acuerdo" },
-];
+/**
+ * ── Idioma de la pantalla ─────────────────────────────────────────────────
+ *
+ * El texto de los ítems, las etiquetas y las introducciones de cada bloque ya
+ * llegan traducidos desde /api/bateria/session (ver src/lib/bateria/i18n.ts).
+ * Lo que vive acá es el TEXTO DE LA PANTALLA: consentimiento, instrucciones,
+ * botones, cronómetro, avisos de cámara y errores. Antes estaba incrustado en
+ * el JSX, así que un candidato en China veía la prueba en inglés dentro de una
+ * interfaz en español.
+ *
+ * El español queda idéntico carácter por carácter: esto es una adición, no una
+ * reescritura. Lo que cambia es que el mismo texto ahora sale del diccionario.
+ *
+ * `**así**` marca negrilla; rich() lo convierte en <b> al renderizar, para que
+ * el diccionario siga siendo texto plano y no JSX.
+ * `{n}`, `{total}` son los valores que se interpolan; los reemplaza fmt().
+ */
+type Lang = "es" | "en";
+
+type Dict = {
+  // estados y errores
+  loading: string;
+  errorTitle: string;
+  errorHelp: string;
+  errOpen: string;
+  errNetwork: string;
+  errInvalidLink: string;
+  errAlreadyTaken: string;
+  errConsentSave: string;
+  errConsentNetwork: string;
+  // consentimiento
+  consentTitle: string;
+  consentIntro: string;
+  consentBullets: string[];
+  nameLabel: string;
+  namePlaceholder: string;
+  consentDataCheck: string;
+  consentCamCheck: string;
+  consentButton: string;
+  camBlocked: string;
+  // presentación
+  introFallbackTitle: string;
+  introP1: string;
+  introP2: string;
+  introP3: string;
+  introP4: string;
+  introButton: string;
+  // bloques
+  blockQuestions: string;
+  blockButton: string;
+  // fallo de guardado
+  saveFailTitle: string;
+  saveFailAlready: string;
+  saveFailGeneric: string;
+  saveFailNetwork: string;
+  saveFailHelp: string;
+  // cierre
+  sendingTitle: string;
+  sendingBody: string;
+  doneTitle: string;
+  doneBody: string;
+  // prueba
+  camOn: string;
+  camOff: string;
+  scaleAria: string;
+  anchorDisagree: string;
+  anchorAgree: string;
+  likert5: string[];
+  tetradMost: string;
+  tetradLeast: string;
+  questionCounter: string;
+  autoAdvance: string;
+  finishButton: string;
+  nextButton: string;
+  autosave: string;
+};
+
+const T: Record<Lang, Dict> = {
+  es: {
+    loading: "Cargando…",
+    errorTitle: "No pudimos abrir la prueba",
+    errorHelp: "Si el problema sigue, responda el correo con el que recibió este enlace y lo revisamos.",
+    errOpen: "No pudimos abrir la prueba.",
+    errNetwork: "No pudimos conectar. Revise su conexión e intente de nuevo.",
+    errInvalidLink: "Enlace no válido",
+    errAlreadyTaken: "Esta prueba ya fue presentada",
+    errConsentSave: "No pudimos registrar su autorización. Escríbanos y le enviamos un enlace nuevo.",
+    errConsentNetwork: "No pudimos conectar para registrar su autorización. Revise su internet e intente de nuevo.",
+
+    consentTitle: "Autorización de tratamiento de datos personales",
+    consentIntro:
+      "Trading Solutions S.A.S. tratará los datos que usted suministre en esta prueba con la única finalidad de evaluar su candidatura al cargo al que aplicó. Se recogen sus respuestas, los tiempos de respuesta y las capturas de cámara durante la sesión.",
+    consentBullets: [
+      "Los resultados se conservan **dos años** y luego se eliminan.",
+      "No se comparten con terceros distintos al equipo de selección.",
+      "Sus derechos como titular y los canales para ejercerlos están descritos en la **Política de Tratamiento de Datos Personales** de Trading Solutions S.A.S., publicada en nuestro sitio de empleo.",
+      "La presentación **remota exige cámara activa** durante toda la sesión. Si prefiere no habilitarla, puede presentar la prueba de forma **presencial** en nuestras instalaciones: responda el correo con el que recibió este enlace y le agendamos.",
+    ],
+    nameLabel: "Nombre completo",
+    namePlaceholder: "Como aparece en su documento",
+    consentDataCheck: "**Autorizo** el tratamiento de mis datos en los términos descritos.",
+    consentCamCheck:
+      "**Autorizo la captura de imagen** durante la sesión y entiendo que es condición de la modalidad remota.",
+    consentButton: "Acepto y continúo",
+    camBlocked:
+      "El navegador bloqueó la cámara. Habilite el permiso y vuelva a intentar, o escríbanos para presentar la prueba de forma presencial.",
+
+    introFallbackTitle: "Prueba de selección",
+    introP1:
+      "La prueba tiene **cinco partes** y {total} preguntas en total. Toma alrededor de **90 minutos**. Solo la cuarta parte está cronometrada; las otras cuatro no tienen tiempo.",
+    introP2:
+      "En las partes de afirmaciones no hay respuestas correctas ni incorrectas: responda con lo primero que le parezca, pensarlo mucho no mejora el resultado. En la parte cronometrada sí hay una respuesta correcta.",
+    introP3:
+      "Sus respuestas se guardan a medida que avanza. Si se le cierra el navegador, vuelva a abrir este mismo enlace y continúa exactamente donde quedó.",
+    introP4:
+      "Al terminar no verá un resultado en pantalla: el informe lo revisa el equipo de selección y nos comunicamos con usted por correo.",
+    introButton: "Comenzar",
+
+    blockQuestions: "{n} preguntas",
+    blockButton: "Continuar",
+
+    saveFailTitle: "Sus respuestas no se están guardando",
+    saveFailAlready: "Este enlace ya fue presentado. Sus respuestas no se están guardando.",
+    saveFailGeneric: "No pudimos guardar su respuesta. No siga: sus respuestas no se están registrando.",
+    saveFailNetwork: "Se perdió la conexión y su última respuesta no se guardó. Revise su internet antes de continuar.",
+    saveFailHelp:
+      "Por favor **no continúe**. Responda el correo con el que recibió este enlace y le enviamos uno nuevo. Nada de lo que responda a partir de aquí quedaría registrado.",
+
+    sendingTitle: "Enviando sus respuestas…",
+    sendingBody: "No cierre esta ventana.",
+    doneTitle: "Listo, recibimos su prueba",
+    doneBody:
+      "Gracias por el tiempo que dedicó. El equipo de selección revisa los resultados y se comunica con usted por correo. Ya puede cerrar esta ventana.",
+
+    camOn: "● cámara activa",
+    camOff: "● sin cámara",
+    scaleAria: "Opción {n} de 7",
+    anchorDisagree: "En desacuerdo",
+    anchorAgree: "De acuerdo",
+    likert5: ["Muy en desacuerdo", "En desacuerdo", "Neutral", "De acuerdo", "Muy de acuerdo"],
+    tetradMost: "Más",
+    tetradLeast: "Menos",
+    questionCounter: "Pregunta {n} de {total}",
+    autoAdvance: "Avanza sola al responder",
+    finishButton: "Terminar y enviar",
+    nextButton: "Siguiente",
+    autosave: "Sus respuestas se guardan automáticamente.",
+  },
+
+  /**
+   * El consentimiento en inglés NO es la traducción del habeas data colombiano.
+   * El candidato está en China y la ley que lo cubre es la PIPL: lo que exige es
+   * decir quién trata la información, para qué, cuánto tiempo se guarda, que sale
+   * del país, y pedir un consentimiento aparte para la imagen. Citar la Ley 1581
+   * acá sería citarle una ley que no lo protege.
+   */
+  en: {
+    loading: "Loading…",
+    errorTitle: "We could not open the assessment",
+    errorHelp: "If the problem continues, reply to the email that sent you this link and we will look into it.",
+    errOpen: "We could not open the assessment.",
+    errNetwork: "We could not connect. Check your connection and try again.",
+    errInvalidLink: "This link is not valid",
+    errAlreadyTaken: "This assessment has already been taken",
+    errConsentSave: "We could not record your consent. Write to us and we will send you a new link.",
+    errConsentNetwork: "We could not connect to record your consent. Check your internet and try again.",
+
+    consentTitle: "Consent to the processing of your personal information",
+    consentIntro:
+      "Trading Solutions S.A.S. processes the answers you give in this assessment, your response times and the camera captures taken during the session, for the sole purpose of evaluating your application for the position you applied to.",
+    consentBullets: [
+      "The results are kept for **two years** and are then deleted.",
+      "They are not shared with anyone outside the selection team.",
+      "Trading Solutions S.A.S. is established outside China, so your information is **transferred to and stored outside China**, where the selection team reviews it.",
+      "The remote format **requires an active camera** throughout the session. If you prefer not to enable it, you can take the assessment **on site** at our offices: reply to the email that sent you this link and we will arrange it.",
+      "You may **withdraw your consent** at any time by replying to that same email.",
+    ],
+    nameLabel: "Full name",
+    namePlaceholder: "As it appears on your ID",
+    consentDataCheck: "**I consent** to the processing of my personal information as described above.",
+    consentCamCheck:
+      "**I consent to the capture of my image** during the session and understand that it is required for the remote format.",
+    consentButton: "I consent and continue",
+    camBlocked:
+      "Your browser blocked the camera. Allow the permission and try again, or write to us to take the assessment on site.",
+
+    introFallbackTitle: "Selection assessment",
+    introP1:
+      "The assessment has **five parts** and {total} questions in total. It takes around **90 minutes**. Only the fourth part is timed; the other four have no time limit.",
+    introP2:
+      "In the statement parts there are no right or wrong answers: answer with your first reaction, thinking it over does not improve the result. The timed part does have a correct answer.",
+    introP3:
+      "Your answers are saved as you go. If your browser closes, open this same link again and you continue exactly where you left off.",
+    introP4:
+      "You will not see a result on screen when you finish: the selection team reviews the report and we contact you by email.",
+    introButton: "Start",
+
+    blockQuestions: "{n} questions",
+    blockButton: "Continue",
+
+    saveFailTitle: "Your answers are not being saved",
+    saveFailAlready: "This link has already been used. Your answers are not being saved.",
+    saveFailGeneric: "We could not save your answer. Do not continue: your answers are not being recorded.",
+    saveFailNetwork: "The connection was lost and your last answer was not saved. Check your internet before continuing.",
+    saveFailHelp:
+      "Please **do not continue**. Reply to the email that sent you this link and we will send you a new one. Nothing you answer from here on would be recorded.",
+
+    sendingTitle: "Sending your answers…",
+    sendingBody: "Do not close this window.",
+    doneTitle: "Done, we received your assessment",
+    doneBody:
+      "Thank you for the time you gave us. The selection team reviews the results and will contact you by email. You can close this window now.",
+
+    camOn: "● camera on",
+    camOff: "● no camera",
+    scaleAria: "Option {n} of 7",
+    anchorDisagree: "Disagree",
+    anchorAgree: "Agree",
+    likert5: ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"],
+    tetradMost: "Most",
+    tetradLeast: "Least",
+    questionCounter: "Question {n} of {total}",
+    autoAdvance: "Moves on by itself when you answer",
+    finishButton: "Finish and submit",
+    nextButton: "Next",
+    autosave: "Your answers are saved automatically.",
+  },
+};
+
+/** Reemplaza {n}, {total} … por su valor. */
+function fmt(text: string, vars: Record<string, string | number>): string {
+  return text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+}
+
+/** Convierte **esto** en <b>esto</b>. El texto visible no cambia. */
+function rich(text: string): React.ReactNode[] {
+  return text
+    .split(/\*\*(.+?)\*\*/g)
+    .map((part, i) => (i % 2 === 1 ? <b key={i}>{part}</b> : <Fragment key={i}>{part}</Fragment>));
+}
+
+/**
+ * Los endpoints responden en español. Para el candidato en inglés se traduce
+ * lo que se sabe traducir; el español sigue mostrando exactamente lo que
+ * mostraba antes, incluido el mensaje crudo del backend.
+ */
+function apiError(j: any, lang: Lang): string {
+  const t = T[lang];
+  const raw = String(j?.error ?? "");
+  if (j?.status === "completed" || raw === "Esta prueba ya fue presentada") return t.errAlreadyTaken;
+  if (raw === "Enlace no válido") return t.errInvalidLink;
+  if (lang === "es") return raw || t.errOpen;
+  return t.errOpen;
+}
+
+/** Los cinco puntos de la escala Likert. Las etiquetas salen del diccionario. */
+const L5 = [1, 2, 3, 4, 5];
 
 /** Escala de 7 puntos en círculos graduados: el tamaño y el color indican la intensidad. */
 const L7 = [
@@ -62,6 +312,9 @@ export default function PruebaPage() {
   const [session, setSession] = useState<any>(null);
   const [blocks, setBlocks] = useState<CBlock[]>([]);
   const [answers, setAnswers] = useState<Record<string, any>>({});
+  // El idioma lo decide la sesión (candidato de China → inglés). Si no viene,
+  // español: es el caso de toda la operación en Colombia.
+  const [lang, setLang] = useState<Lang>("es");
 
   const [bi, setBi] = useState(0);
   const [ii, setIi] = useState(0);
@@ -72,6 +325,8 @@ export default function PruebaPage() {
   const [name, setName] = useState("");
   const [camState, setCamState] = useState<"off" | "on" | "denied">("off");
   const [fallaGuardado, setFallaGuardado] = useState<string | null>(null);
+
+  const t = T[lang];
 
   const shownAt = useRef<number>(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -100,11 +355,16 @@ export default function PruebaPage() {
         const r = await fetch(`/api/bateria/session/${token}`);
         const j = await r.json();
         if (!r.ok) {
-          setErrorMsg(j.error || "No pudimos abrir la prueba.");
+          // Un enlace inválido o ya presentado no trae idioma: queda el de por
+          // defecto, salvo que el endpoint alguna vez lo mande.
+          const le: Lang = j?.lang === "en" ? "en" : "es";
+          setLang(le);
+          setErrorMsg(apiError(j, le));
           setPhase("error");
           return;
         }
         setSession(j.session);
+        setLang(j.session?.lang === "en" ? "en" : "es");
         setBlocks(j.blocks);
         setAnswers(j.existing || {});
         setName(j.session.candidate_name || "");
@@ -120,10 +380,11 @@ export default function PruebaPage() {
         setIi(ri);
         setPhase(j.session.consent_data_at ? "intro" : "habeas");
       } catch {
-        setErrorMsg("No pudimos conectar. Revise su conexión e intente de nuevo.");
+        setErrorMsg(T[lang].errNetwork);
         setPhase("error");
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // ── Proctoring ────────────────────────────────────────────
@@ -250,18 +511,20 @@ export default function PruebaPage() {
           // Un fallo al guardar NO se puede tragar: es exactamente como alguien
           // termina las 172 preguntas y no queda ninguna registrada.
           const j = await r.json().catch(() => ({}));
+          // El `detalle` del backend viene en español: al candidato en inglés se
+          // le muestra el mensaje equivalente del diccionario.
           setFallaGuardado(
-            j?.detalle ||
+            (lang === "es" ? j?.detalle : null) ||
               (r.status === 409
-                ? "Este enlace ya fue presentado. Sus respuestas no se están guardando."
-                : "No pudimos guardar su respuesta. No siga: sus respuestas no se están registrando.")
+                ? T[lang].saveFailAlready
+                : T[lang].saveFailGeneric)
           );
         })
         .catch(() => {
-          setFallaGuardado("Se perdió la conexión y su última respuesta no se guardó. Revise su internet antes de continuar.");
+          setFallaGuardado(T[lang].saveFailNetwork);
         });
     },
-    [token]
+    [token, lang]
   );
 
   function goTo(nb: number, ni: number) {
@@ -309,18 +572,20 @@ export default function PruebaPage() {
       const r = await fetch("/api/bateria/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, camera: okCam && camOk, name }),
+        // El idioma va en el cuerpo: el backend guarda la versión del texto que
+        // el candidato acaba de leer (habeas data o PIPL), no la del servidor.
+        body: JSON.stringify({ token, camera: okCam && camOk, name, lang }),
       });
       const j = await r.json().catch(() => ({}));
       // Si la autorizacion no queda registrada, la prueba NO empieza: sin ese
       // registro no hay evidencia de habeas data y las capturas se rechazan.
       if (!r.ok || j?.error) {
-        setErrorMsg(j?.detalle || "No pudimos registrar su autorización. Escríbanos y le enviamos un enlace nuevo.");
+        setErrorMsg((lang === "es" ? j?.detalle : null) || t.errConsentSave);
         setPhase("error");
         return;
       }
     } catch {
-      setErrorMsg("No pudimos conectar para registrar su autorización. Revise su internet e intente de nuevo.");
+      setErrorMsg(t.errConsentNetwork);
       setPhase("error");
       return;
     }
@@ -344,15 +609,15 @@ export default function PruebaPage() {
   };
 
   if (phase === "loading") {
-    return <div style={shell}><div style={card}><p style={{ color: TS_GRAY, margin: 0 }}>Cargando…</p></div></div>;
+    return <div style={shell}><div style={card}><p style={{ color: TS_GRAY, margin: 0 }}>{t.loading}</p></div></div>;
   }
 
   if (phase === "error") {
     return (
       <div style={shell}><div style={card}>
-        <h1 style={h1}>No pudimos abrir la prueba</h1>
+        <h1 style={h1}>{t.errorTitle}</h1>
         <p style={sub}>{errorMsg}</p>
-        <p style={{ ...sub, marginBottom: 0 }}>Si el problema sigue, responda el correo con el que recibió este enlace y lo revisamos.</p>
+        <p style={{ ...sub, marginBottom: 0 }}>{t.errorHelp}</p>
       </div></div>
     );
   }
@@ -362,37 +627,32 @@ export default function PruebaPage() {
     return (
       <div style={shell}><div style={card}>
         <p style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: TS_BLUE, fontWeight: 700, margin: "0 0 10px" }}>Trading Solutions</p>
-        <h1 style={h1}>Autorización de tratamiento de datos personales</h1>
-        <p style={sub}>
-          Trading Solutions S.A.S. tratará los datos que usted suministre en esta prueba con la única finalidad de
-          evaluar su candidatura al cargo al que aplicó. Se recogen sus respuestas, los tiempos de respuesta y las
-          capturas de cámara durante la sesión.
-        </p>
+        <h1 style={h1}>{t.consentTitle}</h1>
+        <p style={sub}>{t.consentIntro}</p>
         <ul style={{ ...sub, paddingLeft: 18, marginBottom: 22 }}>
-          <li style={{ marginBottom: 7 }}>Los resultados se conservan <b>dos años</b> y luego se eliminan.</li>
-          <li style={{ marginBottom: 7 }}>No se comparten con terceros distintos al equipo de selección.</li>
-          <li style={{ marginBottom: 7 }}>Sus derechos como titular y los canales para ejercerlos están descritos en la <b>Política de Tratamiento de Datos Personales</b> de Trading Solutions S.A.S., publicada en nuestro sitio de empleo.</li>
-          <li>La presentación <b>remota exige cámara activa</b> durante toda la sesión. Si prefiere no habilitarla, puede presentar la prueba de forma <b>presencial</b> en nuestras instalaciones: responda el correo con el que recibió este enlace y le agendamos.</li>
+          {t.consentBullets.map((b, i) => (
+            <li key={i} style={i === t.consentBullets.length - 1 ? undefined : { marginBottom: 7 }}>{rich(b)}</li>
+          ))}
         </ul>
         <div style={{ marginBottom: 18 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>Nombre completo</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Como aparece en su documento"
+          <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t.nameLabel}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.namePlaceholder}
             style={{ width: "100%", padding: "11px 12px", border: `1px solid ${TS_BORDER}`, borderRadius: 7, fontSize: 14 }} />
         </div>
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12, fontSize: 14, cursor: "pointer" }}>
           <input type="checkbox" checked={okData} onChange={(e) => setOkData(e.target.checked)} style={{ marginTop: 3 }} />
-          <span><b>Autorizo</b> el tratamiento de mis datos en los términos descritos.</span>
+          <span>{rich(t.consentDataCheck)}</span>
         </label>
         <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 20, fontSize: 14, cursor: "pointer" }}>
           <input type="checkbox" checked={okCam} onChange={(e) => setOkCam(e.target.checked)} style={{ marginTop: 3 }} />
-          <span><b>Autorizo la captura de imagen</b> durante la sesión y entiendo que es condición de la modalidad remota.</span>
+          <span>{rich(t.consentCamCheck)}</span>
         </label>
         <button style={{ ...btn, opacity: listo ? 1 : 0.4, cursor: listo ? "pointer" : "not-allowed" }} disabled={!listo} onClick={acceptConsent}>
-          Acepto y continúo
+          {t.consentButton}
         </button>
         {camState === "denied" && (
           <p style={{ color: "#B45309", fontSize: 13, marginTop: 14 }}>
-            El navegador bloqueó la cámara. Habilite el permiso y vuelva a intentar, o escríbanos para presentar la prueba de forma presencial.
+            {t.camBlocked}
           </p>
         )}
       </div></div>
@@ -403,29 +663,17 @@ export default function PruebaPage() {
     const total = blocks.reduce((n, b) => n + b.items.length, 0);
     return (
       <div style={shell}><div style={card}>
-        <h1 style={h1}>{session?.vacancy_title || "Prueba de selección"}</h1>
-        <p style={sub}>
-          La prueba tiene <b>cinco partes</b> y {total} preguntas en total. Toma alrededor de <b>90 minutos</b>. Solo la
-          cuarta parte está cronometrada; las otras cuatro no tienen tiempo.
-        </p>
-        <p style={sub}>
-          En las partes de afirmaciones no hay respuestas correctas ni incorrectas: responda con lo primero que le
-          parezca, pensarlo mucho no mejora el resultado. En la parte cronometrada sí hay una respuesta correcta.
-        </p>
-        <p style={sub}>
-          Sus respuestas se guardan a medida que avanza. Si se le cierra el navegador, vuelva a abrir este mismo enlace
-          y continúa exactamente donde quedó.
-        </p>
-        <p style={{ ...sub, marginBottom: 24 }}>
-          Al terminar no verá un resultado en pantalla: el informe lo revisa el equipo de selección y nos comunicamos
-          con usted por correo.
-        </p>
+        <h1 style={h1}>{session?.vacancy_title || t.introFallbackTitle}</h1>
+        <p style={sub}>{rich(fmt(t.introP1, { total }))}</p>
+        <p style={sub}>{rich(t.introP2)}</p>
+        <p style={sub}>{rich(t.introP3)}</p>
+        <p style={{ ...sub, marginBottom: 24 }}>{rich(t.introP4)}</p>
         <button style={btn} onClick={async () => {
           if (camState !== "on") await startCamera();
           shownAt.current = Date.now();
           setPhase("test");
           logEvent("block_start", blocks[bi]?.key);
-        }}>Comenzar</button>
+        }}>{t.introButton}</button>
       </div></div>
     );
   }
@@ -434,9 +682,9 @@ export default function PruebaPage() {
     return (
       <div style={shell}><div style={card}>
         <p style={{ fontSize: 11, letterSpacing: "0.11em", textTransform: "uppercase", color: TS_BLUE, fontWeight: 700, margin: "0 0 10px" }}>{block.label}</p>
-        <h1 style={h1}>{block.items.length} preguntas</h1>
+        <h1 style={h1}>{fmt(t.blockQuestions, { n: block.items.length })}</h1>
         <p style={{ ...sub, marginBottom: 24 }}>{block.intro}</p>
-        <button style={btn} onClick={() => { shownAt.current = Date.now(); setPhase("test"); logEvent("block_start", block.key); }}>Continuar</button>
+        <button style={btn} onClick={() => { shownAt.current = Date.now(); setPhase("test"); logEvent("block_start", block.key); }}>{t.blockButton}</button>
       </div></div>
     );
   }
@@ -444,11 +692,10 @@ export default function PruebaPage() {
   if (fallaGuardado && phase === "test") {
     return (
       <div style={shell}><div style={{ ...card, borderColor: "#F3D6D2", background: "#FDF6F5" }}>
-        <h1 style={h1}>Sus respuestas no se están guardando</h1>
+        <h1 style={h1}>{t.saveFailTitle}</h1>
         <p style={sub}>{fallaGuardado}</p>
         <p style={{ ...sub, marginBottom: 0 }}>
-          Por favor <b>no continúe</b>. Responda el correo con el que recibió este enlace y le enviamos uno nuevo.
-          Nada de lo que responda a partir de aquí quedaría registrado.
+          {rich(t.saveFailHelp)}
         </p>
       </div></div>
     );
@@ -457,11 +704,9 @@ export default function PruebaPage() {
   if (phase === "sending" || phase === "done") {
     return (
       <div style={shell}><div style={card}>
-        <h1 style={h1}>{phase === "sending" ? "Enviando sus respuestas…" : "Listo, recibimos su prueba"}</h1>
+        <h1 style={h1}>{phase === "sending" ? t.sendingTitle : t.doneTitle}</h1>
         <p style={{ ...sub, marginBottom: 0 }}>
-          {phase === "sending"
-            ? "No cierre esta ventana."
-            : "Gracias por el tiempo que dedicó. El equipo de selección revisa los resultados y se comunica con usted por correo. Ya puede cerrar esta ventana."}
+          {phase === "sending" ? t.sendingBody : t.doneBody}
         </p>
       </div></div>
     );
@@ -492,7 +737,7 @@ export default function PruebaPage() {
           <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 13, fontWeight: 600, color: left < 120 ? "#C41818" : TS_GRAY }}>{mmss(left)}</span>
         )}
         <span style={{ fontSize: 11, color: camState === "on" ? TS_GREEN : "#B45309", fontWeight: 600 }}>
-          {camState === "on" ? "● cámara activa" : "● sin cámara"}
+          {camState === "on" ? t.camOn : t.camOff}
         </span>
       </div>
 
@@ -501,12 +746,12 @@ export default function PruebaPage() {
           <>
             <p style={{ fontSize: 19, lineHeight: 1.5, margin: "6px 0 32px", fontWeight: 500, textAlign: "center" }}>{item.stem}</p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "nowrap" }}>
-              <span style={{ fontSize: 12, color: TS_GRAY, fontWeight: 600, whiteSpace: "nowrap" }}>En desacuerdo</span>
+              <span style={{ fontSize: 12, color: TS_GRAY, fontWeight: 600, whiteSpace: "nowrap" }}>{t.anchorDisagree}</span>
               {L7.map((o) => {
                 const on = a?.value === o.v;
                 const color = o.tone === "si" ? TS_GREEN : o.tone === "no" ? "#8B5CF6" : TS_GRAY;
                 return (
-                  <button key={o.v} aria-label={`Opción ${o.v} de 7`} onClick={() => answerAndAdvance(item.code, { value: o.v }, true)}
+                  <button key={o.v} aria-label={fmt(t.scaleAria, { n: o.v })} onClick={() => answerAndAdvance(item.code, { value: o.v }, true)}
                     style={{
                       width: o.size, height: o.size, borderRadius: "50%", cursor: "pointer", flex: "0 0 auto",
                       border: `2px solid ${on ? color : TS_BORDER}`, background: on ? color : "#fff", padding: 0,
@@ -514,22 +759,22 @@ export default function PruebaPage() {
                     }} />
                 );
               })}
-              <span style={{ fontSize: 12, color: TS_GRAY, fontWeight: 600, whiteSpace: "nowrap" }}>De acuerdo</span>
+              <span style={{ fontSize: 12, color: TS_GRAY, fontWeight: 600, whiteSpace: "nowrap" }}>{t.anchorAgree}</span>
             </div>
           </>
         ) : item.type === "likert" ? (
           <>
             <p style={{ fontSize: 16.5, lineHeight: 1.6, margin: "0 0 20px" }}>{item.stem}</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {L5.map((l) => {
-                const on = a?.value === l.v;
+              {L5.map((v, idx) => {
+                const on = a?.value === v;
                 return (
-                  <button key={l.v} onClick={() => answerAndAdvance(item.code, { value: l.v }, true)}
+                  <button key={v} onClick={() => answerAndAdvance(item.code, { value: v }, true)}
                     style={{
                       flex: "1 1 120px", padding: "13px 8px", fontSize: 12.5, borderRadius: 7, cursor: "pointer",
                       border: `1px solid ${on ? TS_BLUE : TS_BORDER}`, background: on ? "#EEF3FE" : "#fff",
                       color: on ? TS_BLUE : TS_BLACK, fontWeight: on ? 700 : 400,
-                    }}>{l.label}</button>
+                    }}>{t.likert5[idx]}</button>
                 );
               })}
             </div>
@@ -540,8 +785,8 @@ export default function PruebaPage() {
             <div style={{ border: `1px solid ${TS_BORDER}`, borderRadius: 7, overflow: "hidden" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 62px 62px", background: "#F5F5F5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: TS_GRAY }}>
                 <div style={{ padding: "9px 12px" }}>&nbsp;</div>
-                <div style={{ padding: "9px 6px", textAlign: "center", borderLeft: `1px solid ${TS_BORDER}` }}>Más</div>
-                <div style={{ padding: "9px 6px", textAlign: "center", borderLeft: `1px solid ${TS_BORDER}` }}>Menos</div>
+                <div style={{ padding: "9px 6px", textAlign: "center", borderLeft: `1px solid ${TS_BORDER}` }}>{t.tetradMost}</div>
+                <div style={{ padding: "9px 6px", textAlign: "center", borderLeft: `1px solid ${TS_BORDER}` }}>{t.tetradLeast}</div>
               </div>
               {item.statements?.map((s) => (
                 <div key={s.key} style={{ display: "grid", gridTemplateColumns: "1fr 62px 62px", borderTop: `1px solid ${TS_BORDER}`, alignItems: "center" }}>
@@ -609,19 +854,19 @@ export default function PruebaPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 26, paddingTop: 20, borderTop: `1px solid ${TS_BORDER}` }}>
-          <span style={{ fontSize: 12.5, color: TS_GRAY }}>Pregunta {ii + 1} de {block.items.length}</span>
+          <span style={{ fontSize: 12.5, color: TS_GRAY }}>{fmt(t.questionCounter, { n: ii + 1, total: block.items.length })}</span>
           {autoAdvance ? (
-            <span style={{ fontSize: 12.5, color: TS_GRAY }}>Avanza sola al responder</span>
+            <span style={{ fontSize: 12.5, color: TS_GRAY }}>{t.autoAdvance}</span>
           ) : (
             <button style={{ ...btn, opacity: answered ? 1 : 0.4, cursor: answered ? "pointer" : "not-allowed" }} disabled={!answered} onClick={next}>
-              {ii + 1 === block.items.length && bi + 1 === blocks.length ? "Terminar y enviar" : "Siguiente"}
+              {ii + 1 === block.items.length && bi + 1 === blocks.length ? t.finishButton : t.nextButton}
             </button>
           )}
         </div>
       </div>
 
       <p style={{ maxWidth: 720, margin: "16px auto 0", fontSize: 12, color: TS_GRAY, textAlign: "center" }}>
-        Sus respuestas se guardan automáticamente.
+        {t.autosave}
       </p>
     </div>
   );
