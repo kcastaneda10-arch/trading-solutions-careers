@@ -14,6 +14,7 @@ import CandidateFilesBlock from "./CandidateFilesBlock";
 import EvaluacionPanel from "./EvaluacionPanel";
 import { rubricaDeVacante } from "@/lib/rubricas";
 import { escucharPedidos, tomarPedidoDeCandidato } from "@/lib/abrirCandidato";
+import HistorialContactos from "@/components/HistorialContactos";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -521,6 +522,10 @@ export default function PipelineFunnel() {
               <span className="ts-tabular text-[var(--ts-green)]">{hiredCount}</span> contratados
               <span className="text-[var(--ts-gray-40)]"> · </span>
               <span className="ts-tabular text-[var(--ts-red)]">{rejectedCount}</span> rechazados
+              <span className="text-[var(--ts-gray-40)]"> · </span>
+              <a href="/hr-admin/trazabilidad" className="underline text-[var(--ts-black)] font-semibold">
+                Trazabilidad de contactos
+              </a>
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -1974,6 +1979,12 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             {cand.prefilter_completed_at && (
               <Row k="Completó prefiltro" v={new Date(cand.prefilter_completed_at).toLocaleString("es-CO")} />
             )}
+          </Section>
+
+          {/* Historial de contactos · correos de Gmail, WhatsApp importado,
+              llamadas anotadas y cambios de etapa, en orden. */}
+          <Section title="🧾 Historial de contactos">
+            <HistorialContactos key={cand.id} candidateId={cand.id} />
           </Section>
 
           {/* Motivo de rechazo · solo si ya está clasificado */}

@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Fila = {
+  candidateId: string | null;
   nombre: string;
   email: string | null;
   vacante: string;
@@ -69,6 +70,26 @@ export default function PendientesBateria() {
   }, [vacante]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Abrir WhatsApp desde acá queda en el historial del candidato como
+  // «intento»: prueba que se abrió el chat con el texto listo, no que se
+  // envió. Lo confirma el chat cuando se importa en la ficha.
+  function anotarWhatsapp(f: Fila) {
+    if (!f.candidateId) return;
+    void fetch(`/api/admin/candidates/${f.candidateId}/contactos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        channel: "whatsapp",
+        direction: "saliente",
+        source: "whatsapp_boton",
+        kind: "recordatorio_prueba",
+        summary: f.mensaje.slice(0, 280),
+        body: f.mensaje,
+      }),
+    }).catch(() => {});
+  }
 
   async function copiarCorreo(f: Fila) {
     const cuerpo =
@@ -165,6 +186,7 @@ export default function PendientesBateria() {
                     {f.whatsapp ? (
                       <a
                         href={f.whatsapp}
+                        onClick={() => anotarWhatsapp(f)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#25D366] text-white hover:brightness-95"

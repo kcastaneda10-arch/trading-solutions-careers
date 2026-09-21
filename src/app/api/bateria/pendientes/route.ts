@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
       `Si has decidido no continuar, agradecemos que nos lo informes para cerrar tu proceso formalmente.`;
 
     return {
+      // Para anotar en el historial cuando se abre el WhatsApp desde acá.
+      candidateId: s.ht_candidate_id ?? null,
       nombre,
       email: ficha?.email ?? null,
       vacante: s.vacancy_title,
