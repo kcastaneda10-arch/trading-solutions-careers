@@ -73,12 +73,12 @@ export default function PendientesBateria() {
   async function copiarCorreo(f: Fila) {
     const cuerpo =
       `Hola ${f.nombre.trim().split(/\s+/)[0]},\n\n` +
-      `Ojalá estés muy bien. Te escribimos porque nos quedó pendiente tu prueba de selección para ${f.vacante}, y nos daría pena que el proceso se quedara ahí teniendo tu perfil tan cerca del siguiente paso.\n\n` +
-      `Toma entre 40 y 50 minutos y se hace de una sola sentada, desde un computador con cámara. No es un examen y no hay respuestas correctas ni incorrectas: nos sirve para conocerte un poco más allá de la hoja de vida.\n\n` +
+      `Esperamos que te encuentres bien. Te escribimos para recordarte que tienes pendiente la prueba de selección correspondiente al proceso de ${f.vacante}. Tu perfil avanzó hasta esta etapa y necesitamos completarla para continuar con la evaluación.\n\n` +
+      `La prueba toma alrededor de 90 minutos y debe presentarse en una sola sesión, desde un computador con cámara. No se trata de un examen: es un instrumento que nos permite conocer aspectos de tu perfil que la hoja de vida no alcanza a mostrar.\n\n` +
       `Este es tu enlace personal:\n\n${f.urlPrueba}\n\n` +
-      `Si ya intentaste y algo no te cargó, se te trabó o no te guardó las respuestas, escríbenos respondiendo este correo y te generamos uno nuevo el mismo día. Nos ha pasado con otros candidatos esta semana y no queremos que te quedes por fuera por algo que es nuestro, no tuyo.\n\n` +
-      `Y si cambiaste de planes o la posición ya no te encaja, cuéntanos con toda confianza: cerramos tu proceso sin ningún problema y quedas en nuestra base para lo que venga.\n\n` +
-      `Un abrazo,\n\nTalent Team · Trading Solutions`;
+      `Si ya intentaste presentarla y la plataforma no cargó, se detuvo o no registró tus respuestas, por favor respóndenos este correo y habilitaremos un nuevo enlace el mismo día. Hemos identificado esta situación en otros procesos y queremos asegurarnos de que no afecte tu participación.\n\n` +
+      `Si por el contrario has decidido no continuar, te agradecemos informarnos para cerrar tu proceso de manera formal. Tu perfil permanecerá en nuestra base de datos para futuras oportunidades.\n\n` +
+      `Cordialmente,\n\nTalent Team · Trading Solutions`;
     try {
       await navigator.clipboard.writeText(cuerpo);
       setCopiado(f.urlPrueba);

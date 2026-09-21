@@ -71,19 +71,18 @@ export async function GET(req: NextRequest) {
     const ficha = s.ht_candidate_id ? porId.get(String(s.ht_candidate_id)) : undefined;
     const nombre = s.candidate_name || ficha?.name || 'Sin nombre';
     const primerNombre = nombre.trim().split(/\s+/)[0];
-    const urlPrueba = `${BASE}/assessment/ht/${s.token}`;
+    const urlPrueba = `${BASE}/prueba/${s.token}`;
     const wa = aWhatsapp(ficha?.phone);
 
     // El texto va acá y no en la pantalla para que el recordatorio diga lo
     // mismo salga de donde salga.
     const mensaje =
       `Hola ${primerNombre}, te saludamos del Talent Team de Trading Solutions. ` +
-      `Nos quedó pendiente tu prueba de selección para ${s.vacancy_title} y nos daría pena ` +
-      `que el proceso se quedara ahí. ` +
-      `Toma entre 40 y 50 minutos, de una sola sentada y desde un computador. ` +
+      `Te recordamos que tienes pendiente la prueba de selección del proceso de ${s.vacancy_title}. ` +
+      `Toma alrededor de 90 minutos y debe presentarse en una sola sesión, desde un computador con cámara. ` +
       `Este es tu enlace personal: ${urlPrueba} ` +
-      `Si algo no te carga o se te traba, escríbenos por acá y te generamos uno nuevo el mismo día. ` +
-      `Y si ya cambiaste de planes, cuéntanos con confianza y cerramos tu proceso sin problema.`;
+      `Si la plataforma no carga o se detiene, escríbenos por este medio y habilitamos un nuevo enlace el mismo día. ` +
+      `Si has decidido no continuar, agradecemos que nos lo informes para cerrar tu proceso formalmente.`;
 
     return {
       nombre,
