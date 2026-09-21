@@ -15,6 +15,7 @@ import EvaluacionPanel from "./EvaluacionPanel";
 import { rubricaDeVacante } from "@/lib/rubricas";
 import { escucharPedidos, tomarPedidoDeCandidato } from "@/lib/abrirCandidato";
 import HistorialContactos from "@/components/HistorialContactos";
+import SeguimientoVacante from "@/components/SeguimientoVacante";
 
 // Map de stage → icono Lucide. Centralizado para reutilizar en cualquier render.
 const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -307,6 +308,9 @@ export default function PipelineFunnel() {
   );
   const [loading, setLoading] = useState(true);
   const [selectedCand, setSelectedCand] = useState<Cand | null>(null);
+  // Quiénes escribieron y esperan respuesta nuestra · lo llena el panel de
+  // seguimiento y se marca en las tarjetas.
+  const [esperandoIds, setEsperandoIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
@@ -600,6 +604,19 @@ export default function PipelineFunnel() {
         </div>
       </div>
 
+      {/* Seguimiento de contactos de la vacante elegida: quién espera
+          respuesta nuestra y quién no tiene ningún contacto. */}
+      {vacFilter !== "all" && (
+        <SeguimientoVacante
+          vacancyId={vacFilter}
+          onEsperando={setEsperandoIds}
+          onAbrir={(id) => {
+            const c = candidates.find((x) => x.id === id);
+            if (c) setSelectedCand(c);
+          }}
+        />
+      )}
+
       {loading ? (
         <div className="text-center py-16 ts-eyebrow text-[var(--ts-gray-40)]">Cargando pipeline…</div>
       ) : (
@@ -689,6 +706,14 @@ export default function PipelineFunnel() {
                               <div className="text-[11px] text-[var(--ts-gray-60)] truncate mt-1 ts-tabular">
                                 {c.email}
                               </div>
+                              {esperandoIds.has(c.id) && (
+                                <div
+                                  className="mt-1.5 inline-block text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5"
+                                  title="El último mensaje es del candidato y no le hemos respondido"
+                                >
+                                  ✉ Espera respuesta
+                                </div>
+                              )}
                               <div className="mt-2 inline-block ts-eyebrow text-[9px] tracking-[1.5px] text-[var(--ts-gray-90)] border border-[var(--ts-gray-20)] px-1.5 py-0.5">
                                 {c.ht_vacancies?.title || "—"}
                               </div>

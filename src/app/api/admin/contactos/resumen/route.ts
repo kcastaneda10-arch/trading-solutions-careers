@@ -6,11 +6,14 @@
  * nadie le ha respondido. Es la vista para no dejar a nadie esperando y para
  * mostrar el seguimiento que se hizo.
  *
- * «Activo» = cualquier etapa menos rechazado y contratado.
+ * «Activo» = en una vacante abierta y en cualquier etapa menos rechazado y
+ * contratado. Los procesos cerrados no se muestran: no hay a quién responder.
+ * ?vacancy_id=UUID limita a una vacante (así lo usa el funnel).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ETAPAS_CERRADAS, vacantesAbiertas } from "@/lib/contactos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,11 +24,17 @@ export async function GET(req: NextRequest) {
   const authError = requireAdmin(req);
   if (authError) return authError;
 
+  const vacancyId = req.nextUrl.searchParams.get("vacancy_id");
+  const vacantes = vacancyId ? [vacancyId] : await vacantesAbiertas();
+  if (vacantes.length === 0) {
+    return NextResponse.json({ total: 0, esperando_respuesta: 0, sin_ningun_contacto: 0, gmail_sin_revisar: 0, candidatos: [] });
+  }
+
   const { data: cands, error } = await supabaseAdmin
     .from("ht_candidates")
     .select("id, name, email, phone, stage, vacancy_id, contactos_sync_at, ht_vacancies(title)")
-    .not("stage", "in", "(rechazado,contratado)")
-    .gte("created_at", new Date(Date.now() - 200 * 86_400_000).toISOString())
+    .in("vacancy_id", vacantes)
+    .not("stage", "in", ETAPAS_CERRADAS)
     .limit(1000);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

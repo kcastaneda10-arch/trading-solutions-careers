@@ -224,34 +224,54 @@ export function adivinarNosotros(mensajes: MensajeWhatsapp[]): string | null {
 }
 
 /**
- * Pasa por Gmail un lote de candidatos, empezando por los que llevan más
- * tiempo sin revisar. Lo usan el cron y el botón «Auditar Gmail».
+ * Ids de las vacantes abiertas. El seguimiento solo mira procesos vivos: una
+ * vacante cerrada no tiene a nadie a quien responderle.
+ */
+export async function vacantesAbiertas(): Promise<string[]> {
+  const { data } = await supabaseAdmin.from("ht_vacancies").select("id, status");
+  return (data ?? []).filter((v: any) => v.status == null || v.status === "open").map((v: any) => v.id);
+}
+
+/** Etapas que ya no están en proceso. */
+export const ETAPAS_CERRADAS = "(rechazado,contratado)";
+
+/**
+ * Pasa por Gmail un lote de candidatos ACTIVOS —en una vacante abierta y en
+ * una etapa en curso—, empezando por los que llevan más tiempo sin revisar.
+ * Lo usan el cron y el botón «Auditar Gmail» del funnel.
  *
  * Por lotes porque cada candidato son varias llamadas a Gmail: todos de una
  * vez no caben en el tiempo de una función.
  */
 export async function sincronizarLote(
   lote = 20,
-  { soloVencidosHoras = 0 }: { soloVencidosHoras?: number } = {},
+  { soloVencidosHoras = 0, vacancyId = null }: { soloVencidosHoras?: number; vacancyId?: string | null } = {},
 ): Promise<{ procesados: number; nuevos: number; restantes: number; errores: string[] }> {
-  const desde = new Date(Date.now() - 200 * 86_400_000).toISOString();
+  const abiertas = vacancyId ? [vacancyId] : await vacantesAbiertas();
+  if (abiertas.length === 0) return { procesados: 0, nuevos: 0, restantes: 0, errores: [] };
   const corte = new Date(Date.now() - soloVencidosHoras * 3_600_000).toISOString();
 
-  let q = supabaseAdmin
-    .from("ht_candidates")
-    .select("id, name, email, vacancy_id")
-    .gte("created_at", desde)
-    .not("email", "is", null)
+  const base = (sel: string, opts?: { count: "exact"; head: true }) => {
+    let q = supabaseAdmin
+      .from("ht_candidates")
+      .select(sel, opts)
+      .in("vacancy_id", abiertas)
+      .not("stage", "in", ETAPAS_CERRADAS)
+      .not("email", "is", null);
+    q = soloVencidosHoras > 0
+      ? q.or(`contactos_sync_at.is.null,contactos_sync_at.lt.${corte}`)
+      : q.is("contactos_sync_at", null);
+    return q;
+  };
+
+  const { data, error } = await base("id, name, email, vacancy_id")
     .order("contactos_sync_at", { ascending: true, nullsFirst: true })
     .limit(lote);
-  q = soloVencidosHoras > 0 ? q.or(`contactos_sync_at.is.null,contactos_sync_at.lt.${corte}`) : q.is("contactos_sync_at", null);
-
-  const { data, error } = await q;
   if (error) return { procesados: 0, nuevos: 0, restantes: 0, errores: [error.message] };
 
   let nuevos = 0;
   const errores: string[] = [];
-  for (const c of data ?? []) {
+  for (const c of (data ?? []) as any[]) {
     const r = await sincronizarGmailCandidato(c);
     if (r.ok) nuevos += r.nuevos;
     else {
@@ -260,13 +280,6 @@ export async function sincronizarLote(
     }
   }
 
-  let rq = supabaseAdmin
-    .from("ht_candidates")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", desde)
-    .not("email", "is", null);
-  rq = soloVencidosHoras > 0 ? rq.or(`contactos_sync_at.is.null,contactos_sync_at.lt.${corte}`) : rq.is("contactos_sync_at", null);
-  const { count } = await rq;
-
+  const { count } = await base("id", { count: "exact", head: true });
   return { procesados: (data ?? []).length, nuevos, restantes: count ?? 0, errores };
 }

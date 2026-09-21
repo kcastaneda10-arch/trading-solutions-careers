@@ -1,8 +1,9 @@
 /**
  * POST /api/admin/contactos/sync-gmail
- * Body: { lote?: number, todos?: boolean }
+ * Body: { lote?: number, todos?: boolean, vacancy_id?: string }
  *
- * Auditoría de Gmail: pasa un lote de candidatos por la bandeja y guarda en su
+ * Auditoría de Gmail: pasa un lote de candidatos ACTIVOS (vacante abierta,
+ * etapa en curso; o solo los de `vacancy_id`) por la bandeja y guarda en su
  * historial todo lo que se cruzó con cada uno (180 días hacia atrás).
  * Devuelve cuántos quedan; la pantalla lo llama en bucle hasta llegar a cero.
  *
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json().catch(() => ({}));
   const lote = Math.min(Math.max(parseInt(b.lote, 10) || 15, 1), 40);
-  const r = await sincronizarLote(lote, { soloVencidosHoras: b.todos ? 6 : 0 });
+  const vacancyId = typeof b.vacancy_id === "string" && b.vacancy_id ? b.vacancy_id : null;
+  const r = await sincronizarLote(lote, { soloVencidosHoras: b.todos ? 6 : 0, vacancyId });
   return NextResponse.json({ ...r, buzon: gmail.email });
 }
