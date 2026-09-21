@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { LISTA_PERFILES } from "@/lib/bateria/perfiles-cargo";
 
+/** Los criterios del perfil son de la compañía, no de una persona. Los
+ *  resultados calculados antes de corregirlo guardaron el texto viejo. */
+const versionPerfil = (v: string) => v.replace(/criterio de Kelly/gi, "criterio de la compañía");
+
 const BLACK = "#0A0A0A";
 const BLUE = "#2C64ED";
 const GRAY = "#6B7280";
@@ -240,7 +244,7 @@ export default function InformeImprimible() {
             <h1 style={{ fontSize: 30, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em" }}>{s.candidate_name || "(sin nombre)"}</h1>
             <p style={{ margin: 0, color: GRAY, fontSize: 14 }}>
               {m?.perfil?.nombre ?? s.vacancy_title ?? "Sin perfil de cargo"}
-              {m?.perfil?.version ? ` · perfil ${m.perfil.version}` : ""}
+              {m?.perfil?.version ? ` · perfil ${versionPerfil(m.perfil.version)}` : ""}
             </p>
             <p style={{ margin: "4px 0 0", color: GRAY, fontSize: 12.5 }}>
               Batería {s.battery_version} · {s.finished_at ? new Date(s.finished_at).toLocaleDateString("es-CO") : "—"} ·
@@ -308,7 +312,7 @@ export default function InformeImprimible() {
       {m && (
         <>
           <H className="page-break">Compatibilidad con el cargo</H>
-          <P>{m.perfil.nombre} · perfil {m.perfil.version}</P>
+          <P>{m.perfil.nombre} · perfil {versionPerfil(m.perfil.version)}</P>
           {m.componentes.map((c: any) => (
             <Bar key={c.key} label={c.label} pct={c.puntaje} right={`peso ${Math.round(c.peso * 100)}%`} />
           ))}

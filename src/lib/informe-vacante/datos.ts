@@ -178,7 +178,15 @@ export async function armarInforme(vacancyId: string): Promise<Informe> {
       if (o > (alcance.get(e.candidate_id) ?? 0)) alcance.set(e.candidate_id, o);
     }
   }
-  const llegaron = (o: number) => [...alcance.values()].filter((x) => x >= o).length;
+  // Las etapas después de las pruebas se cuentan solo entre quienes las
+  // presentaron: así el embudo siempre se angosta. Sin ese filtro, una vacante
+  // que absorbió otra mostraba más entrevistados que evaluados, porque traía
+  // entrevistas viejas hechas antes de que existieran las pruebas.
+  const evaluados = new Set(
+    S.filter((s) => s.finished_at && s.match_data?.global != null).map((s) => s.ht_candidate_id).filter(Boolean),
+  );
+  const llegaron = (o: number) =>
+    [...alcance.entries()].filter(([id, x]) => x >= o && evaluados.has(id)).length;
 
   const aplicaron = C.length;
   const prefiltro = C.filter((c) => c.prefilter_completed_at).length;
@@ -314,10 +322,12 @@ export async function armarInforme(vacancyId: string): Promise<Informe> {
   const sup = filas.filter((f) => f.banda === "sup").length;
 
   // ── Etapa en la que va la búsqueda ──
-  const maxActivo = Math.max(0, ...[...alcance.entries()].filter(([id]) => {
-    const c = porId.get(id);
-    return c && !["rechazado", "contratado"].includes(normalizeStage(c.stage));
-  }).map(([, o]) => o));
+  // La etapa de la búsqueda sale de dónde están HOY los activos. El historial
+  // no sirve para esto: una vacante que absorbió otra trae entrevistas viejas
+  // de candidatos que hoy están de nuevo en prefiltro.
+  const actuales = C.map((c) => normalizeStage(c.stage)).filter((st) => !["rechazado", "contratado"].includes(st));
+  const maxActivo = Math.max(0, ...actuales.map((st) => stageOrder(st)));
+  const enEntrevista = actuales.filter((st) => stageOrder(st) >= stageOrder("recruiter_interview")).length;
   const etapa =
     contratados > 0 ? "Contratación"
     : maxActivo >= stageOrder("terna") ? "Terna"
@@ -329,14 +339,14 @@ export async function armarInforme(vacancyId: string): Promise<Informe> {
   const nombresSup = filas.filter((f) => f.banda === "sup").map((f) => f.nombre.split(" ").slice(0, 1).concat(f.nombre.split(" ").slice(-2, -1)).join(" "));
 
   const fraseSugerida =
-    entrevista > 0
-      ? `${entrevista} ${entrevista === 1 ? "candidato llegó" : "candidatos llegaron"} a entrevista de ${presentaron} que presentaron las pruebas psicométricas iniciales. El siguiente paso es cerrar las entrevistas y armar la terna con el hiring manager.`
+    enEntrevista > 0
+      ? `${enEntrevista} ${enEntrevista === 1 ? "candidato está" : "candidatos están"} hoy en entrevista${presentaron ? ` y ${presentaron} ${presentaron === 1 ? "presentó" : "presentaron"} las pruebas psicométricas iniciales` : ""}. El siguiente paso es cerrar las entrevistas y armar la terna con el hiring manager.`
       : presentaron > 0
-        ? `${presentaron} de ${invitados} invitados presentaron las pruebas psicométricas iniciales y ${sup} ${sup === 1 ? "candidato está" : "candidatos están"} en la banda superior de match, empatados entre sí. El siguiente paso es definir con el hiring manager quiénes pasan a entrevista.`
+        ? `${presentaron} de ${invitados} invitados presentaron las pruebas psicométricas iniciales y ${sup} ${sup === 1 ? "candidato está" : "candidatos están"} en la banda superior de match. El siguiente paso es definir con el hiring manager quiénes pasan a entrevista.`
         : `La búsqueda está en prefiltro: ${prefiltro} de ${aplicaron} candidatos completaron el cuestionario inicial. El siguiente paso es invitar a pruebas psicométricas a quienes lo superaron.`;
 
   const pasosSugeridos =
-    presentaron > 0 && entrevista === 0
+    presentaron > 0 && enEntrevista === 0
       ? [
           `Definir la lista de entrevista con el hiring manager a partir de la banda superior (${nombresSup.join(", ")}).`,
           enSeguimiento > 0
@@ -344,7 +354,7 @@ export async function armarInforme(vacancyId: string): Promise<Informe> {
             : "Cerrar la etapa de pruebas psicométricas.",
           "Agendar entrevistas y presentar la terna al hiring manager.",
         ]
-      : entrevista > 0
+      : enEntrevista > 0
         ? ["Cerrar las entrevistas en curso.", "Presentar la terna al hiring manager.", "Iniciar la etapa de contratación con la persona elegida."]
         : ["Completar el prefiltro de los candidatos pendientes.", "Invitar a pruebas psicométricas a quienes lo superaron.", "Presentar los resultados al hiring manager."];
 

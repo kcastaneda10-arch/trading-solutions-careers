@@ -61,7 +61,7 @@ const SST_PURO = {
   bigfive: { EXT: 65, APE: 55, AMA: 60, RES: 62, EST: 75 } as Record<FactorKey, number>,
 };
 
-/** Inclinacion definida por Kelly para esta vacante: 70% SIG · 30% SST. */
+/** Inclinacion definida por la compañía para esta vacante: 70% SIG · 30% SST. */
 const PESO_SIG = 0.7;
 
 export const PERFILES: Record<string, PerfilCargo> = {
@@ -230,7 +230,7 @@ export const PERFILES: Record<string, PerfilCargo> = {
   'fullstack-jr': {
     key: 'fullstack-jr',
     nombre: 'FullStack Developer Junior',
-    version: '1.0 · criterio de Kelly: razonamiento por encima de todo',
+    version: '1.0 · criterio de la compañía: razonamiento por encima de todo',
     descripcion:
       'Desarrolla backend y frontend para los proyectos de UX Team y Trading Solutions. Es un cargo de entrada: entra a aprender el stack de la casa y a producir bajo revision.',
     fundamento:

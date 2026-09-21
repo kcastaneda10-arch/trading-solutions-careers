@@ -4,6 +4,15 @@ const nextConfig = {
   // rompe si intenta empaquetarlos: se deja como dependencia externa.
   experimental: {
     serverComponentsExternalPackages: ["@react-pdf/renderer"],
+    // pdfkit carga sus fuentes estándar con un require dinámico que el
+    // rastreo de archivos de Vercel no ve: sin esto, en producción falla con
+    // «Cannot find module …/pdfkit/js/standard-fonts/Helvetica.cjs».
+    outputFileTracingIncludes: {
+      "/api/admin/informe-vacante/**": [
+        "./node_modules/pdfkit/js/standard-fonts/**/*",
+        "./node_modules/pdfkit/js/data/**/*",
+      ],
+    },
   },
   images: {
     remotePatterns: [
