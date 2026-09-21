@@ -63,6 +63,7 @@ type Cand = {
   rejected_at?: string | null;
   rejection_note_public?: string | null;
   rejection_sent_at?: string | null;
+  rejection_draft_id?: string | null;
 };
 
 type PrefilterData = {
@@ -1426,25 +1427,30 @@ function RejectedColumn({
   const [correo, setCorreo] = useState<Record<string, string>>({});
   const [enviando, setEnviando] = useState<string | null>(null);
 
-  async function reenviarCorreo(c: Cand) {
+  // El botón ya no envía: deja un borrador en Gmail para revisarlo y enviarlo
+  // desde ahí. Antes de crearlo, el servidor mira Enviados — si el correo ya
+  // salió desde Gmail, solo marca la ficha — y no duplica un borrador que siga
+  // esperando.
+  async function borradorCorreo(c: Cand) {
     if (enviando) return;
     if (!c.email) {
       setCorreo(p => ({ ...p, [c.id]: "Sin correo registrado" }));
       return;
     }
-    const yaSalio = Boolean(c.rejection_sent_at);
-    const aviso = yaSalio
-      ? `El correo de rechazo ya se le envió a ${c.email} el ${new Date(c.rejection_sent_at as string).toLocaleDateString("es-CO")}.\n\n¿Enviarlo otra vez?`
-      : `Enviar el correo de rechazo a ${c.email}?`;
-    if (!window.confirm(aviso)) return;
+    let force = false;
+    if (c.rejection_sent_at) {
+      const fecha = new Date(c.rejection_sent_at).toLocaleDateString("es-CO");
+      if (!window.confirm(`El correo de rechazo ya le salió a ${c.email} el ${fecha}.\n\n¿Crear otro borrador de todas formas?`)) return;
+      force = true;
+    }
 
     setEnviando(c.id);
-    setCorreo(p => ({ ...p, [c.id]: "Enviando…" }));
+    setCorreo(p => ({ ...p, [c.id]: "Revisando Gmail…" }));
     try {
       const r = await fetch(`/api/admin/candidates/${c.id}/resend-rejection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "send" }),
+        body: JSON.stringify({ mode: "draft", force }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -1453,12 +1459,49 @@ function RejectedColumn({
         setCorreo(p => ({ ...p, [c.id]: [j.error, j.detail].filter(Boolean).join(" · ") }));
         return;
       }
-      setCorreo(p => ({ ...p, [c.id]: j.warning || "Enviado ✓" }));
+      setCorreo(p => ({ ...p, [c.id]: j.message || "Borrador listo en Gmail ✓" }));
       onChanged?.();
     } catch (e: any) {
-      setCorreo(p => ({ ...p, [c.id]: e?.message || "No se pudo enviar" }));
+      setCorreo(p => ({ ...p, [c.id]: e?.message || "No se pudo crear el borrador" }));
     } finally {
       setEnviando(null);
+    }
+  }
+
+  // Pone al día la columna contra Gmail: marca como enviados los que ya
+  // salieron desde la bandeja y deja a la vista solo los que de verdad faltan.
+  const [sincronizando, setSincronizando] = useState(false);
+  const [resumenSync, setResumenSync] = useState<string>("");
+  async function sincronizarConGmail() {
+    const ids = cands.filter(c => !c.rejection_sent_at).map(c => c.id);
+    if (ids.length === 0) {
+      setResumenSync("Todos los rechazados ya tienen el correo marcado como enviado.");
+      return;
+    }
+    setSincronizando(true);
+    setResumenSync("Revisando Enviados en Gmail…");
+    try {
+      const r = await fetch("/api/admin/rejections/sync-sent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_ids: ids }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setResumenSync(j.error || "No se pudo revisar Gmail");
+        return;
+      }
+      const ya = (j.ya_habian_salido || []).length;
+      const faltan = (j.sin_correo_de_rechazo || []).length;
+      setResumenSync(
+        `${ya} ya habían salido desde Gmail y quedaron marcados. ` +
+        (faltan > 0 ? `${faltan} de verdad no tienen correo de rechazo: usa «Borrador» en cada uno.` : "No falta ninguno."),
+      );
+      onChanged?.();
+    } catch (e: any) {
+      setResumenSync(e?.message || "No se pudo revisar Gmail");
+    } finally {
+      setSincronizando(false);
     }
   }
 
@@ -1498,6 +1541,26 @@ function RejectedColumn({
           {visibleCands.length}<span className="text-[14px] text-[var(--ts-gray-40)]">/{cands.length}</span>
         </div>
       </div>
+
+      {/* Cuántos rechazos no tienen correo registrado · y cómo ponerlos al día */}
+      {cands.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[10px] text-[var(--ts-gray-60)]">
+            {cands.filter(c => !c.rejection_sent_at).length} sin correo registrado
+          </span>
+          <button
+            onClick={sincronizarConGmail}
+            disabled={sincronizando}
+            title="Busca en Enviados de Gmail los correos de rechazo que salieron desde la bandeja y los marca en el ATS"
+            className="ml-auto text-[9px] uppercase tracking-[1px] font-bold px-2 py-1 border border-[var(--ts-gray-10)] text-[var(--ts-gray-60)] hover:border-[var(--ts-black)] hover:text-[var(--ts-black)] disabled:opacity-40 disabled:cursor-wait"
+          >
+            {sincronizando ? "Revisando…" : "Verificar en Gmail"}
+          </button>
+        </div>
+      )}
+      {resumenSync && (
+        <div className="text-[10px] text-[var(--ts-gray-60)] -mt-1 mb-3 leading-snug">{resumenSync}</div>
+      )}
 
       {/* Filtros · categoría + saved for future */}
       {cands.length > 0 && (
@@ -1565,11 +1628,18 @@ function RejectedColumn({
                   )}
                 </button>
 
-                {/* Correo de rechazo · se puede reenviar si nunca salió */}
+                {/* Correo de rechazo · queda en borrador para enviarlo desde Gmail */}
                 <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-[var(--ts-gray-10)]">
                   {c.rejection_sent_at ? (
                     <span className="text-[9px] uppercase tracking-[1px] text-[var(--ts-green)] font-bold">
                       ✓ Enviado {new Date(c.rejection_sent_at).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
+                    </span>
+                  ) : c.rejection_draft_id ? (
+                    <span
+                      className="text-[9px] uppercase tracking-[1px] text-[var(--ts-gray-60)] font-bold"
+                      title="Se creó un borrador. Si ya lo enviaste desde Gmail, «Verificar en Gmail» lo marca."
+                    >
+                      Borrador · sin confirmar
                     </span>
                   ) : (
                     <span className="text-[9px] uppercase tracking-[1px] text-[var(--ts-gray-40)] font-bold">
@@ -1577,12 +1647,12 @@ function RejectedColumn({
                     </span>
                   )}
                   <button
-                    onClick={(e) => { e.stopPropagation(); reenviarCorreo(c); }}
+                    onClick={(e) => { e.stopPropagation(); borradorCorreo(c); }}
                     disabled={enviando === c.id}
-                    title={c.rejection_sent_at ? "Volver a enviar el correo de rechazo" : "Enviar el correo de rechazo"}
+                    title="Deja el correo de rechazo en Borradores de Gmail para revisarlo y enviarlo desde ahí"
                     className="ml-auto text-[9px] uppercase tracking-[1px] font-bold px-2 py-0.5 border border-[var(--ts-gray-10)] text-[var(--ts-gray-60)] hover:border-[var(--ts-black)] hover:text-[var(--ts-black)] disabled:opacity-40 disabled:cursor-wait transition-colors"
                   >
-                    {enviando === c.id ? "···" : c.rejection_sent_at ? "Reenviar" : "✉ Enviar"}
+                    {enviando === c.id ? "···" : "✉ Borrador"}
                   </button>
                 </div>
                 {correo[c.id] && (

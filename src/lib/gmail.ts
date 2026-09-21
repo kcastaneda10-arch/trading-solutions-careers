@@ -362,3 +362,72 @@ export async function getCandidateGmailHistory(
   messages.sort((a, b) => (b.internal_date || 0) - (a.internal_date || 0));
   return { ok: true, messages };
 }
+
+/**
+ * ¿Sigue existiendo este borrador en Gmail?
+ *
+ * true  → está en Borradores, sin enviar.
+ * false → ya no está: se envió o se borró a mano.
+ * null  → no se pudo saber (Gmail desconectado, error de red). Quien llama
+ *         decide; lo prudente es no crear otro encima.
+ */
+export async function gmailDraftExists(draftId: string): Promise<boolean | null> {
+  const valid = await getValidAccessToken();
+  if (!valid) return null;
+  const r = await fetch(`${GMAIL_DRAFTS_URL}/${encodeURIComponent(draftId)}?format=minimal`, {
+    headers: { Authorization: `Bearer ${valid.access_token}` },
+  });
+  if (r.status === 404) return false;
+  if (!r.ok) return null;
+  return true;
+}
+
+/**
+ * Busca en Enviados el correo de rechazo de una persona.
+ *
+ * POR QUÉ EXISTE
+ * Al rechazar, el ATS deja un borrador en Gmail y el equipo lo envía desde
+ * Gmail. Ese envío el ATS no lo ve, así que la ficha se quedaba en «Sin
+ * enviar» aunque el correo hubiera salido hace semanas. Esto lo verifica
+ * contra la bandeja real.
+ *
+ * `desde` es la fecha del rechazo: solo cuenta lo que salió después. Sin ese
+ * corte, alguien rechazado en agosto para otra vacante que volvió a aplicar
+ * aparecería como «ya avisado» del rechazo nuevo.
+ *
+ * Reconoce el asunto actual («Sobre tu aplicación a …»), el viejo sin vacante
+ * («Sobre tu aplicación») y el de los procesos en inglés.
+ */
+export async function findSentRejection(
+  email: string,
+  desde?: string | null,
+): Promise<{ ok: true; sentAt: string | null; count: number } | { ok: false; error: string }> {
+  const safe = email.replace(/["'\s]/g, "");
+  if (!safe) return { ok: true, sentAt: null, count: 0 };
+
+  let q = `in:sent to:${safe} (subject:"Sobre tu aplicación" OR subject:"About your application")`;
+  if (desde) {
+    // Un día de margen: Gmail corta `after:` por fecha, no por hora.
+    const d = new Date(new Date(desde).getTime() - 86_400_000);
+    q += ` after:${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  }
+
+  const search = await searchGmailMessages(q, 10);
+  if (!search.ok) return search;
+  if (search.ids.length === 0) return { ok: true, sentAt: null, count: 0 };
+
+  // La fecha que vale es la del primer envío: si salió dos veces, el candidato
+  // ya estaba avisado desde el primero.
+  let primero: number | null = null;
+  for (const id of search.ids) {
+    const meta = await getGmailMessageMetadata(id);
+    if (meta.ok && meta.data.internal_date && (primero === null || meta.data.internal_date < primero)) {
+      primero = meta.data.internal_date;
+    }
+  }
+  return {
+    ok: true,
+    sentAt: primero ? new Date(primero).toISOString() : new Date().toISOString(),
+    count: search.ids.length,
+  };
+}

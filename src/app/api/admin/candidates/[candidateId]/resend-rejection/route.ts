@@ -12,14 +12,30 @@
  * tomada, acá solo se vuelve a mandar el correo.
  *
  * Body:
- *   - mode: "send" (default) envía de verdad · "draft" deja borrador en Gmail
+ *   - mode: "draft" (default) deja borrador en Gmail · "send" envía de verdad
+ *   - force: true crea el borrador aunque ya haya salido o ya exista uno
+ *
+ * ANTES DE CREAR NADA, MIRA GMAIL
+ * El borrador que se crea al rechazar se envía desde Gmail, y ese envío el ATS
+ * no lo ve. Por eso muchas fichas decían «Sin enviar» con el correo ya en
+ * Enviados. Ahora, antes de armar otro borrador:
+ *   1. Si el correo ya está en Enviados (después de la fecha del rechazo),
+ *      marca la ficha como enviada y no crea nada.
+ *   2. Si el borrador de antes sigue en Gmail sin enviar, lo dice y no crea
+ *      otro encima: un segundo borrador es un segundo correo esperando salir.
  *
  * No toca la etapa, ni la categoría, ni `rejected_at`. Solo el correo.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { createDraftViaGmail, sendViaGmail, isGmailConnected } from "@/lib/gmail";
+import {
+  createDraftViaGmail,
+  sendViaGmail,
+  isGmailConnected,
+  findSentRejection,
+  gmailDraftExists,
+} from "@/lib/gmail";
 import {
   buildRejectionHtml,
   rejectionSubject,
@@ -42,12 +58,14 @@ export async function POST(
 
   try {
     const body = await req.json().catch(() => ({}));
-    const mode: "send" | "draft" = body?.mode === "draft" ? "draft" : "send";
+    // Por defecto borrador: el correo lo revisa y lo envía una persona.
+    const mode: "send" | "draft" = body?.mode === "send" ? "send" : "draft";
+    const force = body?.force === true;
 
     const { data: cand, error: fetchErr } = await supabaseAdmin
       .from("ht_candidates")
       .select(
-        "id, name, email, stage, status, preferred_language, rejection_category, rejection_note_public, rejection_sent_at, ht_vacancies(title, form_template_key, country)",
+        "id, name, email, stage, status, preferred_language, rejection_category, rejection_note_public, rejection_sent_at, rejection_draft_id, rejected_at, ht_vacancies(title, form_template_key, country)",
       )
       .eq("id", params.candidateId)
       .maybeSingle();
@@ -59,8 +77,10 @@ export async function POST(
       return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 });
     }
 
-    // Solo para quienes ya están rechazados: esta ruta no toma decisiones.
-    if (cand.stage !== "rechazado" && cand.status !== "rejected") {
+    // Solo para quienes están en la etapa de rechazados. Mira la etapa y no el
+    // `status`: hay fichas con status «rejected» de un proceso viejo que hoy
+    // siguen activas en otra etapa, y a esas no se les manda un rechazo.
+    if (cand.stage !== "rechazado") {
       return NextResponse.json(
         { error: "Este candidato no está rechazado. El correo de rechazo se genera al rechazarlo." },
         { status: 409 },
@@ -116,6 +136,46 @@ export async function POST(
         },
         { status: 503 },
       );
+    }
+
+    if (!force) {
+      // 1. ¿Ya salió? Se mira Enviados, no la ficha: la ficha no se entera de
+      //    lo que se envía desde Gmail.
+      const enviado = await findSentRejection(cand.email as string, (cand as any).rejected_at);
+      if (enviado.ok && enviado.sentAt) {
+        if (!cand.rejection_sent_at) {
+          await supabaseAdmin
+            .from("ht_candidates")
+            .update({ rejection_sent_at: enviado.sentAt, updated_at: new Date().toISOString() })
+            .eq("id", params.candidateId);
+        }
+        const fecha = new Date(enviado.sentAt).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+        return NextResponse.json({
+          success: true,
+          already_sent: true,
+          sent_at: enviado.sentAt,
+          times: enviado.count,
+          message:
+            `Ya había salido el ${fecha}` +
+            (enviado.count > 1 ? ` (${enviado.count} veces)` : "") +
+            ". Quedó marcado como enviado; no se creó otro borrador.",
+        });
+      }
+
+      // 2. ¿Hay un borrador anterior esperando en Gmail?
+      const draftId = (cand as any).rejection_draft_id as string | null;
+      if (mode === "draft" && draftId) {
+        const existe = await gmailDraftExists(draftId);
+        if (existe === true) {
+          return NextResponse.json({
+            success: true,
+            draft_exists: true,
+            draft_id: draftId,
+            to: cand.email,
+            message: "Ya hay un borrador sin enviar para esta persona en Gmail. Envía ese; no se creó otro.",
+          });
+        }
+      }
     }
 
     const vacancyTitle: string =
