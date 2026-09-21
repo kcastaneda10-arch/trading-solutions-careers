@@ -431,3 +431,59 @@ export async function findSentRejection(
     count: search.ids.length,
   };
 }
+
+/**
+ * Borrador con archivos adjuntos (multipart/mixed).
+ *
+ * `to` es opcional: el informe de vacante se deja sin destinatario para que
+ * quien lo envía escriba el correo del líder a mano en Gmail.
+ */
+export async function createDraftWithAttachmentsViaGmail(opts: {
+  to?: string | null;
+  subject: string;
+  html: string;
+  fromName?: string;
+  replyTo?: string;
+  attachments: { filename: string; mimeType: string; data: Buffer }[];
+}): Promise<{ ok: true; draft_id: string; message_id: string; gmail_email: string } | { ok: false; error: string }> {
+  const valid = await getValidAccessToken();
+  if (!valid) return { ok: false, error: "Gmail no está conectado o el permiso expiró." };
+
+  const limite = "ts_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const enc = (t: string) => `=?UTF-8?B?${Buffer.from(t).toString("base64")}?=`;
+  // base64 en líneas de 76: algunos clientes rechazan líneas más largas.
+  const b64 = (b: Buffer) => b.toString("base64").replace(/.{1,76}/g, "$&\r\n").trimEnd();
+
+  const l: string[] = [];
+  l.push(`From: ${enc(opts.fromName ?? "Trading Solutions")} <${valid.email}>`);
+  if (opts.to) l.push(`To: ${opts.to}`);
+  if (opts.replyTo) l.push(`Reply-To: ${opts.replyTo}`);
+  l.push(`Subject: ${enc(opts.subject)}`);
+  l.push("MIME-Version: 1.0");
+  l.push(`Content-Type: multipart/mixed; boundary="${limite}"`);
+  l.push("");
+  l.push(`--${limite}`);
+  l.push('Content-Type: text/html; charset="UTF-8"');
+  l.push("Content-Transfer-Encoding: base64");
+  l.push("");
+  l.push(b64(Buffer.from(opts.html)));
+  for (const a of opts.attachments) {
+    l.push(`--${limite}`);
+    l.push(`Content-Type: ${a.mimeType}; name="${enc(a.filename)}"`);
+    l.push(`Content-Disposition: attachment; filename="${enc(a.filename)}"`);
+    l.push("Content-Transfer-Encoding: base64");
+    l.push("");
+    l.push(b64(a.data));
+  }
+  l.push(`--${limite}--`);
+
+  const raw = Buffer.from(l.join("\r\n")).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const r = await fetch(GMAIL_DRAFTS_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${valid.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: { raw } }),
+  });
+  if (!r.ok) return { ok: false, error: `Gmail no creó el borrador: ${r.status} ${(await r.text()).slice(0, 300)}` };
+  const j = await r.json();
+  return { ok: true, draft_id: j.id, message_id: j.message?.id, gmail_email: valid.email };
+}

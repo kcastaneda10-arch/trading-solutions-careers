@@ -599,6 +599,18 @@ export default function PipelineFunnel() {
                   📊 Comparar
                 </a>
               )}
+              {vacFilter !== "all" && (
+                <a
+                  href={`/hr-admin/informe/${vacFilter}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold px-3 py-2.5 border border-black text-black hover:bg-black hover:text-white transition-colors whitespace-nowrap"
+                  style={{ borderRadius: 0 }}
+                  title="Informe de la vacante en PDF para el hiring manager y la dirección · se puede dejar en borrador de Gmail"
+                >
+                  📄 Informe
+                </a>
+              )}
             </div>
           </div>
         </div>
