@@ -144,7 +144,14 @@ type Vacancy = {
   created_at?: string | null;
   requisition_id?: string | null;
   ht_candidates?: { count: number }[];
+  /** Quién responde por el proceso · null mientras nadie lo tenga asignado. */
+  owner_recruiter_id?: string | null;
+  /** Quien puede operarla igual sin aparecer frente al candidato. */
+  support_recruiter_id?: string | null;
 };
+
+/** El equipo de Talent, para saber de quién es cada vacante. */
+type Reclutador = { id: string; nombre: string; rol: string; calendly_url: string | null };
 
 /** Cuántos candidatos tiene una vacante, según el conteo que ya trae la API. */
 function candidatosDe(v: Vacancy): number {
@@ -279,6 +286,11 @@ const OWNER_STYLE: Record<StageOwner, { label: string; barColor: string; bgTint:
 export default function PipelineFunnel() {
   const [candidates, setCandidates] = useState<Cand[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  /** El equipo de Talent. Si la tabla todavía no existe, queda vacío y el
+   *  funnel se ve exactamente como antes: nadie pierde el tablero por esto. */
+  const [reclutadores, setReclutadores] = useState<Reclutador[]>([]);
+  /** Filtro por quién lleva el proceso · 'all' mientras no se elija a nadie. */
+  const [duenoFilter, setDuenoFilter] = useState("all");
   // El desplegable arranca solo con las abiertas: es lo que se está trabajando.
   const [verCerradas, setVerCerradas] = useState(false);
   /** Origen: separa lo que se cargó de un proceso anterior de lo que llegó solo. */
@@ -302,9 +314,25 @@ export default function PipelineFunnel() {
       window.history.replaceState(null, '', newUrl);
     }
   };
+  /**
+   * Las vacantes que se están mirando según el filtro por dueño.
+   *
+   * El apoyo cuenta igual que el dueño: si alguien cubre una vacante mientras
+   * el otro está fuera, tiene que verla en su lista o el filtro le esconde
+   * justo el trabajo que le tocó.
+   */
+  const vacantesVisibles = useMemo(
+    () =>
+      duenoFilter === "all"
+        ? vacancies
+        : vacancies.filter(
+            (v) => v.owner_recruiter_id === duenoFilter || v.support_recruiter_id === duenoFilter,
+          ),
+    [vacancies, duenoFilter],
+  );
   const opcionesVacante = useMemo(
-    () => opcionesDeVacante(vacancies, verCerradas, vacFilter),
-    [vacancies, verCerradas, vacFilter],
+    () => opcionesDeVacante(vacantesVisibles, verCerradas, vacFilter),
+    [vacantesVisibles, verCerradas, vacFilter],
   );
   const [loading, setLoading] = useState(true);
   const [selectedCand, setSelectedCand] = useState<Cand | null>(null);
@@ -385,9 +413,21 @@ export default function PipelineFunnel() {
       // La bateria va aparte y es tolerante a fallo: si no carga, el funnel
       // sigue sirviendo, solo que sin los chips de la prueba.
       void cargarBateria();
+      void cargarReclutadores();
     } finally {
       setLoading(false);
     }
+  }
+
+  /** El equipo, para el filtro por dueño. Tolerante a fallo a propósito: si la
+   *  migración de reclutadores no está corrida, el funnel no se entera. */
+  async function cargarReclutadores() {
+    try {
+      const r = await fetch("/api/admin/reclutadores", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      setReclutadores(j.reclutadores || []);
+    } catch { /* el funnel no depende de esto */ }
   }
 
   async function cargarBateria() {
@@ -449,9 +489,16 @@ export default function PipelineFunnel() {
     [vacancies],
   );
 
+  /** Ids de las vacantes del dueño elegido · vacío significa «sin filtro». */
+  const idsDelDueno = useMemo(
+    () => (duenoFilter === "all" ? null : new Set(vacantesVisibles.map((v) => v.id))),
+    [duenoFilter, vacantesVisibles],
+  );
+
   const filtered = useMemo(() => {
     let base: Cand[];
     if (vacFilter !== "all") base = candidates.filter(c => c.vacancy_id === vacFilter);
+    else if (idsDelDueno) base = candidates.filter(c => c.vacancy_id && idsDelDueno.has(c.vacancy_id));
     else if (verCerradas) base = candidates;
     // Sin vacantes cargadas todavía no se esconde nada: mejor de más que un
     // tablero vacío mientras llega la respuesta.
@@ -465,7 +512,7 @@ export default function PipelineFunnel() {
       return base.filter(c => c.source !== "cv_proceso_anterior");
     }
     return base;
-  }, [candidates, vacFilter, verCerradas, idsAbiertas, origenFilter]);
+  }, [candidates, vacFilter, verCerradas, idsAbiertas, origenFilter, idsDelDueno]);
 
   /** Dentro de cada columna, quien ya tiene resultado de bateria va primero y
    *  de mayor a menor match. El orden ES el ranking: no hace falta abrir otra
@@ -533,6 +580,39 @@ export default function PipelineFunnel() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
+            {/* Quién lleva el proceso. Aparece solo cuando hay equipo cargado:
+                con una sola persona reclutando, el filtro es ruido. */}
+            {reclutadores.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="ts-eyebrow text-[10px]">Reclutador</span>
+                <select
+                  value={duenoFilter}
+                  onChange={(e) => {
+                    setDuenoFilter(e.target.value);
+                    setVacFilter("all");
+                  }}
+                  className="text-xs font-medium border border-[var(--ts-gray-20)] bg-white px-2 py-1 hover:border-[var(--ts-black)] focus:border-[var(--ts-black)] outline-none transition-colors"
+                  style={{ borderRadius: 0 }}
+                  title="Muestra solo las vacantes de esa persona, como dueña o como apoyo"
+                >
+                  <option value="all">Todo el equipo</option>
+                  {reclutadores
+                    .filter((r) => r.rol !== "hiring_manager")
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nombre}
+                      </option>
+                    ))}
+                </select>
+                <a
+                  href="/hr-admin/reclutadores"
+                  className="text-[11px] underline text-[var(--ts-gray-60)] hover:text-[var(--ts-black)] whitespace-nowrap"
+                  title="Equipo de Talent y dueños de vacante"
+                >
+                  equipo
+                </a>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="ts-eyebrow text-[10px]">Origen</span>
               <select
@@ -612,6 +692,30 @@ export default function PipelineFunnel() {
                 </a>
               )}
             </div>
+            {/* De quién es el proceso que se está mirando. Sin dueño no hay a
+                quién preguntarle, y los correos salen con la agenda del
+                equipo en vez de la de quien entrevista. */}
+            {vacFilter !== "all" && reclutadores.length > 0 && (() => {
+              const v = vacancies.find((x) => x.id === vacFilter);
+              const dueno = reclutadores.find((r) => r.id === v?.owner_recruiter_id);
+              const apoyo = reclutadores.find((r) => r.id === v?.support_recruiter_id);
+              return (
+                <div className="text-[11px] text-[var(--ts-gray-60)] mt-0.5">
+                  {dueno ? (
+                    <>
+                      Lleva el proceso <span className="font-bold text-[var(--ts-black)]">{dueno.nombre}</span>
+                      {apoyo && <> · apoyo {apoyo.nombre}</>}
+                      {!dueno.calendly_url && <span className="text-amber-700"> · sin agenda propia</span>}
+                    </>
+                  ) : (
+                    <span className="text-amber-700">Esta vacante no tiene dueño asignado</span>
+                  )}
+                  <a href="/hr-admin/reclutadores" className="underline ml-1.5">
+                    cambiar
+                  </a>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

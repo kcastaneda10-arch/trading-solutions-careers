@@ -17,6 +17,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected } from "@/lib/gmail";
 import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
+import { agendaDeVacante } from "@/lib/reclutadores";
 
 export const runtime = "nodejs";
 
@@ -160,11 +161,23 @@ export async function POST(
     const vacancyTitle: string = (candidate as any).ht_vacancies?.title || (lang === "en" ? "the position" : "la posición");
 
     // Selección de host según stage y vacante:
+    //   0. Dueño de la vacante con agenda propia → su calendario y su firma
     //   1. Stage cwo_interview → siempre Yohanna (en cualquier vacante)
     //   2. Vacante Talent Acquisition → Yohanna como recruiter
     //   3. Default → Kelly
+    //
+    // El dueño va primero porque es quien va a estar en la entrevista, pero
+    // los stages con host fijo mandan sobre él: ahí el host no depende de
+    // quién lleve el proceso. Si el dueño todavía no cargó su agenda, todo
+    // sigue saliendo como antes en vez de quedarse sin enviar.
     const candidateStage = candidate.stage as string | null;
-    const baseCalendlyUrl = getCalendlyUrl(candidate.vacancy_id as string | null, candidateStage);
+    const stageConHostFijo = Boolean(candidateStage && YOHANNA_STAGES.has(candidateStage));
+    const agenda = stageConHostFijo
+      ? { calendlyUrl: null, firma: null }
+      : await agendaDeVacante(candidate.vacancy_id as string | null);
+
+    const baseCalendlyUrl =
+      agenda.calendlyUrl || getCalendlyUrl(candidate.vacancy_id as string | null, candidateStage);
     const calendlyUrl = buildPrefillUrl(
       baseCalendlyUrl,
       candidate.name as string,
@@ -172,7 +185,7 @@ export async function POST(
       vacancyTitle
     );
 
-    const host = getHost(candidate.vacancy_id as string | null, candidateStage);
+    const host = agenda.firma || getHost(candidate.vacancy_id as string | null, candidateStage);
     const isCustomHost = baseCalendlyUrl !== CALENDLY_URL_DEFAULT;
     let draftId: string | null = null;
     if (candidate.email) {
