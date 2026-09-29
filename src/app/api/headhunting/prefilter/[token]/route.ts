@@ -79,11 +79,14 @@ const SEVERIDAD_POR_REGLA: Record<string, Severidad> = {
   sin_curso_50_horas: "duro",
   sin_autorizacion_trabajo_china: "duro",
   sin_tarjeta_profesional: "duro",
+  ingles_a1_a2: "blando",
   ingles_b1: "blando",
   ingles_b2_para_c1: "blando",
   sobre_banda: "blando",
   pretension_salarial: "blando",
   sin_disponibilidad_presencial: "blando",
+  sin_experiencia_rol: "blando",
+  anos_industria: "blando",
 };
 
 // Normaliza un valor Yes/No (bool o string) a booleano.
