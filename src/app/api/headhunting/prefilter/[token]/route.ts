@@ -43,10 +43,22 @@ const DEFAULT_ENGLISH_MIN_RANK = 4; // B2
 
 const ENGLISH_MIN_RANK_OVERRIDES: Record<string, number> = {
   "368006e7-98da-46a2-b871-6b741290821b": 5, // Pricing Senior · C1
-  // Especialista SIG-SST · B1. El aviso pide B2, pero el ingles NO descalifica
-  // en este cargo: el filtro real son las credenciales de ley. Decision de
-  // Wellness, 7-sep-2026.
-  "52e41180-79ca-48c5-97d1-f385f4d44dde": 3,
+
+  // ── Especialista SIG-SST · minimo B1 ──────────────────────────────────
+  // El aviso pide B2, pero el ingles NO descalifica en este cargo: el filtro
+  // real son las credenciales de ley. Decision de Wellness, 7-sep-2026.
+  //
+  // OJO, ESTA EXCEPCION NUNCA SE APLICO A NADIE. Se escribio apuntando a
+  // 52e41180, que es el registro gemelo sin candidatos. Los 47 candidatos
+  // reales viven en d369cefb (Integrated Management Systems & HSE
+  // Specialist), asi que entre el 7 y el 24 de septiembre el prefiltro
+  // siguio rechazando por B1 a seis personas en la vacante real -- entre
+  // ellas Edwin Navarro Florian, que despues quedo primero en el ranking
+  // con 4.33. Se dejan las tres ids porque el cargo esta duplicado en la
+  // base y cualquiera de ellas puede recibir una aplicacion.
+  "d369cefb-4f1e-4ba7-bc1e-b050fdf9ae5f": 3, // la viva · 47 candidatos
+  "52e41180-79ca-48c5-97d1-f385f4d44dde": 3, // gemela
+  "b0ab0b08-8fed-43b1-b083-918d8fb013a6": 3, // gemela cerrada
 };
 
 function getEnglishMinRank(vacancyId: string): number {
