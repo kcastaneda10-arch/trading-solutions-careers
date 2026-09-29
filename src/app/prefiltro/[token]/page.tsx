@@ -20,6 +20,17 @@ const SALARY_RANGES = ["< 3 M", "3 – 4 M", "4 – 5 M", "5 – 6 M", "6 – 7 
 const AVAILABILITY = ["Inmediato", "15 días", "30 días", "60+ días"];
 const RELOCATE = ["Ya vivo en Barranquilla", "Sí, dispuesto a mudarme", "No me puedo mudar"];
 const ENGLISH = ["A1 (básico)", "A2 (elemental)", "B1 (intermedio)", "B2 (intermedio alto)", "C1 (avanzado)", "C2 (nativo / fluido)"];
+// El marco europeo no se usa en China: alli se habla de CET, IELTS y TOEFL.
+// Con los chips en letras peladas, las cinco unicas personas descartadas por
+// idioma fueron las cinco que marcaron "B1" -- una con IELTS 7.5 -- y nadie
+// marco A1 ni A2: "B1" se estaba leyendo como "no estoy seguro". La etiqueta
+// lleva la equivalencia; el valor que se guarda sigue siendo B1/B2/C1/C2.
+const CN_ENGLISH: ChipOption[] = [
+  { value: "B1", label: "B1 · CET-4 · IELTS 4.5–5.0" },
+  { value: "B2", label: "B2 · CET-6 · IELTS 5.5–6.5" },
+  { value: "C1", label: "C1 · IELTS 7.0–8.0 · TEM-8" },
+  { value: "C2", label: "C2 · near-native" },
+];
 // Education options · varían según template
 const EDU_COMEX = ["Industrial", "Sistemas / Software", "Otra ingeniería", "Otra carrera", "Estudiante últimos semestres", "Bachiller / técnico"];
 const EDU_HR = ["Psicología", "Administración / Negocios", "Recursos Humanos", "Comunicación / Mercadeo", "Otra carrera", "Estudiante últimos semestres"];
@@ -598,9 +609,13 @@ export default function PrefiltroForm() {
 
           <Section title="3 · English">
             <Q label="English level">
-              <SelectChips value={cnEnglish} onChange={setCnEnglish} options={["B1", "B2", "C1", "C2"]} />
+              <SelectChips value={cnEnglish} onChange={setCnEnglish} options={CN_ENGLISH} />
+              <p style={hintStyle}>
+                This role needs <strong>B2 or above</strong>. If you are unsure, pick the level that matches
+                your test score or your day-to-day work, and tell us the details below — we read it.
+              </p>
             </Q>
-            <Q label="How do you certify it? (e.g. certification, years working in English, studies abroad)">
+            <Q label="How do you certify it? (e.g. IELTS / TOEFL / CET score, years working in English, studies abroad)">
               <textarea value={cnEnglishCert} onChange={(e) => setCnEnglishCert(e.target.value.slice(0, 300))} rows={2} style={inputStyle} />
             </Q>
           </Section>
@@ -960,6 +975,13 @@ function SelectChips({ value, onChange, options }: { value: string; onChange: (v
     </div>
   );
 }
+
+const hintStyle: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 12.5,
+  lineHeight: 1.5,
+  color: "#6B7280",
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",

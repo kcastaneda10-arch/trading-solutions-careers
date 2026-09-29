@@ -71,6 +71,21 @@ const CHINA_ENGLISH_RANK: Record<string, number> = {
 };
 const CHINA_ENGLISH_MIN_RANK = 4; // B2
 
+// Que tan firme es el dato detras de cada regla. Lo que el candidato declara
+// sobre si mismo es blando; lo que se verifica contra un documento es duro.
+const SEVERIDAD_POR_REGLA: Record<string, Severidad> = {
+  sin_licencia_sst: "duro",
+  licencia_vencida: "duro",
+  sin_curso_50_horas: "duro",
+  sin_autorizacion_trabajo_china: "duro",
+  sin_tarjeta_profesional: "duro",
+  ingles_b1: "blando",
+  ingles_b2_para_c1: "blando",
+  sobre_banda: "blando",
+  pretension_salarial: "blando",
+  sin_disponibilidad_presencial: "blando",
+};
+
 // Normaliza un valor Yes/No (bool o string) a booleano.
 function isYes(v: unknown): boolean {
   if (v === true) return true;
@@ -79,6 +94,50 @@ function isYes(v: unknown): boolean {
 }
 
 type Decision = "pass" | "review" | "reject";
+
+// Un dato "blando" lo escribio el candidato sobre si mismo y se equivoca a
+// menudo: nivel de idioma, aspiracion, disponibilidad. Un dato "duro" se
+// verifica contra un hecho: sin licencia vigente no se puede ejercer el
+// cargo, sin autorizacion no se puede trabajar en el pais. La severidad no
+// decide nada; ordena la cola de revision, porque un no equivocado sobre un
+// dato blando es el que sale caro.
+type Severidad = "duro" | "blando";
+
+type Bloqueo = {
+  regla: string;
+  severidad: Severidad;
+  categoria: string;
+  sub_detail: string;
+  valor?: string | null;
+  contradiccion?: string | null;
+};
+
+const PRUEBAS_IDIOMA =
+  /\b(ielts|toefl|toeic|cet[\s-]?[46]|tem[\s-]?[48]|cambridge|fce|cae|cpe|duolingo|pte|aptis|efset)\b/i;
+const SENALES_IDIOMA =
+  /(main working language|working language|multinational|native speaker|lived abroad|living abroad|studied abroad|medium of instruction|bilingual)/i;
+
+/**
+ * Busca en el texto libre una senal que obligue a mirar el nivel que el
+ * candidato marco en el desplegable antes de creerselo.
+ *
+ * El caso que origino esto: Charlotte Cheng, la segunda del ranking de China,
+ * marco "B1" y en el campo de al lado escribio "IELTS 7.5 overall, more than
+ * 7 years in multinational companies with English as the main working
+ * language". El formulario la descarto solo. IELTS 7.5 es C1.
+ *
+ * No afirma que el nivel este mal: dice que hay algo que una persona tiene
+ * que leer. CET-4 tambien entra, porque su puntaje decide si llega a B2.
+ */
+function senalContrariaIdioma(texto: unknown): string | null {
+  const t = String(texto ?? "").trim();
+  if (t.length < 8) return null;
+  const prueba = t.match(PRUEBAS_IDIOMA);
+  if (prueba) return `menciona ${prueba[0].toUpperCase()} - verificar el puntaje`;
+  const senal = t.match(SENALES_IDIOMA);
+  if (senal) return `menciona "${senal[0]}"`;
+  return null;
+}
 
 function decideFromSalary(salaryRange: string, vacancyId: string): { decision: Decision; cap: number | null; lowerBound: number | null } {
   const cap = SALARY_CAPS[vacancyId] ?? null;
@@ -253,6 +312,7 @@ export async function POST(
   let decision: Decision;
   let rejectionReason: { category: string; sub_detail: string } | null = null;
   let meta: Record<string, unknown>;
+  const bloqueos: Bloqueo[] = [];
 
   if (templateKey === "china") {
     // ─── Rama CHINA · knock-outs solamente ──────────────────────────
@@ -268,18 +328,38 @@ export async function POST(
     const workAuthorized = isYes(body.work_authorized);
     const onsiteAvailable = isYes(body.onsite_available);
 
+    // Se recogen todos los bloqueos, no solo el primero: si alguien falla en
+    // dos cosas, quien decide tiene que ver las dos. Antes el else-if
+    // escondia el segundo motivo.
     if (!workAuthorized) {
-      decision = "reject";
-      rejectionReason = { category: "requisito_excluyente", sub_detail: "sin_autorizacion_trabajo_china" };
-    } else if (englishFails) {
-      decision = "reject";
-      rejectionReason = { category: "idioma_insuficiente", sub_detail: englishRank <= 3 ? "ingles_b1" : "ingles_b2_para_c1" };
-    } else if (!onsiteAvailable) {
-      decision = "reject";
-      rejectionReason = { category: "requisito_excluyente", sub_detail: "sin_disponibilidad_presencial" };
-    } else {
-      decision = "pass";
+      bloqueos.push({
+        regla: "autorizacion_trabajo",
+        severidad: "duro",
+        categoria: "requisito_excluyente",
+        sub_detail: "sin_autorizacion_trabajo_china",
+        valor: String(body.work_authorized ?? ""),
+      });
     }
+    if (englishFails) {
+      bloqueos.push({
+        regla: "ingles_minimo",
+        severidad: "blando",
+        categoria: "idioma_insuficiente",
+        sub_detail: englishRank <= 3 ? "ingles_b1" : "ingles_b2_para_c1",
+        valor: String(body.english_level ?? ""),
+        contradiccion: senalContrariaIdioma(body.english_cert),
+      });
+    }
+    if (!onsiteAvailable) {
+      bloqueos.push({
+        regla: "disponibilidad_presencial",
+        severidad: "blando",
+        categoria: "requisito_excluyente",
+        sub_detail: "sin_disponibilidad_presencial",
+        valor: String(body.onsite_available ?? ""),
+      });
+    }
+    decision = bloqueos.length ? "review" : "pass";
 
     // Presupuesto · sobre el tope no se rechaza, se manda a revisión.
     const salaryUsd = parseSalaryUsd(body.salary_usd);
@@ -419,6 +499,44 @@ export async function POST(
     };
   }
 
+  // ─── Ningun descarte automatico ─────────────────────────────────────
+  // Decision de Kelly, 29-sep-2026: el prefiltro no rechaza a nadie. Marca
+  // en rojo con el motivo y una persona decide.
+  //
+  // Lo que lo motivo: las cinco unicas personas que el prefiltro descarto por
+  // idioma en China son las cinco que marcaron "B1", y ninguna marco A1 ni
+  // A2. El chip "B1" estaba funcionando como "no estoy seguro". Una de ellas
+  // tenia IELTS 7.5 escrito en el campo de al lado y era la segunda del
+  // ranking; otra se cerro con correo enviado antes de que alguien leyera que
+  // llevaba diez anos viviendo en el exterior.
+  //
+  // El rechazo sigue existiendo, pero lo firma una persona en
+  // /api/admin/candidates/[candidateId]/reject-with-reason.
+  if (rejectionReason) {
+    bloqueos.push({
+      regla: rejectionReason.sub_detail,
+      severidad: SEVERIDAD_POR_REGLA[rejectionReason.sub_detail] ?? "blando",
+      categoria: rejectionReason.category,
+      sub_detail: rejectionReason.sub_detail,
+    });
+  }
+  if (decision === "reject") decision = "review";
+
+  // La prioridad ordena la mesa de decision. Arriba lo que puede estar mal y
+  // cuesta caro: dato blando con una senal que lo contradice. Abajo el hecho
+  // verificable, que solo necesita un clic de confirmacion.
+  const prioridadRevision = bloqueos.reduce((max, b) => {
+    const p = b.severidad === "blando" ? (b.contradiccion ? 3 : 2) : 1;
+    return p > max ? p : max;
+  }, 0);
+
+  meta = {
+    ...meta,
+    bloqueos,
+    rojo: bloqueos.length > 0,
+    prioridad_revision: prioridadRevision,
+  };
+
   const updates: Record<string, unknown> = {
     prefilter_data: {
       ...body,
@@ -428,62 +546,14 @@ export async function POST(
     prefilter_completed_at: new Date().toISOString(),
   };
 
-  // Si rechazo · escribir motivo clasificado para que aparezca en el Funnel
-  if (rejectionReason) {
-    updates.rejection_category = rejectionReason.category;
-    updates.rejection_sub_detail = rejectionReason.sub_detail;
-    updates.rejected_by = "prefilter_auto";
-    updates.rejected_at = new Date().toISOString();
-  }
-
-  // Si decisión = reject → status='rejected' + crear draft de descarte
-  if (decision === "reject") {
-    updates.status = "rejected";
-
-    // El idioma del proceso manda: en China el candidato no habla español, así
-    // que el descarte sale en inglés aunque haya escrito poco en el formulario.
-    // Fuera de China se sigue detectando por lo que escribió.
-    const lang = resolveCandidateLang({
-      formTemplateKey: templateKey,
-      preferredLanguage: (candidate as any).preferred_language,
-      jobTitle: (candidate as any).ht_vacancies?.title,
-      country: (candidate as any).ht_vacancies?.country,
-    }) === "en"
-      ? "en"
-      : detectLanguage(body.why_ts, body.next_role, body.extra, body.english_cert);
-    // @ts-expect-error supabase relation
-    const clientName = candidate.ht_clients?.name || "Trading Solutions";
-    // @ts-expect-error supabase relation
-    const vacancyTitle = candidate.ht_vacancies?.title || "the position";
-
-    try {
-      const gmail = await isGmailConnected();
-      if (gmail.connected) {
-        const subject = lang === "en"
-          ? `Trading Solutions · About your application`
-          : `Trading Solutions · Sobre tu aplicación`;
-        const html = lang === "en"
-          ? buildRejectionHtmlEn(candidate.name as string, clientName, vacancyTitle)
-          : buildRejectionHtmlEs(candidate.name as string, clientName, vacancyTitle);
-        const draftRes = await createDraftViaGmail({
-          to: candidate.email as string,
-          subject,
-          html,
-          fromName: lang === "en" ? EN_SIGNATURE_NAME : "Kelly Castañeda",
-        });
-        if (draftRes.ok) {
-          updates.rejection_draft_id = draftRes.draft_id;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to create rejection draft:", e);
-    }
-  }
+  // Ya no se escribe rejection_category ni rejected_at desde aca, ni se crea
+  // el borrador del correo: el candidato no esta rechazado, esta en rojo
+  // esperando decision. Escribirle "rechazado" en la ficha a alguien que
+  // nadie ha revisado es lo que dejo a doce personas esperando en silencio.
 
   // Actualizar stage según decisión
   if (decision === "pass") updates.stage = "prefiltro_pasado";
   else if (decision === "review") updates.stage = "prefiltro_revision";
-  else if (decision === "reject") updates.stage = "rechazado";
 
   const { error: updateErr } = await supabaseAdmin
     .from("ht_candidates")
@@ -514,8 +584,12 @@ export async function POST(
     if (gmail.connected) {
       // @ts-expect-error supabase relation
       const vacancyTitle = candidate.ht_vacancies?.title || "vacante";
-      const decisionEmoji = decision === "pass" ? "✅" : decision === "review" ? "⚠️" : "❌";
-      const decisionLabel = decision === "pass" ? "PASS" : decision === "review" ? "REVIEW" : "REJECT";
+      const enRojo = bloqueos.length > 0;
+      const decisionEmoji = enRojo ? "🔴" : "✅";
+      const decisionLabel = enRojo ? "EN ROJO · decide tú" : "PASA";
+      const listaBloqueos = bloqueos
+        .map((b) => `<li>${b.sub_detail.replace(/_/g, " ")} — dato ${b.severidad}${b.valor ? ` (marcó: ${b.valor})` : ""}${b.contradiccion ? ` · <strong>${b.contradiccion}</strong>` : ""}</li>`)
+        .join("");
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://trading-solutions-careers.vercel.app";
       await sendViaGmail({
         to: "jointheteam@tradingsolutions.com",
@@ -530,7 +604,7 @@ export async function POST(
             <tr><td style="padding: 4px 12px 4px 0; color: #666;">Inglés:</td><td>${body.english_level || "—"}</td></tr>
             <tr><td style="padding: 4px 12px 4px 0; color: #666;">Ciudad:</td><td>${body.city || "—"}</td></tr>
           </table>
-          ${decision === "reject" ? `<p style="background: #FEF2F2; padding: 10px 14px; border-radius: 6px; color: #991B1B; font-size: 13px;">⚠️ Draft de descarte ya está en tu Gmail Drafts — revisa antes de enviar.</p>` : ""}
+          ${enRojo ? `<div style="background: #FEF2F2; padding: 10px 14px; border-radius: 6px; color: #991B1B; font-size: 13px;"><strong>No se rechazó a nadie.</strong> Quedó en rojo esperando tu decisión:<ul style="margin: 8px 0 0; padding-left: 18px;">${listaBloqueos}</ul></div>` : ""}
           <p><a href="${baseUrl}/hr-admin?tab=prefiltros" style="color: #2C64ED;">Ver en HR Admin →</a></p>
         </body></html>`,
         fromName: "Trading Solutions ATS",
