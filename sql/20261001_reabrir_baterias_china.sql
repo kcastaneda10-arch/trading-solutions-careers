@@ -32,17 +32,15 @@ where token in (
   'mbKjxBqTPSysW_kzCH_52C4-78z6s0nS'   -- Judy Guo
 );
 
--- Verificación: las dos deben quedar in_progress, con scores en null y
--- con sus respuestas contadas.
+-- Verificación: las dos deben quedar in_progress, con scores y match en
+-- null, y con sus respuestas intactas.
 select s.token,
        s.status,
-       s.scores is null  as scores_limpio,
+       s.scores is null     as scores_limpio,
        s.match_data is null as match_limpio,
-       count(a.id)       as respuestas_guardadas
+       (select count(*) from ts_bat_answers a where a.session_id = s.id) as respuestas_guardadas
 from ts_bat_sessions s
-left join ts_bat_answers a on a.session_id = s.id
 where s.token in (
   'v5_zZQLM_eYdgsgKEnUlbZ6L-Gh0mJpX',
   'mbKjxBqTPSysW_kzCH_52C4-78z6s0nS'
-)
-group by s.token, s.status, s.scores, s.match_data;
+);
