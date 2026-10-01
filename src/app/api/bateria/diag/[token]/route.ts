@@ -13,8 +13,19 @@ export const maxDuration = 120;
 /**
  * Diagnostico. Abrir en el navegador con la sesion de hr-admin iniciada:
  *   /api/bateria/diag/<token>
- * Dice si el calculo corre, si la escritura persiste y que quedo guardado.
- * No es una ruta permanente: se quita cuando el problema este resuelto.
+ * Dice si el calculo corre y que hay guardado.
+ *
+ * SOLO LEE. Para escribir hay que pedirlo: ?aplicar=1
+ *
+ * Por que: esta ruta se llamaba "diag" y cerraba la sesion. Un GET que
+ * parece lectura marcaba status='completed' y guardaba puntajes, aunque la
+ * persona llevara 16 de 172 respuestas. El 1-oct-2026 abrirla sobre dos
+ * candidatas de China que estaban a medias --Yijiao Wang con 68 respuestas y
+ * Judy Guo con 16-- las dejo cerradas con un match calculado sobre un
+ * cuestionario incompleto. Las dos habian escrito preguntando por un error y
+ * estaban esperando respuesta.
+ *
+ * Un diagnostico no cambia lo que mide.
  */
 export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: 'No autorizado · entre primero a /hr-admin' }, { status: 401 });
@@ -73,18 +84,41 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     return NextResponse.json(out);
   }
 
-  // 2) ¿la escritura persiste? Se escribe y se vuelve a leer en la misma llamada.
-  const { data: escrito, error: eUpd } = await supabaseAdmin
-    .from('ts_bat_sessions')
-    .update({ scores, validity, status: 'completed', updated_at: new Date().toISOString() })
-    .eq('id', sesion.id)
-    .select('id, status, updated_at, scores');
+  // 2) ¿la escritura persiste? Solo si se pide con ?aplicar=1.
+  //    Sin el parametro no se toca la sesion: cerrar una bateria a medias
+  //    produce un match sobre un cuestionario incompleto, y ese numero
+  //    despues se lee como si fuera el resultado de la persona.
+  const aplicar = new URL(req.url).searchParams.get('aplicar') === '1';
+  const incompleta = (respuestas?.length ?? 0) < ITEMS.length;
 
-  out.escritura = {
-    error: eUpd?.message ?? null,
-    filasDevueltas: escrito?.length ?? 0,
-    scoresTrasEscribir: escrito?.[0]?.scores ? Object.keys(escrito[0].scores) : null,
-  };
+  if (!aplicar) {
+    out.escritura = {
+      omitida: true,
+      razon: 'solo lectura · agregue ?aplicar=1 para escribir',
+      respuestasGuardadas: respuestas?.length ?? 0,
+      itemsTotales: ITEMS.length,
+      incompleta,
+    };
+  } else if (incompleta) {
+    out.escritura = {
+      omitida: true,
+      razon: `la sesion tiene ${respuestas?.length ?? 0} de ${ITEMS.length} respuestas · no se cierra una bateria a medias`,
+      incompleta: true,
+    };
+  } else {
+    const { data: escrito, error: eUpd } = await supabaseAdmin
+      .from('ts_bat_sessions')
+      .update({ scores, validity, status: 'completed', updated_at: new Date().toISOString() })
+      .eq('id', sesion.id)
+      .select('id, status, updated_at, scores');
+
+    out.escritura = {
+      aplicada: true,
+      error: eUpd?.message ?? null,
+      filasDevueltas: escrito?.length ?? 0,
+      scoresTrasEscribir: escrito?.[0]?.scores ? Object.keys(escrito[0].scores) : null,
+    };
+  }
 
   // ── ¿Las columnas nuevas existen? Si falta el SQL, guardar el informe falla.
   out.columnas = {
