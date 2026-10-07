@@ -42,6 +42,31 @@ const SIG_SECTORS = ["Logística / freight forwarding", "Aduanas / puerto / zona
 const CRMS = ["Salesforce", "HubSpot", "CargoWise", "SAP", "Odoo", "Zoho", "Microsoft Dynamics", "Otro CRM", "Ninguno"];
 const PSYCH_INSTRUMENTS = ["DISC", "Betesa", "16PF", "Cleaver", "Wartegg", "Terman", "IPV", "Zavic", "MMPI", "Otro", "Ninguno"];
 const ATS_TOOLS = ["LinkedIn Recruiter", "Greenhouse", "Lever", "Workday", "BambooHR", "HiBob", "Otro ATS", "Ninguno"];
+// Customer Documentation · lo que de verdad pasa por las manos del cargo.
+const DOC_TYPES_COMEX = ["B/L o guía aérea", "Factura comercial", "Packing list", "Certificado de origen", "Declaración de importación o exportación", "Órdenes y contratos con soportes", "Anticipos de clientes", "Ninguno de estos"];
+const DOC_COMPANY_TYPES = ["Freight forwarder", "Agencia de aduanas", "Naviera o aerolínea", "Importador o exportador", "Otra"];
+const DOC_PLATFORMS = ["MUISCA", "VUCE", "Federal Maritime Commission", "CargoWise u otro TMS", "ERP (SAP, Siesa, World Office…)", "Ninguna de estas"];
+const DOC_COURSES = ["Gestión documental de comercio internacional", "Procesos aduaneros", "Logística internacional", "INCOTERMS", "Ninguno todavía"];
+const DOC_YEARS: ChipOption[] = [
+  { value: "0", label: "No he trabajado con documentos de comercio exterior" },
+  { value: "-1", label: "Menos de 1 año" },
+  { value: "1-2", label: "Entre 1 y 2 años" },
+  { value: "2-4", label: "Entre 2 y 4 años" },
+  { value: "+4", label: "Más de 4 años" },
+];
+// Tres niveles y no un sí/no: mucha gente concilia todos los días sin
+// llamarlo conciliar, y un sí/no la deja por fuera.
+const DOC_RECONCILIATION: ChipOption[] = [
+  { value: "central", label: "Sí, era parte central de mi trabajo" },
+  { value: "ocasional", label: "Lo he hecho de vez en cuando" },
+  { value: "no", label: "No lo he hecho" },
+];
+const DOC_CASE: ChipOption[] = [
+  { value: "radico", label: "Radico con el peso del B/L para no frenar el embarque y aviso después." },
+  { value: "pago", label: "Pago lo que dice la factura del agente; él conoce su operación." },
+  { value: "soporte", label: "Pido el soporte del peso al agente y aviso de inmediato a mi líder y al cliente que hay una diferencia sin resolver." },
+  { value: "espera", label: "Espero a que el agente responda; si no contesta, radico igual." },
+];
 const ACCOUNTING_SYSTEMS = ["SAP", "Oracle NetSuite", "QuickBooks", "Microsoft Dynamics", "Siigo", "World Office", "Otro", "Ninguno"];
 const DOC_TYPES = [
   { label: "Cédula de Ciudadanía", value: "CC" },
@@ -96,6 +121,18 @@ export default function PrefiltroForm() {
   const [accountingSystems, setAccountingSystems] = useState<string[]>([]);
   const [ifrsFamiliar, setIfrsFamiliar] = useState("");
   const [auditExp, setAuditExp] = useState("");
+  // Customer Documentation
+  const [docYears, setDocYears] = useState("");
+  const [docsHandled, setDocsHandled] = useState<string[]>([]);
+  const [docCompanies, setDocCompanies] = useState<string[]>([]);
+  const [docReconciliation, setDocReconciliation] = useState("");
+  const [docStory, setDocStory] = useState("");
+  const [docPlatforms, setDocPlatforms] = useState<string[]>([]);
+  const [docCourses, setDocCourses] = useState<string[]>([]);
+  const [docExcel, setDocExcel] = useState("");
+  const [docExcelWhat, setDocExcelWhat] = useState("");
+  const [docCase, setDocCase] = useState("");
+  const [docCaseWhy, setDocCaseWhy] = useState("");
   // SIG-SST
   const [licenseStatus, setLicenseStatus] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
@@ -138,6 +175,7 @@ export default function PrefiltroForm() {
   const isFinance = templateKey === "finance";
   const isChina = templateKey === "china";
   const isSIG = templateKey === "sig_sst";
+  const isDoc = templateKey === "customer_doc";
 
   // Prefill de nombre/email del candidato cuando cargan los datos (China)
   useEffect(() => {
@@ -233,6 +271,12 @@ export default function PrefiltroForm() {
         excelSig && sigCase.trim().length >= 40
       );
     }
+    if (isDoc) {
+      return !!(
+        docYears && docsHandled.length > 0 && docReconciliation &&
+        docStory.trim().length >= 40 && docCase && docCaseWhy.trim().length >= 15
+      );
+    }
     if (isHR) {
       return !!(yearsHR !== "" && atsTools.length > 0 && pipelineFromScratch && psychometricsYears !== "" && beiCertified);
     }
@@ -248,6 +292,11 @@ export default function PrefiltroForm() {
     }
     // Tech u otros roles: basta con las preguntas comunes
     return true;
+  }
+
+  /** Agrega o quita un valor de una lista de chips multiples. */
+  function toggleEnLista(valor: string, lista: string[], set: (v: string[]) => void) {
+    set(lista.includes(valor) ? lista.filter((x) => x !== valor) : [...lista, valor]);
   }
 
   async function handleSubmit() {
@@ -335,6 +384,21 @@ export default function PrefiltroForm() {
         cert_audit_cycles: parseInt(certAuditCycles) || 0,
         excel_level: parseInt(excelSig) || 0,
         case_answer: sigCase.trim(),
+      };
+    } else if (isDoc) {
+      payload = {
+        ...payload,
+        years_doc_comex: docYears,
+        docs_handled: docsHandled,
+        company_types: docCompanies,
+        invoice_reconciliation: docReconciliation,
+        difference_story: docStory.trim(),
+        platforms_used: docPlatforms,
+        doc_courses: docCourses,
+        excel_level: parseInt(docExcel) || 0,
+        excel_detail: docExcelWhat.trim(),
+        case_choice: docCase,
+        case_why: docCaseWhy.trim(),
       };
     } else if (isHR) {
       payload = {
@@ -861,6 +925,67 @@ export default function PrefiltroForm() {
               <textarea value={auditExp} onChange={(e) => setAuditExp(e.target.value.slice(0, 300))} rows={2} style={inputStyle} placeholder="Ej. 3 ciclos con KPMG en cliente multinacional" />
             </Q>
           </Section>
+        ) : isDoc ? (
+          <>
+            <Section title="5 · Tu experiencia documental">
+              <Q label="¿Cuántos años llevas manejando documentos de comercio exterior?">
+                <SelectChips value={docYears} onChange={setDocYears} options={DOC_YEARS} />
+              </Q>
+              <Q label="¿Cuáles de estos documentos has trabajado directamente? Marca solo los que hayas revisado, emitido o corregido tú.">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {DOC_TYPES_COMEX.map((d) => (
+                    <button key={d} type="button" onClick={() => toggleEnLista(d, docsHandled, setDocsHandled)} style={chipStyle(docsHandled.includes(d))}>{d}</button>
+                  ))}
+                </div>
+              </Q>
+              <Q label="¿En qué tipo de empresa fue?">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {DOC_COMPANY_TYPES.map((c) => (
+                    <button key={c} type="button" onClick={() => toggleEnLista(c, docCompanies, setDocCompanies)} style={chipStyle(docCompanies.includes(c))}>{c}</button>
+                  ))}
+                </div>
+              </Q>
+              <Q label="¿Has verificado facturas contra contratos u órdenes y encontrado diferencias?">
+                <SelectChips value={docReconciliation} onChange={setDocReconciliation} options={DOC_RECONCILIATION} />
+              </Q>
+              <Q label={`Cuéntanos de una diferencia o un cobro indebido que hayas detectado: cómo te diste cuenta, qué hiciste y en qué terminó. Si nunca te ha pasado, dilo con franqueza y cuéntanos el error más costoso que hayas encontrado en un documento. (mín. 40 caracteres) — ${docStory.length}/700`}>
+                <textarea value={docStory} onChange={(e) => setDocStory(e.target.value.slice(0, 700))} rows={5} style={inputStyle} placeholder="Cinco o seis líneas bastan" />
+              </Q>
+              <Q label="Plataformas y sistemas que has usado">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {DOC_PLATFORMS.map((pl) => (
+                    <button key={pl} type="button" onClick={() => toggleEnLista(pl, docPlatforms, setDocPlatforms)} style={chipStyle(docPlatforms.includes(pl))}>{pl}</button>
+                  ))}
+                </div>
+              </Q>
+              <Q label="¿Has hecho alguno de estos cursos o diplomados?">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {DOC_COURSES.map((c) => (
+                    <button key={c} type="button" onClick={() => toggleEnLista(c, docCourses, setDocCourses)} style={chipStyle(docCourses.includes(c))}>{c}</button>
+                  ))}
+                </div>
+              </Q>
+              <Q label="Tu nivel de Excel (1 = básico, 5 = experto con tablas dinámicas y fórmulas anidadas)">
+                <SelectChips value={docExcel} onChange={setDocExcel} options={["1","2","3","4","5"]} />
+              </Q>
+              <Q label="¿Qué haces en Excel en un día normal? (opcional)">
+                <input value={docExcelWhat} onChange={(e) => setDocExcelWhat(e.target.value.slice(0, 200))} style={inputStyle} placeholder="Tablas dinámicas, BUSCARV, conciliaciones…" />
+              </Q>
+            </Section>
+
+            <Section title="6 · Un caso corto">
+              <div style={{ background: "#f4f3f0", padding: "14px 16px", fontSize: 14, lineHeight: 1.55, marginBottom: 4 }}>
+                <b style={{ display: "block", marginBottom: 4 }}>La situación</b>
+                Estás por radicar una orden. La factura del agente dice <b>2.540 kg</b>, el B/L dice <b>2.450 kg</b> y la orden del cliente autoriza <b>2.450 kg</b>. El agente insiste en que su factura está bien y el embarque sale hoy a las 5:00 p. m.
+              </div>
+              <Q label="¿Qué haces primero?">
+                <SelectChips value={docCase} onChange={setDocCase} options={DOC_CASE} />
+              </Q>
+              <Q label={`¿Por qué? (mín. 15 caracteres) — ${docCaseWhy.length}/400`}>
+                <textarea value={docCaseWhy} onChange={(e) => setDocCaseWhy(e.target.value.slice(0, 400))} rows={3} style={inputStyle} placeholder="Dos o tres líneas" />
+              </Q>
+            </Section>
+          </>
         ) : isComex ? (
           <>
             <Section title="5 · Experiencia en comex · operaciones">
@@ -901,7 +1026,7 @@ export default function PrefiltroForm() {
           </>
         ) : null}
 
-        <Section title={`${isComex ? "7" : (isHR || isFinance) ? "6" : "5"} · Sobre ti`}>
+        <Section title={`${isComex || isDoc ? "7" : (isHR || isFinance) ? "6" : "5"} · Sobre ti`}>
           <Q label={`¿Por qué Trading Solutions específicamente? (mín. 20 caracteres) — ${whyTs.length}/500`}>
             <textarea value={whyTs} onChange={(e) => setWhyTs(e.target.value.slice(0, 500))} rows={4} style={inputStyle} placeholder="Cuéntanos qué te llamó la atención de la empresa, no de la vacante…" />
           </Q>

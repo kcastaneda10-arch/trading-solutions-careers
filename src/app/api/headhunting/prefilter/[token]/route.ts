@@ -16,6 +16,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { createDraftViaGmail, isGmailConnected, sendViaGmail } from "@/lib/gmail";
 import { recordStageEvent } from "@/lib/stage-events";
 import { resolveCandidateLang, EN_SIGNATURE_NAME } from "@/lib/candidate-lang";
+import { TEMPLATE_ENGLISH_MIN_RANK, TEMPLATE_SALARY_CAP, type TemplateKey } from "@/lib/prefilter-templates";
 
 // Techos por vacancy_id (en COP mensuales)
 const SALARY_CAPS: Record<string, number> = {
@@ -61,8 +62,22 @@ const ENGLISH_MIN_RANK_OVERRIDES: Record<string, number> = {
   "b0ab0b08-8fed-43b1-b083-918d8fb013a6": 3, // gemela cerrada
 };
 
-function getEnglishMinRank(vacancyId: string): number {
-  return ENGLISH_MIN_RANK_OVERRIDES[vacancyId] ?? DEFAULT_ENGLISH_MIN_RANK;
+/**
+ * El minimo de ingles de una vacante: primero su override, luego el default
+ * del template, y solo al final el global.
+ *
+ * El orden importa. La configuracion por id de vacante es la que fallo en
+ * septiembre: el cargo existia dos veces y la excepcion quedo escrita en el
+ * gemelo sin candidatos. El default por template viaja con el tipo de cargo,
+ * asi que una vacante nueva —o un duplicado— nace con la regla correcta.
+ */
+function getEnglishMinRank(vacancyId: string, templateKey?: string): number {
+  const porVacante = ENGLISH_MIN_RANK_OVERRIDES[vacancyId];
+  if (porVacante != null) return porVacante;
+  const porTemplate = templateKey
+    ? TEMPLATE_ENGLISH_MIN_RANK[templateKey as TemplateKey]
+    : undefined;
+  return porTemplate ?? DEFAULT_ENGLISH_MIN_RANK;
 }
 
 const ENGLISH_RANK: Record<string, number> = {
@@ -99,6 +114,11 @@ const SEVERIDAD_POR_REGLA: Record<string, Severidad> = {
   sin_disponibilidad_presencial: "blando",
   sin_experiencia_rol: "blando",
   anos_industria: "blando",
+  // Customer Documentation · todo lo que declara el candidato de si mismo
+  sin_experiencia_doc_comex: "blando",
+  sin_conciliacion_facturas: "blando",
+  sin_documentos_comex: "blando",
+  criterio_caso_documental: "blando",
 };
 
 // Normaliza un valor Yes/No (bool o string) a booleano.
@@ -154,8 +174,10 @@ function senalContrariaIdioma(texto: unknown): string | null {
   return null;
 }
 
-function decideFromSalary(salaryRange: string, vacancyId: string): { decision: Decision; cap: number | null; lowerBound: number | null } {
-  const cap = SALARY_CAPS[vacancyId] ?? null;
+function decideFromSalary(salaryRange: string, vacancyId: string, templateKey?: string): { decision: Decision; cap: number | null; lowerBound: number | null } {
+  const cap =
+    SALARY_CAPS[vacancyId] ??
+    (templateKey ? TEMPLATE_SALARY_CAP[templateKey as TemplateKey] ?? null : null);
   const lower = SALARY_LOWER[salaryRange] ?? null;
   if (cap == null || lower == null) {
     // Sin cap configurado o rango desconocido → review (humano decide)
@@ -170,8 +192,8 @@ function decideFromSalary(salaryRange: string, vacancyId: string): { decision: D
  * Devuelve el sub-detalle de rechazo según el nivel del candidato vs requerido.
  * null si el candidato cumple el mínimo.
  */
-function checkEnglishLevel(englishLevel: string | undefined, vacancyId: string): { fails: boolean; sub_detail: string | null; minRank: number; candidateRank: number } {
-  const minRank = getEnglishMinRank(vacancyId);
+function checkEnglishLevel(englishLevel: string | undefined, vacancyId: string, templateKey?: string): { fails: boolean; sub_detail: string | null; minRank: number; candidateRank: number } {
+  const minRank = getEnglishMinRank(vacancyId, templateKey);
   const candidateRank = ENGLISH_RANK[String(englishLevel || "")] ?? 0;
   if (candidateRank === 0) {
     return { fails: false, sub_detail: null, minRank, candidateRank };
@@ -403,9 +425,10 @@ export async function POST(
     //   (años liderando, ciclos de auditoría) no descarta: manda a review.
     const salaryResult = decideFromSalary(
       String(body.salary || ""),
-      String(candidate.vacancy_id)
+      String(candidate.vacancy_id),
+      templateKey
     );
-    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
+    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id), templateKey);
 
     const licenseStatus = String(body.license_status || "").trim().toLowerCase();
     const licenseValid = licenseStatus === "si";
@@ -456,15 +479,140 @@ export async function POST(
       english_candidate_rank: englishCheck.candidateRank,
       english_fails: englishCheck.fails,
     };
+  } else if (templateKey === "customer_doc") {
+    // ─── Rama Customer Documentation · experiencia documental ───────
+    //   Dos innegociables, definidos con Talent el 7-oct: experiencia
+    //   documental en comercio exterior y haber conciliado facturas contra
+    //   ordenes. Los dos son datos que la persona declara de si misma, asi
+    //   que son blandos: marcan la ficha, no la cierran. Las plataformas, los
+    //   cursos y el tipo de empresa suman y nunca bloquean, porque en la
+    //   costa hay buenos perfiles documentales que aprendieron en la
+    //   operacion y no en un diplomado.
+    const salaryResult = decideFromSalary(
+      String(body.salary || ""),
+      String(candidate.vacancy_id),
+      templateKey
+    );
+    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id), templateKey);
+
+    const anosDoc = String(body.years_doc_comex || "").trim();          // "0" | "-1" | "1-2" | "2-4" | "+4"
+    const conciliacion = String(body.invoice_reconciliation || "").trim(); // central | ocasional | no
+    const documentos: string[] = Array.isArray(body.docs_handled) ? body.docs_handled : [];
+    const plataformas: string[] = Array.isArray(body.platforms_used) ? body.platforms_used : [];
+    const eleccionCaso = String(body.case_choice || "").trim();
+    const relocateVal = String(body.relocate || "");
+
+    if (relocateVal === "No me puedo mudar") {
+      bloqueos.push({
+        regla: "sin_disponibilidad_presencial",
+        severidad: "blando",
+        categoria: "requisito_excluyente",
+        sub_detail: "sin_disponibilidad_presencial",
+        valor: relocateVal,
+      });
+    }
+    if (salaryResult.decision !== "pass") {
+      bloqueos.push({
+        regla: "sobre_banda",
+        severidad: "blando",
+        categoria: "pretension_salarial",
+        sub_detail: "sobre_banda",
+        valor: String(body.salary || ""),
+      });
+    }
+    if (englishCheck.fails) {
+      bloqueos.push({
+        regla: englishCheck.sub_detail || "ingles_b1",
+        severidad: "blando",
+        categoria: "idioma_insuficiente",
+        sub_detail: englishCheck.sub_detail || "ingles_b1",
+        valor: String(body.english_level || ""),
+        // El mismo detector que salvo a Charlotte Cheng: si en el campo de al
+        // lado menciona una prueba o anos leyendo documentos en ingles, hay
+        // algo que una persona tiene que leer antes de creerle al chip.
+        contradiccion: senalContrariaIdioma(body.english_cert),
+      });
+    }
+    if (anosDoc === "0") {
+      bloqueos.push({
+        regla: "sin_experiencia_doc_comex",
+        severidad: "blando",
+        categoria: "experiencia_insuficiente",
+        sub_detail: "sin_experiencia_doc_comex",
+        valor: anosDoc,
+        // Decir que no tiene experiencia y marcar plataformas aduaneras no
+        // cuadra: o se subestimo o marco por marcar. En los dos casos se
+        // pregunta antes de cerrar.
+        contradiccion: plataformas.some((x) => ["MUISCA", "VUCE", "Federal Maritime Commission", "CargoWise u otro TMS"].includes(x))
+          ? "marco plataformas aduaneras - verificar la hoja de vida"
+          : null,
+      });
+    }
+    if (conciliacion === "no") {
+      bloqueos.push({
+        regla: "sin_conciliacion_facturas",
+        severidad: "blando",
+        categoria: "experiencia_insuficiente",
+        sub_detail: "sin_conciliacion_facturas",
+        valor: conciliacion,
+        // Mucha gente concilia todos los dias sin llamarlo conciliar. Si el
+        // relato de la diferencia esta escrito, hay que leerlo.
+        contradiccion: String(body.difference_story || "").trim().length >= 80
+          ? "escribio un caso de diferencia detectada - leerlo antes de cerrar"
+          : null,
+      });
+    }
+    if (documentos.includes("Ninguno de estos")) {
+      bloqueos.push({
+        regla: "sin_documentos_comex",
+        severidad: "blando",
+        categoria: "experiencia_insuficiente",
+        sub_detail: "sin_documentos_comex",
+      });
+    }
+    // El caso no bloquea por si mismo: es una senal de criterio para la
+    // entrevista. Radicar o pagar con una diferencia sin resolver es
+    // exactamente lo que el cargo existe para no hacer.
+    const criterioFlojo = ["radico", "pago", "espero"].includes(eleccionCaso);
+    if (criterioFlojo) {
+      bloqueos.push({
+        regla: "criterio_caso_documental",
+        severidad: "blando",
+        categoria: "match_cultural",
+        sub_detail: "criterio_caso_documental",
+        valor: eleccionCaso,
+      });
+    }
+
+    decision = bloqueos.length ? "review" : "pass";
+
+    meta = {
+      customer_doc: true,
+      years_doc_comex: anosDoc,
+      docs_handled: documentos,
+      company_types: Array.isArray(body.company_types) ? body.company_types : [],
+      invoice_reconciliation: conciliacion,
+      platforms_used: plataformas,
+      courses: Array.isArray(body.doc_courses) ? body.doc_courses : [],
+      excel_level: Number(body.excel_level ?? 0),
+      case_choice: eleccionCaso,
+      case_ok: eleccionCaso === "soporte",
+      cap_used: salaryResult.cap,
+      salary_lower_bound: salaryResult.lowerBound,
+      english_min_required_rank: englishCheck.minRank,
+      english_candidate_rank: englishCheck.candidateRank,
+      english_fails: englishCheck.fails,
+    };
   } else {
     // ─── Rama estándar (comex/hr/finance/tech) · salario + inglés ────
     const salaryResult = decideFromSalary(
       String(body.salary || ""),
-      String(candidate.vacancy_id)
+      String(candidate.vacancy_id),
+      templateKey
     );
 
     // Check de inglés mínimo por vacante
-    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id));
+    const englishCheck = checkEnglishLevel(body.english_level, String(candidate.vacancy_id), templateKey);
 
     // Decisión final · si el inglés no llega al mínimo → reject (sobrescribe pass)
     // Si el inglés es menor → priorizamos rechazo por idioma sobre salario

@@ -46,6 +46,11 @@ function plantillaDePrefiltro(job: { dept: string; slug: string; location: strin
   // son credenciales de ley (licencia, cursos, auditor), no experiencia en HR.
   if (/sig|sst|hseq/i.test(job.slug)) return "sig_sst";
   if (d.includes("talento") || d.includes("wellness") || d.includes("people") || d.includes("human")) return "hr_lead";
+  // Customer Documentation va antes que comex: pertenece al mismo mundo, pero
+  // su filtro es documental —qué documentos ha trabajado, si concilia facturas—
+  // y no ventas ni pricing. Con el template de comex se le preguntaba por años
+  // en pricing a quien va a radicar órdenes.
+  if (/customer[-\s]?doc|documentation|documental/i.test(job.slug)) return "customer_doc";
   return "comex";
 }
 

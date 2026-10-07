@@ -10,7 +10,7 @@
  * archivo para validar qué campos son obligatorios según template.
  */
 
-export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech" | "china" | "sig_sst";
+export type TemplateKey = "comex" | "hr_lead" | "finance" | "tech" | "china" | "sig_sst" | "customer_doc";
 
 export type SectionKey =
   | "personal"           // todos
@@ -23,6 +23,8 @@ export type SectionKey =
   | "finance_experience" // solo finance
   | "china_core"         // solo china · form en inglés, innegociables
   | "sig_experience"     // solo sig_sst · licencia, cursos, auditorías
+  | "doc_experience"     // solo customer_doc · documentos, conciliación, plataformas
+  | "doc_case"           // solo customer_doc · el caso de la diferencia de peso
   | "about_you";         // todos
 
 export type PrefilterTemplate = {
@@ -36,7 +38,7 @@ export const PREFILTER_TEMPLATES: Record<TemplateKey, PrefilterTemplate> = {
   comex: {
     key: "comex",
     label: "Comercio exterior · ventas · pricing",
-    description: "Para Pricing Junior, Pricing Senior, Inside Sales, Customer Documentation",
+    description: "Para Pricing Junior, Pricing Senior e Inside Sales. Customer Documentation tiene el suyo.",
     sections: ["personal", "availability", "english", "education", "comex_experience", "sales_pricing", "about_you"],
   },
   hr_lead: {
@@ -62,6 +64,13 @@ export const PREFILTER_TEMPLATES: Record<TemplateKey, PrefilterTemplate> = {
     label: "SIG · SST · HSEQ (credenciales verificables)",
     description: "Para Especialista SIG-SST y cargos de sistemas de gestión. Pide licencia vigente, cursos de ley, certificaciones de auditor y años liderando el sistema. Incluye una pregunta abierta de criterio que es el mejor discriminante del perfil.",
     sections: ["personal", "availability", "english", "education", "sig_experience", "about_you"],
+  },
+  customer_doc: {
+    key: "customer_doc",
+    label: "Customer Documentation · comex documental",
+    description:
+      "Para Customer Documentation y cargos de gestión documental de comercio exterior. Pregunta por los documentos que la persona ha trabajado de verdad, por la conciliación de facturas contra órdenes —que es lo que hace el cargo todos los días— y cierra con un caso de una diferencia de peso con el embarque encima.",
+    sections: ["personal", "availability", "english", "education", "doc_experience", "doc_case", "about_you"],
   },
   china: {
     key: "china",
@@ -129,10 +138,46 @@ export const TEMPLATE_REQUIRED_FIELDS: Record<TemplateKey, string[]> = {
   // China · form en inglés. NO pide doc_type/doc_number/nacionalidad. Salario
   // (salary_usd) es dato, no descarta. Knock-outs: work_authorized, english_level
   // (>=B2), onsite_available. Consentimiento PIPL obligatorio.
+  // Customer Documentation · lo innegociable es la experiencia documental en
+  // comercio exterior y haber conciliado facturas contra órdenes. El resto
+  // (plataformas, cursos, tipo de empresa) ordena la terna y no bloquea.
+  customer_doc: [
+    "doc_type", "doc_number", "phone", "city",
+    "salary", "availability", "relocate",
+    "english_level", "edu_type",
+    "years_doc_comex", "docs_handled", "invoice_reconciliation",
+    "difference_story", "case_choice", "case_why",
+    "why_ts",
+  ],
   china: [
     "full_name", "email", "phone_wechat", "current_city",
     "work_authorized", "english_level", "english_cert",
     "years_experience", "onsite_available", "salary_usd",
     "tariff_choice", "pipl_consent",
   ],
+};
+
+/**
+ * Inglés mínimo y tope salarial por TEMPLATE.
+ *
+ * POR QUÉ POR TEMPLATE Y NO POR VACANTE
+ * La configuración vivía pegada al id de la vacante. Cuando un cargo existe
+ * dos veces en la base —y ya pasó con SIG-SST y con FullStack— la excepción
+ * queda escrita en el registro gemelo y nunca se aplica a nadie: entre el 7 y
+ * el 24 de septiembre seis personas se rechazaron por un inglés que ya se
+ * había decidido que no descalificaba. Atado al template, un cargo nuevo nace
+ * bien configurado y un duplicado hereda la misma regla.
+ *
+ * El override por vacante sigue existiendo y manda sobre esto, para los casos
+ * en que una vacante concreta sí pide algo distinto.
+ */
+export const TEMPLATE_ENGLISH_MIN_RANK: Partial<Record<TemplateKey, number>> = {
+  // Customer Documentation lee documentos en inglés; no negocia en inglés.
+  // A2 alcanza (rank 2). Y como nada descarta solo, esto apenas marca.
+  customer_doc: 2,
+};
+
+/** Tope de la banda en COP. Sobre esto se marca, nunca se rechaza. */
+export const TEMPLATE_SALARY_CAP: Partial<Record<TemplateKey, number>> = {
+  customer_doc: 3_500_000,
 };
