@@ -27,7 +27,10 @@ export const VACANCY_MAP: Record<number, string> = {
   // CERRADAS · el mapeo se conserva para que las aplicaciones históricas
   // sigan resolviendo, pero ya no se publican en /careers.
   2: "c25ce70b-9244-4393-aea6-75372a99a6ef", // Inside Sales Support — CERRADA 18-ago-2026
-  3: "6e4838dd-8aea-4426-bd26-ea588f0f493a", // Customer Documentation Specialist
+  // Customer Documentation Specialist · reabierta el 8-oct-2026. El id de
+  // abril (6e4838dd) quedó cerrado con 181 candidatos; apuntar acá seguía
+  // mandando a los nuevos a esa vacante muerta.
+  3: "0085656c-c139-4f0c-a462-72c2e751b74f",
   4: "d354c55a-eb1c-4aee-bd02-b0a20162e1f1", // Pricing Junior
   5: "70c39cab-adaf-49a0-b137-29d0ff9b56b0", // Talent Acquisition and Development Lead
 
@@ -56,48 +59,118 @@ export const VACANCY_MAP: Record<number, string> = {
  * Se comparan con ILIKE, así que alcanza con un fragmento distintivo.
  */
 const TITLE_HINTS: Record<number, string> = {
+  3: "customer documentation specialist",
   10: "full stack",
 };
 
+/** Lo que se resolvió y cómo, para poder avisar cuando algo huele mal. */
+export type VacanteResuelta = {
+  id: string;
+  titulo: string | null;
+  cerrada: boolean;
+  via: "mapa" | "titulo" | "mapa_reemplazado";
+  aviso: string | null;
+};
+
+type FilaVacante = { id: string; title: string | null; status: string | null };
+
+const estaAbierta = (v: FilaVacante) => v.status == null || v.status === "open";
+
+async function buscarPorTitulo(hint: string): Promise<FilaVacante[]> {
+  const { data, error } = await supabaseAdmin
+    .from("ht_vacancies")
+    .select("id, title, status")
+    .eq("client_id", TS_CLIENT_ID)
+    .ilike("title", `%${hint}%`);
+  if (error || !data) return [];
+  return data as FilaVacante[];
+}
+
 /**
- * Resuelve el vacancy_id de Supabase para un job_id del formulario público.
- * Devuelve null si no hay forma de resolverlo — quien llama debe loguearlo,
- * nunca descartar la aplicación en silencio.
+ * Resuelve la vacante de una aplicación del formulario público.
+ *
+ * POR QUÉ EL MAPA YA NO MANDA SOLO
+ * El 8 de octubre quince personas aplicaron a Customer Documentation y
+ * ninguna apareció en el funnel: el mapa mandaba el job_id 3 a la vacante de
+ * abril, cerrada hacía meses, y nadie lo notó porque la aplicación se guardaba
+ * igual y al candidato le llegaba su correo de confirmación.
+ *
+ * Un cargo que se vuelve a abrir nace con otro id, y el mapa se queda con el
+ * viejo hasta que alguien se acuerde de editarlo. Así que ahora, si lo que
+ * dice el mapa está CERRADO y existe una vacante abierta con ese mismo
+ * nombre, manda la abierta. El mapa sigue valiendo mientras su vacante esté
+ * viva, que es el caso normal.
+ */
+export async function resolverVacante(
+  jobId: number,
+  jobTitle?: string,
+): Promise<VacanteResuelta | null> {
+  const hint = TITLE_HINTS[jobId] || (jobTitle || "").trim();
+  const mapeada = VACANCY_MAP[jobId];
+
+  if (mapeada) {
+    const { data } = await supabaseAdmin
+      .from("ht_vacancies")
+      .select("id, title, status")
+      .eq("id", mapeada)
+      .maybeSingle();
+    const fila = (data as FilaVacante) || null;
+
+    if (fila && !estaAbierta(fila) && hint) {
+      const abierta = (await buscarPorTitulo(hint)).find(estaAbierta);
+      if (abierta && abierta.id !== mapeada) {
+        const aviso =
+          `el mapa manda el job_id ${jobId} a "${fila.title}" (${mapeada}), que está cerrada; ` +
+          `se usó la abierta "${abierta.title}" (${abierta.id}). Actualiza VACANCY_MAP.`;
+        console.warn(`[vacancy-map] ${aviso}`);
+        return { id: abierta.id, titulo: abierta.title, cerrada: false, via: "mapa_reemplazado", aviso };
+      }
+    }
+
+    const cerrada = Boolean(fila && !estaAbierta(fila));
+    return {
+      id: mapeada,
+      titulo: fila?.title ?? null,
+      cerrada,
+      via: "mapa",
+      aviso: cerrada
+        ? `la vacante del mapa para el job_id ${jobId} está cerrada y no hay una abierta con ese nombre`
+        : null,
+    };
+  }
+
+  if (!hint) return null;
+
+  try {
+    const encontradas = await buscarPorTitulo(hint);
+    if (!encontradas.length) return null;
+    const elegida = encontradas.find(estaAbierta) || encontradas[0];
+    const aviso =
+      `job_id ${jobId} no está en VACANCY_MAP · resuelto por título "${hint}" → ` +
+      `${elegida.title} (${elegida.id})`;
+    console.warn(`[vacancy-map] ${aviso}`);
+    return {
+      id: elegida.id,
+      titulo: elegida.title,
+      cerrada: !estaAbierta(elegida),
+      via: "titulo",
+      aviso,
+    };
+  } catch (e: any) {
+    console.error(`[vacancy-map] fallo resolviendo job_id ${jobId}:`, e?.message || e);
+    return null;
+  }
+}
+
+/**
+ * Igual que `resolverVacante` pero devolviendo solo el id, para quien no
+ * necesita el detalle. Devuelve null si no hay forma de resolverlo — quien
+ * llama debe loguearlo, nunca descartar la aplicación en silencio.
  */
 export async function resolveVacancyId(
   jobId: number,
   jobTitle?: string,
 ): Promise<string | null> {
-  const mapped = VACANCY_MAP[jobId];
-  if (mapped) return mapped;
-
-  // Fallback por título: primero la pista fija del id, si no el título que
-  // vino con la aplicación.
-  const hint = TITLE_HINTS[jobId] || (jobTitle || "").trim();
-  if (!hint) return null;
-
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("ht_vacancies")
-      .select("id, title, status")
-      .eq("client_id", TS_CLIENT_ID)
-      .ilike("title", `%${hint}%`);
-
-    if (error || !data || data.length === 0) return null;
-
-    // Con varias coincidencias se prefiere una abierta: si hay una versión
-    // vieja cerrada y una nueva abierta del mismo cargo, el candidato va a la
-    // que está en curso.
-    const abierta = data.find((v: any) => v.status == null || v.status === "open");
-    const elegida = abierta || data[0];
-
-    console.warn(
-      `[vacancy-map] job_id ${jobId} no está en VACANCY_MAP · resuelto por título ` +
-      `"${hint}" → ${elegida.title} (${elegida.id})`,
-    );
-    return elegida.id as string;
-  } catch (e: any) {
-    console.error(`[vacancy-map] fallo resolviendo job_id ${jobId}:`, e?.message || e);
-    return null;
-  }
+  const r = await resolverVacante(jobId, jobTitle);
+  return r?.id ?? null;
 }

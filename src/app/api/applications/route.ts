@@ -8,7 +8,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { recordStageEvent } from "@/lib/stage-events";
 // La resolución job_id → vacancy_id es compartida con
 // /api/admin/sync-applications-to-funnel · no duplicarla acá.
-import { resolveVacancyId } from "@/lib/vacancy-map";
+import { resolverVacante } from "@/lib/vacancy-map";
 import { resolveCandidateLang } from "@/lib/candidate-lang";
 
 const TS_CLIENT_ID = "98b62872-5767-4815-9b49-1394b9527c1f";
@@ -84,13 +84,23 @@ export async function POST(request: NextRequest) {
     // sin necesidad de correr sync manual. Idempotente · si ya existe el email
     // solo actualiza el updated_at.
     try {
-      const vacancyId = await resolveVacancyId(job_id, job_title);
+      const resuelta = await resolverVacante(job_id, job_title);
+      const vacancyId = resuelta?.id ?? null;
+      if (resuelta?.aviso) {
+        console.warn(`[applications] aplicación ${newId} de ${emailLower}: ${resuelta.aviso}`);
+      }
       if (vacancyId) {
         const emailNormalized = emailLower;
+        // El duplicado se mide por correo Y VACANTE. Con la llave solo en el
+        // correo, quien ya estaba en el ATS por otro cargo volvía a aplicar y
+        // lo único que pasaba era que se le tocaba la fecha: su postulación
+        // nueva no entraba a ninguna parte. El 8 de octubre fueron diez de
+        // quince, y dos de ellos figuraban rechazados de un proceso de abril.
         const { data: existing } = await supabaseAdmin
           .from("ht_candidates")
           .select("id")
           .ilike("email", emailNormalized)
+          .eq("vacancy_id", vacancyId)
           .maybeSingle();
 
         if (existing?.id) {

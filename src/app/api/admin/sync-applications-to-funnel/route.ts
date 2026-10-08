@@ -20,7 +20,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { recordStageEvents } from "@/lib/stage-events";
 // El mapa job_id → vacancy_id es compartido con /api/applications · esta copia
 // se había quedado con solo los ids 2-5 y descartaba las vacantes nuevas.
-import { resolveVacancyId } from "@/lib/vacancy-map";
+import { resolverVacante } from "@/lib/vacancy-map";
 
 export const runtime = "nodejs";
 
@@ -49,14 +49,27 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Get existing emails en ht_candidates (case-insensitive dedup)
+    // La llave es correo + vacante, no el correo solo: la misma persona puede
+    // estar en dos procesos, y su postulación nueva tiene que entrar al cargo
+    // al que aplicó, no quedarse en la ficha del cargo anterior.
     const emails = apps.map((a: any) => String(a.email || "").toLowerCase().trim()).filter(Boolean);
     const orFilter = emails.map(e => `email.ilike.${e}`).join(",");
     const { data: existing } = await supabaseAdmin
       .from("ht_candidates")
-      .select("id, email")
+      .select("id, email, vacancy_id")
       .or(orFilter);
-    const existingMap = new Map((existing || []).map((c: any) => [String(c.email || "").toLowerCase().trim(), c.id]));
+    const llave = (email: string, vacancyId: string) => `${email}|${vacancyId}`;
+    const existingMap = new Map(
+      (existing || []).map((c: any) => [
+        llave(String(c.email || "").toLowerCase().trim(), String(c.vacancy_id || "")),
+        c.id,
+      ]),
+    );
 
+    // Lo que hay que mirar aunque la sincronización "salga bien": una vacante
+    // del mapa que ya está cerrada significa que el cargo se volvió a abrir
+    // con otro id y nadie actualizó el mapa.
+    const avisos: string[] = [];
     let inserted = 0;
     let updated = 0;
     let skipped = 0;
@@ -71,19 +84,21 @@ export async function POST(req: NextRequest) {
         skipped++;
         continue;
       }
-      const vacancyId = await resolveVacancyId(app.job_id, app.job_title);
+      const resuelta = await resolverVacante(app.job_id, app.job_title);
+      const vacancyId = resuelta?.id ?? null;
       if (!vacancyId) {
         skipped++;
         details.push({ email, action: "skipped", reason: `job_id ${app.job_id} no mapeado` });
         continue;
       }
+      if (resuelta?.aviso && !avisos.includes(resuelta.aviso)) avisos.push(resuelta.aviso);
 
-      if (existingMap.has(email)) {
+      if (existingMap.has(llave(email, vacancyId))) {
         // Ya existe · solo touch updated_at
         await supabaseAdmin
           .from("ht_candidates")
           .update({ updated_at: new Date().toISOString() })
-          .eq("id", existingMap.get(email));
+          .eq("id", existingMap.get(llave(email, vacancyId)));
         updated++;
         details.push({ email, action: "updated" });
       } else {
@@ -110,6 +125,7 @@ export async function POST(req: NextRequest) {
         } else {
           inserted++;
           details.push({ email, action: "inserted" });
+          if (created?.id) existingMap.set(llave(email, vacancyId), created.id);
           if (created?.id) {
             entryEvents.push({ candidateId: created.id, toStage: "aplico", fromStage: null, vacancyId });
           }
@@ -128,6 +144,7 @@ export async function POST(req: NextRequest) {
       inserted,
       updated,
       skipped,
+      avisos,
       details: details.slice(0, 50),
     });
   } catch (err: any) {
