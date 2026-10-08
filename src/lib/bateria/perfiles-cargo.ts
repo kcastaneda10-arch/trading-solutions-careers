@@ -267,6 +267,48 @@ export const PERFILES: Record<string, PerfilCargo> = {
         'Necesidad alta de reconocimiento es riesgo en un cargo junior donde el merito se reparte con el equipo y la revision es constante.',
     },
   },
+
+  // ── Customer Documentation Specialist ──────────────────────────────
+  'customer-doc': {
+    key: 'customer-doc',
+    nombre: 'Customer Documentation Specialist',
+    version: '1.0 · aviso publicado de octubre 2026',
+    descripcion:
+      'Verifica facturas de entrada y salida contra contratos, ordenes de compra y asignaciones antes de procesarlas. Identifica y resuelve diferencias de facturacion con clientes, proveedores y equipos internos, representando al cliente cuando hay un cobro indebido. Genera ordenes de servicio con sus soportes, consolida costo, ingreso y profit por cliente y linea de servicio, radica tarifas en la plataforma de la Federal Maritime Commission y gestiona los anticipos. Reporta a su lider directo y le escala cualquier inconsistencia.',
+    fundamento:
+      'Sale del aviso que se publico para esta busqueda, no de una idea del cargo. Cinco frases del aviso mandan. ' +
+      'Uno: «verify the accuracy of inbound and outbound invoices against contracts, purchase orders, and assignments» y «high attention to detail and accuracy when handling invoices, tariffs, contracts, and financial records». El dia entero es cotejar dos documentos y no dejar pasar la diferencia: de ahi C7, el mas alto del catalogo, y Responsabilidad 85. ' +
+      'Dos: «identify and resolve billing discrepancies with clients, vendors, and internal teams, representing customer interests in disputes over incorrect charges». El cargo exige sostener un desacuerdo, no acomodarse: de ahi Amabilidad 45, deliberadamente baja, y D4. Quien complace deja pasar el cobro indebido, que es exactamente lo que el cargo existe para evitar. ' +
+      'Tres: «consolidate costs, revenue, and profit by customer and service line; analyze variances and flag profitability risks». Eso es analisis de variaciones, no digitacion: de ahi el peso de 30% y el piso de 50 en razonamiento. Siendo un cargo de entrada de 1 a 2 anos, la experiencia la filtra el prefiltro; lo que la bateria puede aportar es la capacidad de ver el error. ' +
+      'Cuatro: «register and update tariff filings on the Federal Maritime Commission platform in compliance with regulatory timelines and format requirements» y «request, verify, and record customer advances... maintaining complete financial traceability». Radica ante un regulador y toca dinero del cliente: de ahi los pisos de veracidad y cuidado de activos. ' +
+      'Cinco: «manage multiple document workflows simultaneously under tight deadlines» sobre mas de 300 cuentas activas y mas de 52.000 TEUs al ano, mas «escalate any inconsistencies to your direct leader immediately». Es sostener una rutina de alto volumen bajo supervision, no montar algo nuevo: de ahi S6, Estabilidad 70 y Apertura 50.',
+    disc: { D: 4, I: 4, S: 6, C: 7 },
+    bigfive: { EXT: 45, APE: 50, AMA: 45, RES: 85, EST: 70 },
+    tolerancia: 12,
+    pesos: { personalidad: 0.3, estilo: 0.15, razonamiento: 0.3, integridad: 0.25 },
+    fundamentoPesos:
+      'Razonamiento 30%, el segundo mas alto del catalogo despues del junior de desarrollo, porque la tarea central del aviso es numerica: cotejar cifras, analizar variaciones y ver el error antes de que se procese. ' +
+      'Personalidad 30%, sostenida en Responsabilidad: el aviso lo nombra «ownership mindset: you take responsibility for the integrity and timeliness of every document you touch». ' +
+      'Integridad 25%, alta pero por debajo de China Admin: aqui tambien se toca dinero y se radica ante un regulador, pero hay un lider directo que revisa y al que se le escala. ' +
+      'Estilo 15%, el mas bajo junto con el de desarrollo: el ingles que pide el aviso es A2–B1 para leer documentos, no para negociar. El trato importa en una disputa de cobro, pero no es el trabajo.',
+    pisos: {
+      razonamiento: 50,
+      integridad: 70,
+      porDimension: { 'INT-ver': 70, 'INT-act': 70, 'INT-nor': 65 },
+    },
+    criticos: [
+      { key: 'RES', label: 'Responsabilidad', porque: 'El aviso pide hacerse cargo de la integridad y la oportunidad de cada documento. Una factura procesada sin cotejar ya se procesó.' },
+      { key: 'INT-ver', label: 'Veracidad', porque: 'Radica tarifas ante la Federal Maritime Commission con plazos y formatos regulados. Un dato acomodado aqui es una sancion, no un reproceso.' },
+      { key: 'INT-act', label: 'Cuidado de activos', porque: 'Solicita, verifica y registra anticipos del cliente, y responde por la trazabilidad desde la solicitud hasta su aplicacion.' },
+    ],
+    motivadores: {
+      alto: ['MOT-log', 'MOT-seg'],
+      bajo: ['MOT-aut'],
+      nota:
+        'Al contrario de los cargos que estan montando operacion, este es un procedimiento establecido con un lider que revisa y al que se le escala. ' +
+        'Necesidad alta de seguridad no es un riesgo aqui: encaja. Necesidad alta de autonomia si, porque el aviso pide escalar la inconsistencia de inmediato, no resolverla por cuenta propia.',
+    },
+  },
 };
 
 /** Para el selector del panel: no hay que adivinar el cargo cuando la sesion
@@ -292,6 +334,9 @@ export function perfilPorTitulo(titulo: string | null | undefined): string | nul
   // 'setup', y si Operations ganara el orden, el administrativo se mediria
   // contra un perfil de operacion documental que no es el suyo.
   if (t.includes('administration') || t.includes('office setup')) return 'china-admin';
+  // Antes que Operations: «Customer Documentation and Support» tambien lleva
+  // 'support', y el documental no se mide contra un perfil de operacion.
+  if (t.includes('customer document')) return 'customer-doc';
   if (t.includes('operations executive')) return 'ops-exec';
   return null;
 }
