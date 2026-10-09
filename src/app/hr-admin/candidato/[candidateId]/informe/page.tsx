@@ -54,9 +54,18 @@ const SUFICIENCIA: Record<string, { txt: string; cls: string }> = {
   insuficiente: { txt: "Insuficiente", cls: "bad" },
 };
 
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** La fecha se lee del texto, no se convierte a hora local.
+ *  Una prueba guardada como 2026-10-08 sale de la base a medianoche UTC, y en
+ *  Colombia eso es el 7 a las 7 p. m.: el informe mostraba un día menos. Aquí
+ *  no interesa la hora, interesa el día que alguien escribió. */
 function fecha(iso: string | null | undefined) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long" });
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "—";
+  return `${Number(m[3])} de ${MESES[Number(m[2]) - 1]}`;
 }
 
 /** Barras con marca de referencia. La marca es la referencia del cargo; la
@@ -242,7 +251,12 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
                     <td className="mut">{e.presentadaEl ? fecha(e.presentadaEl) : "—"}</td>
                     <td>
                       {e.resumen ?? <span className="mut">—</span>}
-                      {e.soporte && <> · <a href={e.soporte} target="_blank" rel="noopener noreferrer">soporte</a></>}
+                      {/* El enlace solo cuando hay algo que abrir. Antes caía al
+                          portal del proveedor y hasta las filas «no aplica»
+                          mostraban «soporte», que invita a un clic vacío. */}
+                      {e.estado === "cargada" && e.soporte && (
+                        <> · <a href={e.soporte} target="_blank" rel="noopener noreferrer">soporte</a></>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -298,7 +312,7 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
         )}
 
         {/* ── Pruebas externas ────────────────────────── */}
-        {!esCeo && d.externas.some((e: Externa) => e.puntajes || e.resumen) && (
+        {!esCeo && d.externas.some((e: Externa) => e.estado === "cargada") && (
           <section className="shelf">
             <div className="eyebrow">/ PRUEBAS EXTERNAS /</div>
             <h2>Cada una en su propio formato.</h2>
@@ -307,8 +321,16 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
               16personalities da un tipo. Forzarlas a un mismo número sería inventar equivalencias que no existen.
             </p>
             <div className="g2">
-              {d.externas.filter((e: Externa) => e.puntajes || e.resumen).map((e: Externa) => {
-                const nums = Object.entries(e.puntajes ?? {}).filter(([, v]) => typeof v === "number" || !isNaN(Number(v)));
+              {/* Solo las que tienen resultado. Una prueba sin presentar ya
+                  aparece en la tabla de arriba; darle además una tarjeta vacía
+                  en la sección de gráficas no agrega nada y hace más larga la
+                  única parte del informe que se mira con calma. */}
+              {d.externas.filter((e: Externa) => e.estado === "cargada").map((e: Externa) => {
+                // `null` pasaba el filtro viejo porque Number(null) es 0, y la
+                // nota sin calificar de Turing salía dibujada como un 0.
+                const nums = Object.entries(e.puntajes ?? {}).filter(
+                  ([, v]) => v !== null && v !== "" && typeof v !== "boolean" && Number.isFinite(Number(v)),
+                );
                 return (
                   <div className="card" key={e.key}>
                     <h3>{e.nombre}</h3>

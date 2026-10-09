@@ -75,9 +75,20 @@ export function etiquetaEstado(e: EstadoPrueba | null | undefined): string {
  * peor que no tener estado: manda a buscar un resultado que ya está, o da por
  * cerrado uno que nadie bajó.
  */
+const ESTADOS_VALIDOS = new Set<EstadoPrueba>([
+  "pendiente", "enviada", "presentada", "cargada", "no_aplica",
+]);
+
 export function estadoReal(r: Partial<ResultadoExterno>): EstadoPrueba {
-  if (r.estado === "no_aplica") return "no_aplica";
-  if (r.archivo_url || r.puntajes || r.resumen) return "cargada";
+  // Manda el estado guardado. La primera versión lo deducía del contenido y
+  // daba «resultado cargado» a una prueba que NO se presentó, solo porque
+  // tenía resumen — y el resumen muchas veces es justamente la explicación de
+  // por qué no hay resultado: «no aparece en el panel». Un texto que cuenta
+  // una ausencia no es un resultado.
+  if (r.estado && ESTADOS_VALIDOS.has(r.estado)) return r.estado;
+
+  // Sin estado guardado sí se deduce, y ahí solo cuenta la evidencia dura.
+  if (r.archivo_url || (r.puntajes && Object.keys(r.puntajes).length > 0)) return "cargada";
   if (r.presentada_at) return "presentada";
   if (r.enviada_at) return "enviada";
   return "pendiente";
