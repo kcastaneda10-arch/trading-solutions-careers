@@ -691,6 +691,23 @@ export default function PipelineFunnel() {
                   📄 Informe
                 </a>
               )}
+              {/* La matriz de pruebas externas de ESTA vacante. Sin este botón
+                  la pantalla existe pero no se llega a ella, y una función a la
+                  que solo se entra escribiendo la URL es una función que nadie
+                  usa. Lleva la vacante puesta: el seguimiento de pruebas se
+                  hace por cargo, no sobre la lista entera. */}
+              {vacFilter !== "all" && (
+                <a
+                  href={`/hr-admin/pruebas-externas?vacancy=${vacFilter}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold px-3 py-2.5 border border-black text-black hover:bg-black hover:text-white transition-colors whitespace-nowrap"
+                  style={{ borderRadius: 0 }}
+                  title="Quién presentó qué, en los seis proveedores · con el portal a un clic y el Excel de esta vacante"
+                >
+                  🧪 Pruebas externas
+                </a>
+              )}
             </div>
             {/* De quién es el proceso que se está mirando. Sin dueño no hay a
                 quién preguntarle, y los correos salen con la agenda del

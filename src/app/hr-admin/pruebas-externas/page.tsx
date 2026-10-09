@@ -17,7 +17,8 @@
  * la psicóloga, que no entran al ATS.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Proveedor = {
   id: string;
@@ -67,9 +68,25 @@ const ESTADOS: Celda["estado"][] = [
   "no_aplica",
 ];
 
-export default function PruebasExternas() {
+/** `useSearchParams` obliga a un límite de Suspense para que Next pueda
+ *  prerenderizar la ruta. Sin esto el build falla. */
+export default function Pagina() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24, color: "#646B7A" }}>Cargando…</div>}>
+      <PruebasExternas />
+    </Suspense>
+  );
+}
+
+function PruebasExternas() {
+  // La vacante puede venir en la URL, porque a esta pantalla se entra desde el
+  // funnel de un cargo. Llegar y tener que volver a escoger el cargo que ya se
+  // estaba mirando es el tipo de paso que hace que la gente no vuelva.
+  const params = useSearchParams();
+  const desdeUrl = params?.get("vacancy") ?? "";
+
   const [vacantes, setVacantes] = useState<Vacante[]>([]);
-  const [vacanteId, setVacanteId] = useState("");
+  const [vacanteId, setVacanteId] = useState(desdeUrl);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -84,7 +101,10 @@ export default function PruebasExternas() {
           (v: any) => v.status == null || v.status === "open",
         );
         setVacantes(vs);
-        if (vs.length && !vacanteId) setVacanteId(vs[0].id);
+        // Si la URL trae una vacante que sigue abierta, manda esa. Si no,
+        // la primera: entrar a una pantalla vacía no le sirve a nadie.
+        const valida = desdeUrl && vs.some((v) => v.id === desdeUrl);
+        if (!valida && vs.length && !vacanteId) setVacanteId(vs[0].id);
       })
       .catch(() => setError("No se pudieron leer las vacantes"));
     // Solo al montar: después el usuario elige.
