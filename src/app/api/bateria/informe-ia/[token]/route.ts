@@ -5,6 +5,7 @@ import { getAnthropic } from '@/lib/anthropic';
 import { calcularMatch } from '@/lib/bateria/match';
 import { perfilDe, perfilPorTitulo } from '@/lib/bateria/perfiles-cargo';
 import { FACTORS, MOTIVADORES, INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, DISC_PATRONES, ARQUETIPOS } from '@/lib/bateria/interpretacion';
+import { pruebasExternasParaAgente } from '@/lib/pruebas-externas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,6 +84,63 @@ Forma exacta del JSON:
 "no_concluyente" existe porque antes no existía: el esquema obligaba a elegir entre avanzar y no avanzar aunque la sesión fuera inválida, y con integridad baja el modelo elegía no avanzar. La forma del formulario fabricaba el rechazo. Cuando no hay con qué concluir, esa es la respuesta correcta.
 
 4 preguntas de entrevista conductual (STAR), cada una dirigida a verificar un punto dudoso del perfil. 3 periodos de plan de entrada (0-30, 30-60, 60-90 días) pensados para que el jefe los use desde el onboarding. Sé concreto y breve en cada campo: dos o tres frases, no párrafos.`;
+
+/** Parte 3 · cómo se lee la batería propia junto a las pruebas de afuera.
+ *
+ *  POR QUÉ ES UNA PARTE APARTE Y NO UN PÁRRAFO MÁS
+ *  Trading Solutions aplica pruebas en seis plataformas distintas. Cada una
+ *  llega con su propio informe, y nadie tiene tiempo de leer seis PDF y
+ *  acordarse de qué decía el primero. Lo que no se puede ver leyéndolos por
+ *  separado es justo lo que decide: si tres instrumentos distintos dicen lo
+ *  mismo, eso es un hecho; si solo lo dice uno, es una hipótesis.
+ *
+ *  La regla dura: el % de match NO cambia. Sale de la batería propia, que es
+ *  la única con perfil de cargo versionado y fundamento escrito detrás. Las
+ *  externas entran como evidencia que confirma o pone en duda, nunca como
+ *  números que se promedian — promediarlas sería inventar equivalencias entre
+ *  escalas que no miden lo mismo. */
+const SISTEMA_CRUCE = `${REGLAS}
+
+Te llegan DOS cosas: los resultados de la batería propia de Trading Solutions
+(con perfil de cargo versionado detrás) y los resultados de pruebas externas
+de proveedores distintos (DISC, 16personalities, IQ, BETA, motivadores,
+Máquina de Turing). Tu única tarea es leerlas juntas.
+
+REGLAS PROPIAS DE ESTA PARTE:
+
+A. NO produces ningún puntaje ni porcentaje nuevo. El match ya está calculado
+   y no se toca. No promedies escalas de proveedores distintos: un DISC de 0 a
+   100 y un CI de 130 no viven en la misma escala, y forzarlos a un número
+   común es inventar una equivalencia que no existe.
+B. Clasifica cada hallazgo con una de estas cuatro señales:
+   · "convergente" — dos o más instrumentos independientes dicen lo mismo.
+     Nombra cuáles y con qué cifra cada uno. Es lo más sólido del expediente.
+   · "contradictoria" — dos instrumentos dicen cosas distintas. NO decidas
+     cuál tiene razón: descríbelo y conviértelo en algo que la entrevista
+     pueda resolver.
+   · "alerta" — una brecha frente a lo que el cargo exige, la mida una sola
+     prueba o varias.
+   · "hueco" — una prueba que no se presentó, no se calificó o no se verificó.
+     La ausencia es parte del resultado: un expediente incompleto alcanza para
+     entrevistar, no para decidir, y hay que decirlo con esas palabras.
+C. Si una prueba externa no entrega datos utilizables —por ejemplo un DISC que
+   la propia plataforma declara "balanceado" y para el que se niega a emitir
+   informe— dilo y no la interpretes. Un resultado sin relieve no es un
+   resultado neutro: es un dato que no sirve.
+D. Entre 3 y 6 hallazgos. Ordena por lo que más mueve la decisión.
+E. Marca "soloInterno": true en un hallazgo cuando para entenderlo haya que
+   hablar de validez de la medición, de eventos de proctoring o de puntajes
+   sueltos de escala. Ese informe también lo leen el líder del área y el CEO,
+   y esas tres cosas son lecturas internas de Talent: en sus versiones se
+   ocultan. Todo lo demás va con "soloInterno": false.
+
+Forma exacta del JSON:
+{
+  "lecturaCruzada": [{"senal":"convergente|contradictoria|alerta|hueco","titulo":"","texto":"","soloInterno":false}],
+  "suficiencia": {"alcanza":"para_decidir|para_entrevistar|insuficiente","texto":""}
+}
+"titulo" es una frase corta, afirmativa y concreta. "texto" son dos o tres
+frases que citen las cifras exactas de los instrumentos que nombras.`;
 
 type Parte = { ok: true; datos: any } | { ok: false; error: string; crudo?: string };
 
@@ -200,10 +258,22 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       match,
     };
 
-    // Las dos mitades salen al tiempo. Antes era una sola llamada larga.
-    const [pPerfil, pDecision] = await Promise.all([
+    // Las pruebas de los otros proveedores, si la persona tiene ficha en el
+    // funnel. Sin ellas el agente solo puede hablar de la batería propia, que
+    // es como estaba antes: correcto pero ciego a la mitad del expediente.
+    const externas = sesion.ht_candidate_id
+      ? await pruebasExternasParaAgente(String(sesion.ht_candidate_id))
+      : [];
+
+    // Tres partes al tiempo. Antes era una sola llamada larga.
+    // El cruce solo se pide si hay algo con qué cruzar: pagarle al modelo por
+    // comparar la batería contra nada devuelve párrafos de relleno.
+    const [pPerfil, pDecision, pCruce] = await Promise.all([
       redactar(SISTEMA_PERFIL, insumo, 3200),
       redactar(SISTEMA_DECISION, insumo, 6000),
+      externas.length
+        ? redactar(SISTEMA_CRUCE, { ...insumo, pruebasExternas: externas }, 2800)
+        : Promise.resolve({ ok: true, datos: {} } as Parte),
     ]);
 
     if (!pPerfil.ok || !pDecision.ok) {
@@ -217,7 +287,18 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       );
     }
 
-    const informe = { ...pPerfil.datos, ...pDecision.datos };
+    // El cruce no bloquea: si falla, el informe sale igual y la pantalla
+    // muestra por qué faltó esa sección. Perder el perfil y la decisión por
+    // una tercera parte opcional sería un mal negocio.
+    const informe = {
+      ...pPerfil.datos,
+      ...pDecision.datos,
+      ...(pCruce.ok ? pCruce.datos : {}),
+      ...(pCruce.ok
+        ? {}
+        : { lecturaCruzadaError: pCruce.error }),
+      pruebasExternasLeidas: externas.length,
+    };
 
     const guardar = {
       informe_ia: { ...informe, modelo: MODEL, generado_at: new Date().toISOString() },

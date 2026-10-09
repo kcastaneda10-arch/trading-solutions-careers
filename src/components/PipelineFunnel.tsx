@@ -1946,6 +1946,20 @@ function CandDetailPanel({ cand, onClose, onChanged }: { cand: Cand; onClose: ()
             </button>
           )}
 
+          {/* El informe de la persona después de las pruebas: la batería propia
+              y las de los seis proveedores, leídas juntas. Va aquí, al lado del
+              CV, porque es la otra mitad de lo mismo — quién es el candidato,
+              no cómo va la búsqueda. */}
+          <a
+            href={`/hr-admin/candidato/${cand.id}/informe`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-bold px-4 py-2 rounded-full border-2 border-indigo-300 text-indigo-800 bg-indigo-50 hover:bg-indigo-100"
+            title="Todas las pruebas de esta persona leídas juntas · con vista para el líder y para el CEO"
+          >
+            🧭 Informe de pruebas
+          </a>
+
           {/* La hoja de vida vive en la otra base, indexada por aplicación. La
               ruta hace ese puente por correo para que desde acá sea un clic y
               no una consulta a Neon. */}
