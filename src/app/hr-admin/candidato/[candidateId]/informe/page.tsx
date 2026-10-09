@@ -48,6 +48,26 @@ const VALIDEZ: Record<string, { txt: string; cls: string }> = {
   con_reservas: { txt: "Con reservas", cls: "warn" },
   no_interpretable: { txt: "No interpretable", cls: "bad" },
 };
+/** La vista del CEO abre con la decisión que se le está pidiendo, no con una
+ *  descripción. Un informe que describe y no pide nada se lee y no se
+ *  responde. */
+const PIDE: Record<string, { txt: string }> = {
+  avanzar: { txt: "Se pide avanzar con este candidato." },
+  entrevistar_con_reservas: { txt: "Se pide entrevistarlo, con reservas." },
+  no_avanzar: { txt: "Se pide cerrar su proceso." },
+  no_concluyente: { txt: "No hay con qué concluir todavía." },
+};
+
+const VEREDICTO_ENTREVISTA: Record<string, { txt: string; cls: string }> = {
+  pass: { txt: "Pasa", cls: "ok" },
+  partial: { txt: "Parcial", cls: "warn" },
+  fail: { txt: "No pasa", cls: "bad" },
+};
+
+const PRINCIPIO: Record<string, string> = {
+  pass: "ok", partial: "warn", fail: "bad", data: "mute", not_probed: "mute",
+};
+
 const SUFICIENCIA: Record<string, { txt: string; cls: string }> = {
   para_decidir: { txt: "Alcanza para decidir", cls: "ok" },
   para_entrevistar: { txt: "Alcanza para entrevistar", cls: "warn" },
@@ -222,6 +242,87 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
           </div>
         </section>
 
+        {/* ── La página del CEO ───────────────────────── */}
+        {esCeo && (
+          <>
+            {L?.conclusion && (
+              <section className="shelf">
+                <div className="eyebrow">/ LA DECISIÓN QUE SE PIDE /</div>
+                <h2 className="pide">{PIDE[L.conclusion.recomendacion]?.txt ?? "Revisar el caso"}</h2>
+                <p className="sub">{L.conclusion.texto}</p>
+              </section>
+            )}
+
+            <section className="shelf">
+              <div className="eyebrow">/ CONTRA QUIÉN COMPITE /</div>
+              <h2>Los demás de este proceso.</h2>
+              {d.terna.length > 1 ? (
+                <>
+                  <p className="sub">
+                    {d.contexto.posicion === 1
+                      ? "Es el mejor puntaje del proceso."
+                      : `Va de ${d.contexto.posicion} entre ${d.terna.length} que presentaron la batería.`}{" "}
+                    Diferencias de cinco puntos o menos no ordenan a nadie: son un empate.
+                  </p>
+                  <table className="tbl">
+                    <thead><tr><th>Candidato</th><th>Match</th><th>Banda</th></tr></thead>
+                    <tbody>
+                      {d.terna.map((t: any) => (
+                        <tr key={t.id} style={t.esEste ? { background: "#F3F4F6", fontWeight: 600 } : undefined}>
+                          <td className="nm">{t.nombre}{t.esEste && " ←"}</td>
+                          <td>{t.match}%</td>
+                          <td>{t.apto ? "Dentro de banda" : <span className="mut">Bajo banda</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              ) : (
+                <p className="sub">
+                  Es el único del proceso con la batería presentada, así que este porcentaje no
+                  se puede comparar con nadie todavía. Un número solo no dice si es bueno:
+                  dice que es el que hay.
+                </p>
+              )}
+            </section>
+
+            {!!(L?.oportunidades ?? []).length && (
+              <section className="shelf">
+                <div className="eyebrow">/ QUÉ RIESGO SE ASUME /</div>
+                <h2>Lo que habría que vigilar si entra.</h2>
+                <ol className="lst grande">
+                  {L.oportunidades.slice(0, 3).map((o: any, i: number) => (
+                    <li key={i}><strong>{o.titulo}</strong> {o.detalle}</li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            <section className="shelf">
+              <div className="eyebrow">/ EL COSTO DE NO DECIDIR /</div>
+              <h2>Dónde está la búsqueda.</h2>
+              <div className="g3">
+                <div className="card">
+                  <div className="big-num">{d.contexto.diasAbierta ?? "—"}<span className="de"> días</span></div>
+                  <p className="mini">lleva abierta la vacante</p>
+                </div>
+                <div className="card">
+                  <div className="big-num">{d.contexto.activos}</div>
+                  <p className="mini">candidatos siguen vivos en el proceso</p>
+                </div>
+                <div className="card">
+                  <div className="big-num">{d.contexto.conBateria}</div>
+                  <p className="mini">
+                    llegaron a presentar la batería{d.contexto.conBateria <= 2
+                      ? " · si esta opción se cae, la búsqueda vuelve casi al principio"
+                      : ""}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
         {/* ── Qué se le aplicó ────────────────────────── */}
         {!esCeo && (
           <section className="shelf">
@@ -307,6 +408,112 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
                 <p className="mini">Un piso no se compensa con otra escala alta: si no lo pasa, el informe lo
                 dice aunque el match salga bien.</p>
               </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Nuestro DISC ────────────────────────────── */}
+        {!esCeo && bat?.disc && (
+          <section className="shelf">
+            <div className="eyebrow">/ NUESTRO DISC /</div>
+            <h2>Estilo de trabajo{bat.disc.patronNombre ? `: ${bat.disc.patronNombre}.` : "."}</h2>
+            <p className="sub">
+              {bat.disc.patronDescripcion}{bat.disc.patronDescripcion ? " " : ""}
+              Este es el DISC de nuestra batería, con sus tres gráficas. El DISC de los
+              proveedores va aparte y <strong>no se compara eje por eje con este</strong>: son
+              instrumentos distintos, con bancos de ítems y baremos propios, y los dos son
+              ipsativos — dicen qué eje pesa más dentro de la persona, no cuánto tiene frente a
+              los demás. Lo que sí se compara son afirmaciones de conducta, y eso está en la
+              lectura cruzada.
+            </p>
+            <div className="g3">
+              {bat.disc.graficas.map((g: any) => (
+                <div className="card" key={g.key}>
+                  <h3>{g.label}</h3>
+                  <div className="cs">{g.ayuda}</div>
+                  <Barras max={7} filas={g.ejes.map((e: any) => ({
+                    label: e.eje, valor: e.seg, referencia: e.referencia,
+                  }))} />
+                </div>
+              ))}
+            </div>
+            <p className="mini">Escala de 1 a 7 segmentos. La marca en «Natural» es la referencia del cargo.</p>
+          </section>
+        )}
+
+        {/* ── La entrevista inicial ───────────────────── */}
+        {!esCeo && (
+          <section className="shelf">
+            <div className="eyebrow">/ ENTREVISTA INICIAL /</div>
+            <h2>Lo que contó que hizo.</h2>
+            <p className="sub">
+              Las pruebas miden lo que la persona dice de sí misma respondiendo escalas. La
+              entrevista registra lo que contó que hizo, con situación y cita. Es conducta
+              observada: lo único del expediente que puede confirmar o tumbar un puntaje.
+            </p>
+            {!d.entrevista ? (
+              <div className="aviso">
+                Todavía no se le ha hecho la entrevista inicial, o el transcript no se ha pegado
+                en el ATS. Mientras no esté, todo lo que dice este informe sale de escalas:
+                sirve para decidir a quién entrevistar, no para decidir a quién contratar.
+              </div>
+            ) : (
+              <>
+                <div className="g3">
+                  <div className="card">
+                    <h3>Veredicto de la entrevista</h3>
+                    <div className="cs">
+                      {fecha(d.entrevista.fecha)}
+                      {d.entrevista.duracionMin ? ` · ${d.entrevista.duracionMin} min` : ""}
+                    </div>
+                    <span className={`chip big ${VEREDICTO_ENTREVISTA[d.entrevista.verdict]?.cls ?? "mute"}`}>
+                      {VEREDICTO_ENTREVISTA[d.entrevista.verdict]?.txt ?? "Sin veredicto"}
+                    </span>
+                    {!d.entrevista.revisadaPorHumano && d.entrevista.porIA && (
+                      <p className="mini">Parseada por IA y todavía sin revisión de una persona.</p>
+                    )}
+                  </div>
+                  <div className="card">
+                    <h3>Inglés</h3>
+                    <div className="cs">Lo que dijo contra lo que se oyó</div>
+                    <p className="mini" style={{ marginTop: 0 }}>
+                      Declarado: <strong>{d.entrevista.ingles.declarado ?? "—"}</strong><br />
+                      Observado: <strong>{d.entrevista.ingles.real ?? "—"}</strong>
+                      {d.entrevista.ingles.veredicto ? ` · ${d.entrevista.ingles.veredicto}` : ""}
+                    </p>
+                  </div>
+                  <div className="card">
+                    <h3>Qué falta indagar</h3>
+                    <div className="cs">Para la siguiente conversación</div>
+                    {(d.entrevista.porIndagar ?? []).length
+                      ? <ul className="lst">{d.entrevista.porIndagar.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
+                      : <p className="mini" style={{ marginTop: 0 }}>Nada marcado.</p>}
+                  </div>
+                </div>
+
+                {d.entrevista.resumen && <p className="sub" style={{ marginTop: 18 }}>{d.entrevista.resumen}</p>}
+
+                <div className="card full">
+                  <h3>Los 16 principios</h3>
+                  <div className="cs">
+                    «No se preguntó» no es un «no cumple»: es un tema que la entrevista no tocó
+                  </div>
+                  <div className="prin">
+                    {d.entrevista.principios.map((p: any) => (
+                      <div className={`prin-row ${PRINCIPIO[p.puntaje]}`} key={p.num}
+                        title={p.evidencia ?? ""}>
+                        <span className={`chip ${PRINCIPIO[p.puntaje]}`}>{p.puntajeLabel}</span>
+                        <div>
+                          <strong>{p.num}. {p.label}</strong>
+                          {p.soloDato && <span className="mut"> · solo dato, no es criterio</span>}
+                          {p.evidencia && <p>{p.evidencia}</p>}
+                          {p.cita && <p className="cita">«{p.cita}»</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </section>
         )}
@@ -516,6 +723,18 @@ border:1px solid var(--line);border-left:3px solid var(--line);border-radius:12p
 @media(max-width:700px){.conv-row{grid-template-columns:1fr}}
 .lst{margin:0;padding-left:20px;display:grid;gap:8px}
 .lst li{font-size:13.5px;color:var(--ink-soft);line-height:1.6}
+.lst.grande li{font-size:15px;line-height:1.7;margin-bottom:4px}
+.lst.grande strong{color:var(--ink)}
+h2.pide{font-size:26px;line-height:1.3;max-width:24ch}
+.prin{display:grid;gap:9px}
+.prin-row{display:grid;grid-template-columns:120px 1fr;gap:13px;align-items:start;
+padding:11px 0;border-top:1px solid #F0F2F5}
+.prin-row:first-child{border-top:0}
+.prin-row strong{font-size:13.5px}
+.prin-row p{margin:4px 0 0;font-size:13px;color:var(--ink-soft);line-height:1.55}
+.prin-row p.cita{color:var(--ink-mute);font-style:italic}
+.prin-row.mute strong{color:var(--ink-mute);font-weight:500}
+@media(max-width:700px){.prin-row{grid-template-columns:1fr}}
 .aviso{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px 16px;
 font-size:13.5px;color:var(--ink-soft);margin:16px 0}
 .aviso.warn{background:var(--wa-bg);border-color:#F2DFA8;color:var(--wa-fg)}

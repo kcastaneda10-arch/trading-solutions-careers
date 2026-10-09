@@ -6,6 +6,7 @@ import { calcularMatch } from '@/lib/bateria/match';
 import { perfilDe, perfilPorTitulo } from '@/lib/bateria/perfiles-cargo';
 import { FACTORS, MOTIVADORES, INTEGRIDAD_LABEL, RAZONAMIENTO_LABEL, DISC_PATRONES, ARQUETIPOS } from '@/lib/bateria/interpretacion';
 import { pruebasExternasParaAgente } from '@/lib/pruebas-externas';
+import { entrevistaParaAgente } from '@/lib/informe-candidato';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,10 +102,27 @@ Forma exacta del JSON:
  *  escalas que no miden lo mismo. */
 const SISTEMA_CRUCE = `${REGLAS}
 
-Te llegan DOS cosas: los resultados de la batería propia de Trading Solutions
-(con perfil de cargo versionado detrás) y los resultados de pruebas externas
-de proveedores distintos (DISC, 16personalities, IQ, BETA, motivadores,
-Máquina de Turing). Tu única tarea es leerlas juntas.
+Te llegan hasta TRES cosas: los resultados de la batería propia de Trading
+Solutions (con perfil de cargo versionado detrás), los resultados de pruebas
+externas de proveedores distintos (DISC, 16personalities, IQ, BETA,
+motivadores, Máquina de Turing) y, cuando existe, la evaluación de la
+entrevista inicial contra los 16 principios de la compañía. Tu única tarea es
+leerlas juntas.
+
+LA ENTREVISTA PESA DISTINTO. Las pruebas miden lo que la persona dice de sí
+misma respondiendo escalas; la entrevista registra lo que contó que hizo, con
+situaciones y citas. Es conducta observada, y es lo único aquí que puede
+confirmar o tumbar un puntaje. Cuando una escala y la entrevista se
+contradigan, NO resuelvas a favor de la escala: nombra las dos y di qué haría
+falta para zanjarlo. Y si la entrevista no se ha hecho, dilo entre los huecos.
+
+NO COMPARES UN DISC CON OTRO DISC. «DISC» es una familia de instrumentos, no
+un instrumento: cada proveedor tiene su banco de ítems y sus baremos, el
+nuestro entrega tres gráficas —máscara social, bajo presión y natural— y el
+gratuito entrega una sola, y todos son ipsativos. Enfrentar un eje contra el
+otro produce una diferencia que no significa nada. Lo que sí se compara son
+AFIRMACIONES DE CONDUCTA: «es metódico» dicho por tres fuentes es un hecho,
+aunque los números no se parezcan.
 
 REGLAS PROPIAS DE ESTA PARTE:
 
@@ -265,14 +283,20 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       ? await pruebasExternasParaAgente(String(sesion.ht_candidate_id))
       : [];
 
+    // La entrevista inicial, si ya se hizo. Es la conducta observada contra la
+    // que se contrastan las escalas.
+    const entrevista = sesion.ht_candidate_id
+      ? await entrevistaParaAgente(String(sesion.ht_candidate_id))
+      : null;
+
     // Tres partes al tiempo. Antes era una sola llamada larga.
     // El cruce solo se pide si hay algo con qué cruzar: pagarle al modelo por
     // comparar la batería contra nada devuelve párrafos de relleno.
     const [pPerfil, pDecision, pCruce] = await Promise.all([
       redactar(SISTEMA_PERFIL, insumo, 3200),
       redactar(SISTEMA_DECISION, insumo, 6000),
-      externas.length
-        ? redactar(SISTEMA_CRUCE, { ...insumo, pruebasExternas: externas }, 2800)
+      externas.length || entrevista
+        ? redactar(SISTEMA_CRUCE, { ...insumo, pruebasExternas: externas, entrevistaInicial: entrevista }, 2800)
         : Promise.resolve({ ok: true, datos: {} } as Parte),
     ]);
 
