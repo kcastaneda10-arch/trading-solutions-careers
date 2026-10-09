@@ -55,7 +55,7 @@ type Vacante = { id: string; title: string; status: string | null };
 const COLOR: Record<Celda["estado"], { bg: string; fg: string; txt: string }> = {
   pendiente: { bg: "#F3F4F6", fg: "#6B7280", txt: "—" },
   enviada: { bg: "#FFF4E5", fg: "#A4530B", txt: "enviada" },
-  presentada: { bg: "#EEF3FE", fg: "#1B3A8C", txt: "presentada" },
+  presentada: { bg: "#ECEDEF", fg: "#0A0A0A", txt: "presentada" },
   cargada: { bg: "#E8F6EE", fg: "#1E7A43", txt: "lista" },
   no_aplica: { bg: "#FAFAFA", fg: "#C0C4CC", txt: "n/a" },
 };
@@ -91,6 +91,7 @@ function PruebasExternas() {
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
+  const [verTodos, setVerTodos] = useState(false);
   const [abierta, setAbierta] = useState<{ cand: Candidato; prov: Proveedor } | null>(null);
 
   useEffect(() => {
@@ -134,19 +135,33 @@ function PruebasExternas() {
     cargar();
   }, [cargar]);
 
+  /**
+   * A estas pruebas no se manda a todo el mundo: se escoge a quién, después
+   * de leer la hoja de vida y el prefiltro. Por eso la matriz NO arranca con
+   * los 46 candidatos de la vacante — serían 46 filas en gris donde importan
+   * seis, y una tabla que es casi toda ruido se deja de mirar a la semana.
+   *
+   * Por defecto aparece solo quien ya tiene al menos una prueba registrada.
+   * «Ver todos» es para el momento puntual de agregar a alguien nuevo.
+   */
+  const conPruebas = useMemo(
+    () => candidatos.filter((c) => c.pruebas.some((p) => p.estado !== "pendiente")),
+    [candidatos],
+  );
+  const visibles = verTodos ? candidatos : conPruebas;
+
   const resumen = useMemo(() => {
-    const total = candidatos.length * (proveedores.length || 1);
-    const listas = candidatos.reduce(
+    const listas = conPruebas.reduce(
       (a, c) => a + c.pruebas.filter((p) => p.estado === "cargada").length,
       0,
     );
-    const enCurso = candidatos.reduce(
+    const enCurso = conPruebas.reduce(
       (a, c) =>
         a + c.pruebas.filter((p) => p.estado === "enviada" || p.estado === "presentada").length,
       0,
     );
-    return { total, listas, enCurso, sinEmpezar: total - listas - enCurso };
-  }, [candidatos, proveedores]);
+    return { listas, enCurso, personas: conPruebas.length, total: candidatos.length };
+  }, [conPruebas, candidatos]);
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: "0 auto" }}>
@@ -187,23 +202,57 @@ function PruebasExternas() {
           Excel de todas las abiertas
         </a>
 
-        {!cargando && candidatos.length > 0 && (
+        <button
+          onClick={() => setVerTodos((v) => !v)}
+          style={{
+            padding: "8px 14px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+            border: verTodos ? "1px solid #0A0A0A" : "1px solid #E3E6EC",
+            background: verTodos ? "#0A0A0A" : "#fff",
+            color: verTodos ? "#fff" : "#101113",
+          }}
+          title="Las pruebas se mandan solo a algunos. Esto muestra a toda la vacante, para agregar a alguien nuevo."
+        >
+          {verTodos ? "Ver solo los evaluados" : `Ver los ${resumen.total} de la vacante`}
+        </button>
+
+        {!cargando && !error && (
           <span style={{ color: "#646B7A", fontSize: 13 }}>
-            {resumen.listas} con resultado · {resumen.enCurso} en curso · {resumen.sinEmpezar} sin empezar
+            {resumen.personas} {resumen.personas === 1 ? "persona evaluada" : "personas evaluadas"} ·{" "}
+            {resumen.listas} con resultado · {resumen.enCurso} en curso
           </span>
         )}
       </div>
 
       {error && (
-        <div style={{ background: "#FEF2F2", border: "1px solid #FBD5D5", color: "#B4232A", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 14 }}>
-          {error}
+        <div style={{ background: "#FEF2F2", border: "1px solid #FBD5D5", color: "#B4232A", padding: "12px 16px", borderRadius: 8, marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>
+          {/* El error más probable es que falte correr el SQL. Decirlo con su
+              nombre ahorra el rato de pensar que la pantalla está rota. */}
+          {/schema cache|ts_test_providers|ht_external_test_results/i.test(error) ? (
+            <>
+              <strong>Falta crear las tablas de pruebas externas.</strong> Corra
+              <code style={{ margin: "0 5px" }}>sql/20261009_pruebas_externas.sql</code>
+              en el SQL Editor de Supabase y recargue. Debe devolver 7 y 0.
+              <div style={{ marginTop: 6, opacity: 0.8, fontSize: 12.5 }}>{error}</div>
+            </>
+          ) : error}
         </div>
       )}
 
       {cargando ? (
         <p style={{ color: "#646B7A" }}>Leyendo…</p>
-      ) : candidatos.length === 0 ? (
+      ) : error ? null : candidatos.length === 0 ? (
+        // Sin este `error ? null`, una vacante llena de gente salía como
+        // «no tiene candidatos» cuando lo que falló fue la consulta. Decirle a
+        // alguien que su vacante está vacía cuando no lo está es peor que no
+        // decir nada: manda a buscar el problema donde no está.
         <p style={{ color: "#646B7A" }}>Esta vacante no tiene candidatos todavía.</p>
+      ) : visibles.length === 0 ? (
+        <p style={{ color: "#646B7A", lineHeight: 1.7 }}>
+          Todavía no se le ha registrado ninguna prueba a nadie de esta vacante.
+          <br />
+          Estas pruebas no se mandan a todo el mundo, así que la tabla arranca vacía a propósito:
+          dele a <strong>«Ver los {resumen.total} de la vacante»</strong> y marque a quién sí se le aplicó.
+        </p>
       ) : (
         <div style={{ overflowX: "auto", border: "1px solid #E3E6EC", borderRadius: 11, background: "#fff" }}>
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13.5 }}>
@@ -223,7 +272,7 @@ function PruebasExternas() {
               </tr>
             </thead>
             <tbody>
-              {candidatos.map((c) => (
+              {visibles.map((c) => (
                 <tr key={c.id}>
                   <td style={{ ...td(), minWidth: 230 }}>
                     <div style={{ fontWeight: 600 }}>{c.nombre}</div>
@@ -359,7 +408,7 @@ function Registro({
             href={proveedor.portal_url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ display: "inline-block", marginBottom: 16, fontSize: 13, color: "#1B3A8C" }}
+            style={{ display: "inline-block", marginBottom: 16, fontSize: 13, color: "#0A0A0A" }}
           >
             Abrir el portal de {proveedor.nombre} →
           </a>
@@ -420,8 +469,8 @@ function inp(): React.CSSProperties {
 function btn(primario: boolean): React.CSSProperties {
   return {
     padding: "9px 16px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
-    border: primario ? "1px solid #1B3A8C" : "1px solid #E3E6EC",
-    background: primario ? "#1B3A8C" : "#fff",
+    border: primario ? "1px solid #0A0A0A" : "1px solid #E3E6EC",
+    background: primario ? "#0A0A0A" : "#fff",
     color: primario ? "#fff" : "#101113",
   };
 }

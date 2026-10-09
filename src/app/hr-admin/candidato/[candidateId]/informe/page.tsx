@@ -414,7 +414,7 @@ export default function InformeDelCandidato({ params }: { params: { candidateId:
 
 const CSS = `
 :root{--bg:#F4F5F7;--surface:#FCFCFB;--surface-2:#F7F8FA;--ink:#0B0B0B;--ink-soft:#52514E;
---ink-mute:#8A8D96;--line:#E3E6EC;--brand:#1B3A8C;--bar:#2a78d6;--ref:#52514E;
+--ink-mute:#8A8D96;--line:#E3E6EC;--brand:#0A0A0A;--bar:#2a78d6;--ref:#52514E;
 --ok-bg:#E6F4EC;--ok-fg:#11643A;--wa-bg:#FDF0DC;--wa-fg:#8A5207;--bad-bg:#FBE9E9;--bad-fg:#A4201F;
 --mu-bg:#EFF0F3;--mu-fg:#5E626C}
 body{background:var(--bg);color:var(--ink);margin:0;
